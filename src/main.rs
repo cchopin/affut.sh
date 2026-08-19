@@ -1655,30 +1655,17 @@ impl Game {
                 let (w, contracts) = self.contracts_now();
                 if w == self.s.contracts_window && idx < contracts.len() && !self.s.contracts_done[idx] {
                     let c = &contracts[idx];
-                    if self.s.inv2[c.ci].tn() >= c.qty {
+                    if self.deliverable(c.ci) >= c.qty {
                         let (ci, qty, reward) = (c.ci, c.qty, c.reward);
-                        // épargne le meilleur couple ♂♀ tant qu'il y a du surplus ;
-                        // sinon l'entame en sacrifiant le moins gradé d'abord.
-                        // les shinies ne sont jamais livrés.
+                        // le meilleur couple ♂♀ n'est JAMAIS livré ; les shinies non plus
                         let bm = self.take_best_sex(ci, false, 0);
                         let bf = self.take_best_sex(ci, false, 1);
-                        let from_rest = qty.min(self.s.inv2[ci].tn());
-                        self.take_lowest(ci, false, from_rest);
-                        let mut missing = qty - from_rest;
-                        let mut reserved: Vec<(u8, usize)> = vec![];
+                        self.take_lowest(ci, false, qty);
                         if let Some(r) = bm {
-                            reserved.push((0, r));
+                            self.give_back(ci, false, 0, r);
                         }
                         if let Some(r) = bf {
-                            reserved.push((1, r));
-                        }
-                        reserved.sort_by_key(|&(_, r)| r); // moins gradé d'abord
-                        for (sex, r) in reserved {
-                            if missing > 0 {
-                                missing -= 1; // consommé par la livraison
-                            } else {
-                                self.give_back(ci, false, sex, r);
-                            }
+                            self.give_back(ci, false, 1, r);
                         }
                         self.s.contracts_done[idx] = true;
                         self.s.contracts_delivered += 1;
@@ -1804,6 +1791,12 @@ impl Game {
             }
             Action::Nothing => {}
         }
+    }
+    /* stock livrable : la réserve moins le meilleur couple ♂♀, intouchable */
+    fn deliverable(&self, ci: usize) -> u64 {
+        let iv = &self.s.inv2[ci];
+        let reserved = (iv.tm() > 0) as u64 + (iv.tf() > 0) as u64;
+        iv.tn().saturating_sub(reserved)
     }
     /* quantité encore due aux commandes ouvertes pour cette espèce */
     fn contract_need(&self, ci: usize) -> u64 {
@@ -2022,13 +2015,13 @@ impl Game {
         let left_ms = ((w + 1) as f64 * 7_200_000.0) - now_ms();
         let mut rows = vec![
             Row::text("le comptoir affiche trois commandes ; livrez depuis votre réserve.", C::Dim),
-            Row::text("jamais les shinies ; le meilleur couple ♂♀ est épargné s'il y a du surplus.", C::Dimmer),
+            Row::text("jamais les shinies, jamais votre meilleur couple ♂♀ (« livrables » = stock hors couple).", C::Dimmer),
             Row::text(format!("renouvellement dans {} min", (left_ms / 60_000.0).ceil() as u64), C::Dimmer),
             Row::text("", C::Dim),
         ];
         for (i, c) in contracts.iter().enumerate() {
             let done = self.s.contracts_done.get(i).copied().unwrap_or(false);
-            let have = self.s.inv2[c.ci].tn();
+            let have = self.deliverable(c.ci);
             let cr = &CREATURES[c.ci];
             if done {
                 rows.push(Row {
@@ -2047,7 +2040,7 @@ impl Game {
                     segs: vec![
                         ("□ ".into(), C::Dim),
                         (pad(&format!("{}× {}", c.qty, cr.n), 28), rarity_color(cr.r)),
-                        (pad(&format!("(en réserve : {})", have), 18), if ok { C::Green } else { C::Red }),
+                        (pad(&format!("(livrables : {})", have), 18), if ok { C::Green } else { C::Red }),
                         (format!("+{} écus", fmt(c.reward)), C::GoldDark),
                     ],
                     btns: vec![("livrer".into(), if ok { C::Green } else { C::Dimmer }, Action::Deliver(i))],
@@ -2603,13 +2596,13 @@ impl Game {
                     indent: 0,
                 });
             } else {
-                let have = self.s.inv2[c.ci].tn();
+                let have = self.deliverable(c.ci);
                 let ok = have >= c.qty;
                 rows.push(Row {
                     segs: vec![
                         ("□ ".into(), C::Dim),
                         (pad(&format!("{}× {}", c.qty, cr.n), 26), rarity_color(cr.r)),
-                        (pad(&format!("(en réserve : {})", have), 18), if ok { C::Green } else { C::Red }),
+                        (pad(&format!("(livrables : {})", have), 18), if ok { C::Green } else { C::Red }),
                         (format!("+{} écus", fmt(c.reward)), C::GoldDark),
                     ],
                     btns: vec![("livrer".into(), if ok { C::Green } else { C::Dimmer }, Action::Deliver(i))],
@@ -3070,7 +3063,7 @@ impl Game {
             "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,5 chance (repos 5 min).",
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
             "légende errante : une silhouette ✧ apparaît parfois sur la carte. approchez-la et tentez votre chance — une seule fois. créature épique ou légendaire, rang A minimum.",
-            "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies et épargne le couple s'il y a du surplus.",
+            "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
