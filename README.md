@@ -62,6 +62,10 @@ pseudo via `environment=` dans `authorized_keys`).
 # déployer (docker requis sur le serveur ; le port 2322 sert le jeu)
 ./deploy/deploy.sh user@mon-serveur
 
+# demander sa clé à un ami (affiche le message à lui envoyer,
+# avec la commande pour créer/afficher sa clé publique)
+./deploy/invite.sh --demande
+
 # inviter un ami — sa clé, son pseudo, son monde à lui
 ./deploy/invite.sh alice "ssh-ed25519 AAAA... alice@laptop"
 
