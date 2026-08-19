@@ -132,13 +132,19 @@ const BAIT_TRUFFE: usize = 3;
 const BAIT_ESSENCE: usize = 4;
 
 struct LabDef { n: &'static str, max: u32, base: f64, mult: f64, desc: &'static str }
-const LABS: [LabDef; 6] = [
+const LABS: [LabDef; 12] = [
     LabDef { n: "affûtage",        max: 10, base: 200.0,  mult: 2.2, desc: "des mâchoires mieux huilées : +6% de vitesse par niveau." },
     LabDef { n: "flair",           max: 15, base: 300.0,  mult: 2.1, desc: "l'instinct du traqueur : +0,06 de chance par niveau." },
     LabDef { n: "négoce",          max: 15, base: 250.0,  mult: 2.1, desc: "l'art de la marge : +8% aux prix de vente par niveau." },
     LabDef { n: "horlogerie",      max: 11, base: 500.0,  mult: 2.0, desc: "progression hors-ligne simulée au retour : 2 h de base, +2 h par niveau. les pièges, eux, ne s'usent jamais." },
     LabDef { n: "chasse nocturne", max: 10, base: 1000.0, mult: 2.3, desc: "sortir aux bonnes heures : +15% de chance de shiny par niveau." },
     LabDef { n: "auto-vente",      max: 1,  base: 5000.0, mult: 1.0, desc: "revend les doublons dès la capture, selon vos filtres (à la boutique)." },
+    LabDef { n: "conservation",    max: 10, base: 2000.0, mult: 1.9, desc: "de meilleures vitrines : la cagnotte du musée accumule +2 h par niveau (4 h de base)." },
+    LabDef { n: "ailes du musée",  max: 6,  base: 5000.0, mult: 2.2, desc: "on pousse les murs : +1 salle d'exposition par niveau." },
+    LabDef { n: "grands enclos",   max: 3,  base: 4000.0, mult: 2.5, desc: "plus de place pour les couples : +1 enclos par niveau." },
+    LabDef { n: "lignées",         max: 5,  base: 3000.0, mult: 2.2, desc: "registres d'élevage : +5% de chance qu'une naissance monte d'un rang (35% de base)." },
+    LabDef { n: "traqueur",        max: 5,  base: 1500.0, mult: 2.0, desc: "meilleure endurance : le repos entre deux battues diminue de 30 s par niveau (5 min de base)." },
+    LabDef { n: "courtage",        max: 5,  base: 2500.0, mult: 2.1, desc: "carnet d'adresses : les primes de contrats augmentent de 20% par niveau." },
 ];
 const LAB_AFFUTAGE: usize = 0;
 const LAB_FLAIR: usize = 1;
@@ -146,6 +152,12 @@ const LAB_NEGOCE: usize = 2;
 const LAB_HORLOGE: usize = 3;
 const LAB_ECLAT: usize = 4;
 const LAB_AUTOVENTE: usize = 5;
+const LAB_CONSERVATION: usize = 6;
+const LAB_AILES: usize = 7;
+const LAB_ENCLOS: usize = 8;
+const LAB_LIGNEES: usize = 9;
+const LAB_TRAQUEUR: usize = 10;
+const LAB_COURTAGE: usize = 11;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
 const ACHS: [AchDef; 26] = [
@@ -336,7 +348,7 @@ impl Default for State {
             contracts_delivered: 0,
             legends_caught: 0,
             pen_born: 0,
-            lab: vec![0; 6],
+            lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
             ach: vec![false; ACHS.len()],
             last_seen: now_ms(),
@@ -348,14 +360,14 @@ impl State {
         self.traps.resize(6, 0);
         self.baits.resize(5, 0);
         self.biomes.resize(6, None);
-        self.lab.resize(6, 0);
+        self.lab.resize(LABS.len(), 0);
         self.autosell.resize(5, false);
         self.ach.resize(ACHS.len(), false);
         self.inv2.resize(60, InvE::default());
         self.dex2.resize(60, DexE::default());
         self.contracts_done.resize(3, false);
-        self.museum.resize(6, None);
-        self.pens.resize(3, None);
+        self.museum.resize(12, None);
+        self.pens.resize(6, None);
         // migration des sauvegardes d'avant les rangs : tout passe en rang C
         if self.dex2.iter().all(|d| d.n == 0) && self.dex.iter().any(|d| d.0 > 0) {
             for (ci, &(n, s)) in self.dex.iter().enumerate().take(60) {
@@ -909,6 +921,7 @@ struct Game {
     toasts: Vec<(String, Instant)>,
     quit: bool,
     panel_w: usize,
+    legend_seen: u64,
 }
 
 impl Game {
@@ -937,6 +950,7 @@ impl Game {
             toasts: vec![],
             quit: false,
             panel_w: 74,
+            legend_seen: 0,
         };
         (game, fresh)
     }
@@ -1286,7 +1300,18 @@ impl Game {
             self.s.contracts_done = vec![false; 3];
             self.log(vec![("de nouveaux contrats sont affichés à la boutique.".into(), C::Blue)]);
         }
-        // musée : le revenu s'accumule (plafond 4 h)
+        // légende errante : annoncer son apparition (une fois par fenêtre)
+        if let Some((w, b, _)) = self.legend_now() {
+            if w != self.legend_seen {
+                self.legend_seen = w;
+                self.log(vec![
+                    ("✧ une silhouette immense rôde ".into(), C::Gold),
+                    (format!("en {} — trouvez-la sur la carte avant qu'elle ne disparaisse !", BIOMES[b].name), C::Gold),
+                ]);
+                self.toast(format!("✧ légende errante : {}", BIOMES[b].name));
+            }
+        }
+        // musée : le revenu s'accumule (plafond extensible au labo)
         self.museum_accrue(now);
         self.check_achievements();
         self.s.last_seen = now;
@@ -1298,8 +1323,23 @@ impl Game {
         }
         let dt = (now - self.s.museum_at).max(0.0);
         self.s.museum_at = now;
-        let cap = self.museum_rate() * 4.0 * 3_600_000.0;
+        let cap = self.museum_rate() * self.museum_cap_h() * 3_600_000.0;
         self.s.museum_pool = (self.s.museum_pool + self.museum_rate() * dt).min(cap);
+    }
+    fn museum_slots(&self) -> usize {
+        6 + self.s.lab[LAB_AILES] as usize
+    }
+    fn museum_cap_h(&self) -> f64 {
+        4.0 + self.s.lab[LAB_CONSERVATION] as f64 * 2.0
+    }
+    fn pen_slots(&self) -> usize {
+        3 + self.s.lab[LAB_ENCLOS] as usize
+    }
+    fn pen_rankup(&self) -> f64 {
+        0.35 + self.s.lab[LAB_LIGNEES] as f64 * 0.05
+    }
+    fn hunt_cooldown_ms(&self) -> f64 {
+        (300.0 - self.s.lab[LAB_TRAQUEUR] as f64 * 30.0) * 1000.0
     }
     /* écus par milliseconde générés par les salles occupées */
     fn museum_rate(&self) -> f64 {
@@ -1600,7 +1640,8 @@ impl Game {
                             self.report_catch(b, res);
                         }
                     }
-                    self.s.biomes[b].as_mut().unwrap().hunt_at = now + 300_000.0;
+                    let cd = self.hunt_cooldown_ms();
+                    self.s.biomes[b].as_mut().unwrap().hunt_at = now + cd;
                     self.s.hunts_done += 1;
                     self.log(vec![(format!("battue en {} : {} prise{}", BIOMES[b].name, hits, if hits > 1 { "s" } else { "" }), C::Green)]);
                     self.check_achievements();
@@ -1626,7 +1667,7 @@ impl Game {
                 }
             }
             Action::MuseumAdd(slot, ci, shiny) => {
-                if slot < 6 && self.s.museum[slot].is_none() {
+                if slot < self.museum_slots() && self.s.museum[slot].is_none() {
                     self.museum_accrue(now_ms());
                     if let Some((rank, sex)) = self.take_best(ci, shiny) {
                         self.s.museum[slot] = Some(MusE { ci, rank, shiny, sex });
@@ -1654,7 +1695,7 @@ impl Game {
             }
             Action::PenStart(slot, ci) => {
                 let iv = &self.s.inv2[ci];
-                if slot < 3 && self.s.pens[slot].is_none() && iv.tm() >= 1 && iv.tf() >= 1 {
+                if slot < self.pen_slots() && self.s.pens[slot].is_none() && iv.tm() >= 1 && iv.tf() >= 1 {
                     // consomme le mâle et la femelle de plus bas rang
                     let rm = (0..4).find(|&r| self.s.inv2[ci].m[r] > 0).unwrap();
                     let rf = (0..4).find(|&r| self.s.inv2[ci].f[r] > 0).unwrap();
@@ -1672,7 +1713,7 @@ impl Game {
                     if pen.ready_at <= now {
                         self.s.pens[slot] = None;
                         let mut rank = pen.r1.max(pen.r2);
-                        if rank < 3 && rand::thread_rng().gen::<f64>() < 0.35 {
+                        if rank < 3 && rand::thread_rng().gen::<f64>() < self.pen_rankup() {
                             rank += 1;
                         }
                         let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now) * 3.0;
@@ -1753,7 +1794,7 @@ impl Game {
                 1 => rng.gen_range(3..=5),
                 _ => rng.gen_range(2..=3),
             };
-            let reward = (qty as f64 * self.creature_value(ci, false) * 2.5 + 50.0).floor();
+            let reward = ((qty as f64 * self.creature_value(ci, false) * 2.5 + 50.0) * (1.0 + self.s.lab[LAB_COURTAGE] as f64 * 0.2)).floor();
             out.push(Contract { ci, qty, reward });
         }
         (w, out)
@@ -1975,7 +2016,7 @@ impl Game {
                 segs: vec![
                     (format!("revenu : {} écus/min · cagnotte : ", fmt2(rate_min)), C::Text),
                     (format!("{} écus", fmt(pool)), C::Gold),
-                    ("  (plafond 4 h)".into(), C::Dimmer),
+                    (format!("  (plafond {} h)", self.museum_cap_h() as u64), C::Dimmer),
                 ],
                 btns: vec![("encaisser".into(), if pool >= 1.0 { C::Gold } else { C::Dimmer }, Action::MuseumCollect)],
                 act: None,
@@ -1983,7 +2024,7 @@ impl Game {
             },
             Row::text("", C::Dim),
         ];
-        for slot in 0..6 {
+        for slot in 0..self.museum_slots() {
             match &self.s.museum[slot] {
                 None => rows.push(Row {
                     segs: vec![(format!("├─ salle {} : ", slot + 1), C::Dimmer), ("vide".into(), C::Dim)],
@@ -2050,7 +2091,7 @@ impl Game {
             Row::text("les parents (les plus bas rangs de chaque sexe) sont consommés.", C::Dimmer),
             Row::text("", C::Dim),
         ];
-        for slot in 0..3 {
+        for slot in 0..self.pen_slots() {
             match &self.s.pens[slot] {
                 None => rows.push(Row {
                     segs: vec![(format!("├─ enclos {} : ", slot + 1), C::Dimmer), ("libre".into(), C::Dim)],
@@ -2179,6 +2220,13 @@ impl Game {
         });
         rows.push(Row::text(format!("météo : {} — change dans {} min", weather_desc(w), next_w.ceil() as u64), C::Dim));
         rows.push(Row::text(format!("saison : {}", season_desc(sea)), C::Dim));
+        if let Some((wid, b, _)) = self.legend_now() {
+            let left = (((wid + 1) as f64 * 1_800_000.0 - now) / 60_000.0).ceil() as u64;
+            rows.push(Row::text(
+                format!("✧ une légende errante rôde en {} — encore {} min pour la trouver !", BIOMES[b].name, left),
+                C::Gold,
+            ));
+        }
         rows.push(Row::text("", C::Dim));
 
         rows.push(Row::header("expédition"));
@@ -2266,7 +2314,7 @@ impl Game {
         let pool = self.s.museum_pool + self.museum_rate() * (now - self.s.museum_at).max(0.0);
         let occ = self.s.museum.iter().flatten().count();
         rows.push(Row {
-            segs: vec![(format!("├─ musée : {}/6 salles · cagnotte {} écus", occ, fmt(pool)), if pool >= 1.0 { C::Gold } else { C::Dimmer })],
+            segs: vec![(format!("├─ musée : {}/{} salles · cagnotte {} écus", occ, self.museum_slots(), fmt(pool)), if pool >= 1.0 { C::Gold } else { C::Dimmer })],
             btns: vec![],
             act: Some(Action::Open(PanelKind::Museum)),
             indent: 0,
@@ -2276,7 +2324,7 @@ impl Game {
         rows.push(Row {
             segs: vec![(
                 if ready_pens > 0 { format!("├─ enclos : {} naissance{} à récupérer !", ready_pens, if ready_pens > 1 { "s" } else { "" }) }
-                else { format!("├─ enclos : {}/3 occupés", busy_pens) },
+                else { format!("├─ enclos : {}/{} occupés", busy_pens, self.pen_slots()) },
                 if ready_pens > 0 { C::Gold } else { C::Dimmer },
             )],
             btns: vec![],
@@ -2484,7 +2532,38 @@ impl Game {
     }
 
     fn rows_shop(&self) -> (String, Vec<Row>) {
-        let mut rows = vec![Row::header("pièges")];
+        // le comptoir affiche aussi les commandes en cours (raccourci : [c] partout)
+        let (w, contracts) = self.contracts_now();
+        let left_ms = ((w + 1) as f64 * 7_200_000.0) - now_ms();
+        let mut rows = vec![Row::header(&format!("commandes du comptoir — renouvelées dans {} min", (left_ms / 60_000.0).ceil() as u64))];
+        for (i, c) in contracts.iter().enumerate() {
+            let done = self.s.contracts_done.get(i).copied().unwrap_or(false);
+            let cr = &CREATURES[c.ci];
+            if done {
+                rows.push(Row {
+                    segs: vec![("■ ".into(), C::Green), (pad(&format!("{}× {}", c.qty, cr.n), 26), C::Dimmer), ("livré".into(), C::Green)],
+                    btns: vec![],
+                    act: None,
+                    indent: 0,
+                });
+            } else {
+                let have = self.s.inv2[c.ci].tn();
+                let ok = have >= c.qty;
+                rows.push(Row {
+                    segs: vec![
+                        ("□ ".into(), C::Dim),
+                        (pad(&format!("{}× {}", c.qty, cr.n), 26), rarity_color(cr.r)),
+                        (pad(&format!("(en réserve : {})", have), 18), if ok { C::Green } else { C::Red }),
+                        (format!("+{} écus", fmt(c.reward)), C::GoldDark),
+                    ],
+                    btns: vec![("livrer".into(), if ok { C::Green } else { C::Dimmer }, Action::Deliver(i))],
+                    act: None,
+                    indent: 0,
+                });
+            }
+        }
+        rows.push(Row::text("", C::Dim));
+        rows.push(Row::header("pièges"));
         for t in 0..6 {
             let owned = self.s.traps[t];
             let free = owned - self.placed_count(t);
@@ -2607,7 +2686,7 @@ impl Game {
 
     fn rows_lab(&self) -> (String, Vec<Row>) {
         let mut rows = vec![Row::header("recherches")];
-        for k in 0..6 {
+        for k in 0..LABS.len() {
             let lv = self.s.lab[k];
             let maxed = lv >= LABS[k].max;
             let cost = self.lab_cost(k);
@@ -2618,7 +2697,13 @@ impl Game {
                 LAB_NEGOCE => format!("prix de vente +{}%", lv * 8),
                 LAB_HORLOGE => format!("hors-ligne : {} h max", 2 + lv * 2),
                 LAB_ECLAT => format!("chance de shiny +{}%", lv * 15),
-                _ => if lv > 0 { "filtres débloqués".into() } else { "non débloquée".into() },
+                LAB_AUTOVENTE => if lv > 0 { "filtres débloqués".into() } else { "non débloquée".into() },
+                LAB_CONSERVATION => format!("cagnotte du musée : {} h max", 4 + lv * 2),
+                LAB_AILES => format!("{} salles au musée", 6 + lv),
+                LAB_ENCLOS => format!("{} enclos", 3 + lv),
+                LAB_LIGNEES => format!("montée de rang : {}%", 35 + lv * 5),
+                LAB_TRAQUEUR => format!("battue toutes les {} s", 300 - lv * 30),
+                _ => format!("primes de contrats +{}%", lv * 20),
             };
             rows.push(Row {
                 segs: vec![
@@ -2941,7 +3026,7 @@ impl Game {
             "labo ╡ l ╞ : améliorations permanentes (vitesse, chance, prix, hors-ligne, shiny) et la migration.",
             "bestiaire ╡ b ╞ : le registre — découvertes, shinies, meilleurs rangs. jamais décrémenté par les ventes.",
             "trophées ╡ t ╞ : la liste des succès et leurs récompenses.",
-            "musée ╡ m ╞ : exposez vos plus beaux spécimens ; chacun génère des écus en continu (cagnotte plafonnée à 4 h). le spécimen exposé quitte la réserve, récupérable à tout moment.",
+            "musée ╡ m ╞ : exposez vos plus beaux spécimens ; chacun génère des écus en continu (cagnotte plafonnée à 4 h de base, extensible au labo). le spécimen exposé quitte la réserve, récupérable à tout moment.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
