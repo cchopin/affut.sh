@@ -28,6 +28,9 @@ $SSH 'if docker volume inspect traque_data >/dev/null 2>&1 && ! docker volume in
   docker run --rm -v traque_data:/old -v affut_data:/new alpine sh -c "cp -a /old/. /new/." && echo "  volume migré"
 fi'
 
+echo "[5/6] clé d'hôte persistante (l'identité SSH du jeu survit aux rebuilds)"
+$SSH '[ -f /opt/affut/hostkeys/ssh_host_ed25519_key ] || { mkdir -p /opt/affut/hostkeys && ssh-keygen -t ed25519 -N "" -f /opt/affut/hostkeys/ssh_host_ed25519_key -C affut.sh -q; }'
+
 echo "[5/6] (re)lancement du conteneur — port 2322 PUBLIC (jeu seul, clés invitées)"
 $SSH 'docker rm -f affut traque 2>/dev/null || true; docker run -d --name affut \
   --restart unless-stopped \
@@ -35,6 +38,7 @@ $SSH 'docker rm -f affut traque 2>/dev/null || true; docker run -d --name affut 
   -p 2322:2222 \
   -v affut_data:/home/affut \
   -v /opt/affut/authorized_keys:/etc/ssh/auth/affut:ro \
+  -v /opt/affut/hostkeys:/etc/ssh/keys:ro \
   --memory 384m --cpus 0.5 \
   affut'
 
