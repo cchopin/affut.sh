@@ -913,7 +913,15 @@ struct Game {
 
 impl Game {
     fn new() -> (Game, bool) {
-        let raw = std::fs::read_to_string(save_path()).or_else(|_| std::fs::read_to_string(legacy_save_path()));
+        // le repli vers l'ancien nom de fichier ne vaut que pour le propriétaire :
+        // un joueur invité (AFFUT_PLAYER) démarre toujours son propre monde
+        let raw = std::fs::read_to_string(save_path()).or_else(|e| {
+            if std::env::var("AFFUT_PLAYER").is_err() {
+                std::fs::read_to_string(legacy_save_path())
+            } else {
+                Err(e)
+            }
+        });
         let (mut s, fresh) = match raw {
             Ok(raw) => (serde_json::from_str::<State>(&raw).unwrap_or_default(), false),
             Err(_) => (State::default(), true),
