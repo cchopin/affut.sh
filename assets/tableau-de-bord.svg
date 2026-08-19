@@ -1,0 +1,309 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="947" height="598" font-family="Menlo,Consolas,monospace" font-size="14">
+<rect width="100%" height="100%" fill="#14181f" rx="8"/>
+<text x="10.0" y="23.0" fill="#7e8a9b" xml:space="preserve">┌─</text>
+<text x="26.9" y="23.0" fill="#83d691" xml:space="preserve">&#160;affut.sh&#160;</text>
+<text x="111.2" y="23.0" fill="#7e8a9b" xml:space="preserve">─</text>
+<text x="119.6" y="23.0" fill="#ffc45c" xml:space="preserve">&#160;34,2&#160;k&#160;écus&#160;</text>
+<text x="229.2" y="23.0" fill="#7e8a9b" xml:space="preserve">·&#160;1&#160;209&#160;captures&#160;</text>
+<text x="372.5" y="23.0" fill="#7ac9ff" xml:space="preserve">·&#160;bestiaire&#160;30%&#160;</text>
+<text x="507.4" y="23.0" fill="#d6a04b" xml:space="preserve">·&#160;1&#160;trophées&#160;</text>
+<text x="617.0" y="23.0" fill="#7e8a9b" xml:space="preserve">─────────────────────────────────────┐</text>
+<text x="10.0" y="40.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="85.9" y="40.0" fill="#83d691" xml:space="preserve">♣</text>
+<text x="111.2" y="40.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="220.8" y="40.0" fill="#83d691" xml:space="preserve">♠♣</text>
+<text x="414.6" y="40.0" fill="#7e8a9b" xml:space="preserve">▲</text>
+<text x="473.6" y="40.0" fill="#7e8a9b" xml:space="preserve">/</text>
+<text x="490.5" y="40.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="498.9" y="40.0" fill="#7e8a9b" xml:space="preserve">▲</text>
+<text x="608.5" y="40.0" fill="#7e8a9b" xml:space="preserve">^</text>
+<text x="785.6" y="40.0" fill="#bfe0ff" xml:space="preserve">*</text>
+<text x="819.3" y="40.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="827.7" y="40.0" fill="#bfe0ff" xml:space="preserve">▲</text>
+<text x="928.9" y="40.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="10.0" y="57.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="144.9" y="57.0" fill="#83d691" xml:space="preserve">♣</text>
+<text x="279.8" y="57.0" fill="#83d691" xml:space="preserve">♣</text>
+<text x="338.8" y="57.0" fill="#7e8a9b" xml:space="preserve">∆</text>
+<text x="439.9" y="57.0" fill="#7e8a9b" xml:space="preserve">^</text>
+<text x="465.2" y="57.0" fill="#7e8a9b" xml:space="preserve">^</text>
+<text x="490.5" y="57.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="507.4" y="57.0" fill="#7e8a9b" xml:space="preserve">∆</text>
+<text x="524.2" y="57.0" fill="#7e8a9b" xml:space="preserve">/</text>
+<text x="566.4" y="57.0" fill="#7e8a9b" xml:space="preserve">▲</text>
+<text x="591.7" y="57.0" fill="#7e8a9b" xml:space="preserve">▲</text>
+<text x="726.5" y="57.0" fill="#bfe0ff" xml:space="preserve">▲</text>
+<text x="819.3" y="57.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="836.1" y="57.0" fill="#bfe0ff" xml:space="preserve">*</text>
+<text x="920.4" y="57.0" fill="#bfe0ff" xml:space="preserve">▲</text>
+<text x="928.9" y="57.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="61.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="74.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="35.3" y="74.0" fill="#83d691" xml:space="preserve">.♠</text>
+<text x="77.4" y="74.0" fill="#83d691" xml:space="preserve">♠</text>
+<text x="136.4" y="74.0" fill="#7e8a9b" xml:space="preserve">┌─</text>
+<text x="153.3" y="74.0" fill="#ffc45c" xml:space="preserve">&#160;tableau&#160;de&#160;bord&#160;</text>
+<text x="296.6" y="74.0" fill="#7e8a9b" xml:space="preserve">────────────────────────────────────────────────────────────┐</text>
+<text x="819.3" y="74.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="903.6" y="74.0" fill="#bfe0ff" xml:space="preserve">▲</text>
+<text x="928.9" y="74.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="78.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="91.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="43.7" y="91.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="69.0" y="91.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="111.2" y="91.0" fill="#83d691" xml:space="preserve">♠</text>
+<text x="136.4" y="91.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="802.4" y="91.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="91.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="878.3" y="91.0" fill="#bfe0ff" xml:space="preserve">·</text>
+<text x="928.9" y="91.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="95.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="108.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="52.1" y="108.0" fill="#83d691" xml:space="preserve">♣</text>
+<text x="77.4" y="108.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="119.6" y="108.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="136.4" y="108.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="108.0" fill="#7ac9ff" xml:space="preserve">──&#160;conditions&#160;</text>
+<text x="271.3" y="108.0" fill="#545f6e" xml:space="preserve">────────────────────────────────────────</text>
+<text x="802.4" y="108.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="108.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="928.9" y="108.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="112.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="125.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="35.3" y="125.0" fill="#83d691" xml:space="preserve">♣♣</text>
+<text x="69.0" y="125.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="111.2" y="125.0" fill="#83d691" xml:space="preserve">.♣</text>
+<text x="136.4" y="125.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="125.0" fill="#83d691" xml:space="preserve">printemps&#160;·&#160;</text>
+<text x="254.5" y="125.0" fill="#bfe0ff" xml:space="preserve">tempête&#160;·&#160;</text>
+<text x="338.8" y="125.0" fill="#c2cddc" xml:space="preserve">jour&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+<text x="802.4" y="125.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="125.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="928.9" y="125.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="129.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="142.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="136.4" y="142.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="142.0" fill="#7e8a9b" xml:space="preserve">météo&#160;:&#160;montagne&#160;:&#160;réussite&#160;−15%&#160;mais&#160;chance&#160;+0,8&#160;—&#160;change&#160;dans&#160;18&#160;min</text>
+<text x="802.4" y="142.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="142.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="928.9" y="142.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="146.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="159.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="26.9" y="159.0" fill="#83d691" xml:space="preserve">♣.</text>
+<text x="136.4" y="159.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="159.0" fill="#7e8a9b" xml:space="preserve">saison&#160;:&#160;forêt&#160;et&#160;marais&#160;+0,15&#160;chance</text>
+<text x="802.4" y="159.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="159.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="886.7" y="159.0" fill="#d6a04b" xml:space="preserve">∙</text>
+<text x="928.9" y="159.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="163.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="176.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="43.7" y="176.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="69.0" y="176.0" fill="#83d691" xml:space="preserve">.</text>
+<text x="136.4" y="176.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="802.4" y="176.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="176.0" fill="#ff8585" xml:space="preserve">sert&#160;×&#160;╞</text>
+<text x="903.6" y="176.0" fill="#d6a04b" xml:space="preserve">·</text>
+<text x="928.9" y="176.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="180.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="193.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="35.3" y="193.0" fill="#83d691" xml:space="preserve">♣</text>
+<text x="136.4" y="193.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="193.0" fill="#7ac9ff" xml:space="preserve">──&#160;expédition&#160;</text>
+<text x="271.3" y="193.0" fill="#545f6e" xml:space="preserve">────────────────────────────────────────</text>
+<text x="802.4" y="193.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="193.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="836.1" y="193.0" fill="#d6a04b" xml:space="preserve">∙≈≈</text>
+<text x="928.9" y="193.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="197.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="210.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="43.7" y="210.0" fill="#83d691" xml:space="preserve">♠</text>
+<text x="136.4" y="210.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="144.9" y="210.0" fill="#c2cddc" xml:space="preserve">&#160;écus&#160;34,2&#160;k&#160;·&#160;gagnés&#160;cette&#160;expédition&#160;42,8&#160;k&#160;·&#160;au&#160;total&#160;82,8&#160;k&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+<text x="802.4" y="210.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="210.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="827.7" y="210.0" fill="#d6a04b" xml:space="preserve">∙</text>
+<text x="928.9" y="210.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="214.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="227.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="52.1" y="227.0" fill="#83d691" xml:space="preserve">♣</text>
+<text x="136.4" y="227.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="227.0" fill="#7e8a9b" xml:space="preserve">trophées&#160;1&#160;·&#160;migrations&#160;1&#160;·&#160;chance&#160;+0,26&#160;·&#160;vente&#160;×1,04&#160;·&#160;vitesse&#160;×1,06</text>
+<text x="802.4" y="227.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="227.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="827.7" y="227.0" fill="#d6a04b" xml:space="preserve">∙≈</text>
+<text x="928.9" y="227.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="231.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="244.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="136.4" y="244.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="244.0" fill="#83d691" xml:space="preserve">rendement&#160;estimé&#160;:&#160;4,98&#160;captures/min</text>
+<text x="802.4" y="244.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="244.0" fill="#545f6e" xml:space="preserve">░░</text>
+<text x="928.9" y="244.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="248.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="261.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="136.4" y="261.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="802.4" y="261.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="878.3" y="261.0" fill="#d6a04b" xml:space="preserve">≈</text>
+<text x="903.6" y="261.0" fill="#d6a04b" xml:space="preserve">∙</text>
+<text x="928.9" y="261.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="265.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="278.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="136.4" y="278.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="278.0" fill="#7ac9ff" xml:space="preserve">──&#160;biomes&#160;—&#160;Entrée&#160;sur&#160;une&#160;ligne&#160;pour&#160;y&#160;aller&#160;</text>
+<text x="541.1" y="278.0" fill="#545f6e" xml:space="preserve">───────────────────────────────</text>
+<text x="802.4" y="278.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="278.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="886.7" y="278.0" fill="#d6a04b" xml:space="preserve">∙</text>
+<text x="903.6" y="278.0" fill="#d6a04b" xml:space="preserve">≈≈</text>
+<text x="928.9" y="278.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="282.0" width="16.9" height="17" fill="#1e232c"/>
+<rect x="153.3" y="282.0" width="649.1" height="17" fill="#ffc45c"/>
+<rect x="802.4" y="282.0" width="8.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="295.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="136.4" y="295.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="295.0" fill="#1a1e26" xml:space="preserve">├─&#160;forêt&#160;&#160;&#160;&#160;&#160;2/3&#160;pièges&#160;&#160;bestiaire&#160;10/10&#160;✓&#160;&#160;tentative&#160;dans&#160;8&#160;s&#160;&#160;appât&#160;épuisé&#160;</text>
+<text x="802.4" y="295.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="295.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="844.6" y="295.0" fill="#d6a04b" xml:space="preserve">·</text>
+<text x="895.1" y="295.0" fill="#d6a04b" xml:space="preserve">≈</text>
+<text x="928.9" y="295.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="299.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="312.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="43.7" y="312.0" fill="#5fb39b" xml:space="preserve">~</text>
+<text x="136.4" y="312.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="312.0" fill="#545f6e" xml:space="preserve">├─&#160;</text>
+<text x="178.6" y="312.0" fill="#bfe0ff" xml:space="preserve">marais&#160;&#160;&#160;&#160;</text>
+<text x="262.9" y="312.0" fill="#7e8a9b" xml:space="preserve">1/2&#160;pièges&#160;&#160;</text>
+<text x="364.1" y="312.0" fill="#7ac9ff" xml:space="preserve">bestiaire&#160;8/10&#160;&#160;&#160;&#160;&#160;</text>
+<text x="524.2" y="312.0" fill="#83d691" xml:space="preserve">tentative&#160;dans&#160;8&#160;s</text>
+<text x="676.0" y="312.0" fill="#ff8585" xml:space="preserve">&#160;&#160;appât&#160;épuisé&#160;</text>
+<text x="802.4" y="312.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="312.0" fill="#545f6e" xml:space="preserve">░░</text>
+<text x="928.9" y="312.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="316.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="329.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="26.9" y="329.0" fill="#5fb39b" xml:space="preserve">&quot;~</text>
+<text x="52.1" y="329.0" fill="#5fb39b" xml:space="preserve">o</text>
+<text x="119.6" y="329.0" fill="#f8fbff" xml:space="preserve">╡&#160;</text>
+<text x="136.4" y="329.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="329.0" fill="#545f6e" xml:space="preserve">├─&#160;montagne&#160;&#160;</text>
+<text x="262.9" y="329.0" fill="#ffc45c" xml:space="preserve">verrouillé&#160;—&#160;8&#160;000&#160;écus</text>
+<text x="802.4" y="329.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="329.0" fill="#d6a04b" xml:space="preserve">∙</text>
+<text x="928.9" y="329.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="333.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="346.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="77.4" y="346.0" fill="#5fb39b" xml:space="preserve">o</text>
+<text x="119.6" y="346.0" fill="#5fb39b" xml:space="preserve">o</text>
+<text x="128.0" y="346.0" fill="#d6a04b" xml:space="preserve">1</text>
+<text x="136.4" y="346.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="346.0" fill="#545f6e" xml:space="preserve">├─&#160;désert&#160;&#160;&#160;&#160;verrouillé&#160;—&#160;50,0&#160;k&#160;écus</text>
+<text x="802.4" y="346.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="869.9" y="346.0" fill="#d6a04b" xml:space="preserve">·</text>
+<text x="920.4" y="346.0" fill="#d6a04b" xml:space="preserve">·</text>
+<text x="928.9" y="346.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="350.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="363.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="43.7" y="363.0" fill="#5fb39b" xml:space="preserve">~</text>
+<text x="136.4" y="363.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="363.0" fill="#545f6e" xml:space="preserve">├─&#160;glacier&#160;&#160;&#160;verrouillé&#160;—&#160;300,0&#160;k&#160;écus</text>
+<text x="802.4" y="363.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="928.9" y="363.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="367.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="380.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="60.6" y="380.0" fill="#5fb39b" xml:space="preserve">&quot;</text>
+<text x="128.0" y="380.0" fill="#5fb39b" xml:space="preserve">&quot;</text>
+<text x="136.4" y="380.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="380.0" fill="#545f6e" xml:space="preserve">├─&#160;abysses&#160;&#160;&#160;verrouillé&#160;—&#160;2,00&#160;M&#160;écus</text>
+<text x="802.4" y="380.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="928.9" y="380.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="384.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="397.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="52.1" y="397.0" fill="#5fb39b" xml:space="preserve">~</text>
+<text x="94.3" y="397.0" fill="#5fb39b" xml:space="preserve">&quot;</text>
+<text x="136.4" y="397.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="397.0" fill="#ffc45c" xml:space="preserve">→&#160;battues&#160;disponibles&#160;:&#160;forêt,&#160;marais</text>
+<text x="802.4" y="397.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="928.9" y="397.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="401.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="414.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="26.9" y="414.0" fill="#5fb39b" xml:space="preserve">o</text>
+<text x="136.4" y="414.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="802.4" y="414.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="414.0" fill="#545f6e" xml:space="preserve">░░</text>
+<text x="928.9" y="414.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="418.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="431.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="119.6" y="431.0" fill="#5fb39b" xml:space="preserve">~o</text>
+<text x="136.4" y="431.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="431.0" fill="#7ac9ff" xml:space="preserve">──&#160;contrats&#160;·&#160;musée&#160;·&#160;enclos&#160;</text>
+<text x="397.8" y="431.0" fill="#545f6e" xml:space="preserve">────────────────────────────────────────</text>
+<text x="802.4" y="431.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="431.0" fill="#7a8ab0" xml:space="preserve">●</text>
+<text x="819.3" y="431.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="928.9" y="431.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="435.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="448.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="85.9" y="448.0" fill="#5fb39b" xml:space="preserve">~&quot;</text>
+<text x="136.4" y="448.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="448.0" fill="#7ac9ff" xml:space="preserve">├─&#160;contrats&#160;:&#160;3&#160;à&#160;livrer</text>
+<text x="802.4" y="448.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="448.0" fill="#ff8585" xml:space="preserve">ysses&#160;×&#160;╞</text>
+<text x="886.7" y="448.0" fill="#7a8ab0" xml:space="preserve">▓</text>
+<text x="928.9" y="448.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="452.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="465.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="77.4" y="465.0" fill="#5fb39b" xml:space="preserve">o</text>
+<text x="136.4" y="465.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="465.0" fill="#ffc45c" xml:space="preserve">├─&#160;musée&#160;:&#160;1/6&#160;salles&#160;·&#160;cagnotte&#160;3&#160;écus</text>
+<text x="802.4" y="465.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="465.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="836.1" y="465.0" fill="#7a8ab0" xml:space="preserve">●</text>
+<text x="869.9" y="465.0" fill="#7a8ab0" xml:space="preserve">·</text>
+<text x="903.6" y="465.0" fill="#7a8ab0" xml:space="preserve">·●</text>
+<text x="928.9" y="465.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="469.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="482.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="136.4" y="482.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="153.3" y="482.0" fill="#545f6e" xml:space="preserve">├─&#160;enclos&#160;:&#160;0/3&#160;occupés</text>
+<text x="802.4" y="482.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="482.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="836.1" y="482.0" fill="#7a8ab0" xml:space="preserve">▓</text>
+<text x="861.4" y="482.0" fill="#7a8ab0" xml:space="preserve">·</text>
+<text x="886.7" y="482.0" fill="#7a8ab0" xml:space="preserve">·</text>
+<text x="903.6" y="482.0" fill="#7a8ab0" xml:space="preserve">●</text>
+<text x="928.9" y="482.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="486.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="499.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="102.7" y="499.0" fill="#5fb39b" xml:space="preserve">~~</text>
+<text x="136.4" y="499.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="802.4" y="499.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="819.3" y="499.0" fill="#545f6e" xml:space="preserve">░</text>
+<text x="886.7" y="499.0" fill="#7a8ab0" xml:space="preserve">·▓</text>
+<text x="920.4" y="499.0" fill="#7a8ab0" xml:space="preserve">●</text>
+<text x="928.9" y="499.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<rect x="136.4" y="503.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="516.0" fill="#545f6e" xml:space="preserve">├──&#160;promenez-vo</text>
+<text x="136.4" y="516.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="802.4" y="516.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="810.9" y="516.0" fill="#bfe0ff" xml:space="preserve">pête&#160;·&#160;jour&#160;</text>
+<text x="912.0" y="516.0" fill="#545f6e" xml:space="preserve">──┤</text>
+<rect x="136.4" y="520.0" width="674.4" height="17" fill="#1e232c"/>
+<text x="10.0" y="533.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="26.9" y="533.0" fill="#545f6e" xml:space="preserve">[19:42:14]&#160;</text>
+<text x="119.6" y="533.0" fill="#83d691" xml:space="preserve">bi</text>
+<text x="136.4" y="533.0" fill="#7e8a9b" xml:space="preserve">└─</text>
+<text x="153.3" y="533.0" fill="#545f6e" xml:space="preserve">&#160;↑↓&#160;naviguer&#160;·&#160;Entrée&#160;valider&#160;·&#160;Échap&#160;fermer&#160;</text>
+<text x="532.7" y="533.0" fill="#7e8a9b" xml:space="preserve">──────────────────────</text>
+<text x="718.1" y="533.0" fill="#545f6e" xml:space="preserve">&#160;1-24/27&#160;</text>
+<text x="794.0" y="533.0" fill="#7e8a9b" xml:space="preserve">─┘</text>
+<text x="928.9" y="533.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="10.0" y="550.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="928.9" y="550.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="10.0" y="567.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="928.9" y="567.0" fill="#7e8a9b" xml:space="preserve">│</text>
+<text x="10.0" y="584.0" fill="#7e8a9b" xml:space="preserve">└─</text>
+<text x="26.9" y="584.0" fill="#545f6e" xml:space="preserve">&#160;zqsd/←↑↓→&#160;·&#160;Entrée&#160;·&#160;[v]ue&#160;[i]nventaire&#160;[b]estiaire&#160;[o]&#160;boutique&#160;[c]ontrats&#160;[l]abo&#160;[m]usée&#160;[e]nclos&#160;[t]ro</text>
+<text x="920.4" y="584.0" fill="#7e8a9b" xml:space="preserve">─┘</text>
+</svg>

@@ -1,0 +1,1426 @@
+<title>traque.sh</title>
+<style>
+  :root {
+    --bg: #14181f;
+    --text: #c2cdda;
+    --dim: #7e8a9b;
+    --dimmer: #4a5462;
+    --blue: #7ac9ff;
+    --gold: #ffc45c;
+    --gold-dark: #d6a04b;
+    --green: #83d691;
+    --red: #ff8585;
+    --white: #f8fbff;
+    --purple: #c792ea;
+    --marsh: #5fb39b;
+    --ice: #bfe0ff;
+    --abyss: #7a8ab0;
+    --seldark: #1a1e26;
+    --hlbg: #222832;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { background: var(--bg); color: var(--text); }
+  #scr {
+    font-family: "Menlo", ui-monospace, SFMono-Regular, Consolas, "DejaVu Sans Mono", monospace;
+    font-size: 15px; line-height: 19px;
+    white-space: pre; font-variant-ligatures: none;
+    position: absolute; inset: 0; overflow: hidden;
+    user-select: none; -webkit-user-select: none; cursor: default;
+  }
+  #meas { position: absolute; visibility: hidden; top: -100px; }
+  .fg-text { color: var(--text); }
+  .fg-dim { color: var(--dim); }
+  .fg-dimmer { color: var(--dimmer); }
+  .fg-blue { color: var(--blue); }
+  .fg-gold { color: var(--gold); }
+  .fg-golddark { color: var(--gold-dark); }
+  .fg-green { color: var(--green); }
+  .fg-red { color: var(--red); }
+  .fg-white { color: var(--white); }
+  .fg-purple { color: var(--purple); }
+  .fg-marsh { color: var(--marsh); }
+  .fg-ice { color: var(--ice); }
+  .fg-abyss { color: var(--abyss); }
+  .sel { background: var(--gold); color: var(--seldark); }
+  .hl { background: var(--hlbg); }
+  .act { cursor: pointer; }
+  @keyframes blink { 0%,49% {opacity:1} 50%,100% {opacity:0} }
+  .blink { animation: blink 1s step-end infinite; color: var(--green); }
+  @keyframes shinyp { 0%,100% { color: #7ae8ff; } 50% { color: var(--white); } }
+  .shiny { animation: shinyp 1.4s ease-in-out infinite; color: #7ae8ff; }
+  @media (prefers-reduced-motion: reduce) { .blink, .shiny { animation: none; } }
+
+  #io {
+    display: none; position: absolute; z-index: 10;
+    left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: min(40rem, 90vw);
+    background: var(--bg); border: 1px solid var(--dim);
+    padding: 1rem; font-family: Menlo, ui-monospace, monospace; font-size: 13px;
+  }
+  #io.open { display: block; }
+  #io textarea {
+    width: 100%; min-height: 6rem; background: var(--hlbg); color: var(--text);
+    border: 1px solid var(--dimmer); font: inherit; padding: .4rem; resize: vertical;
+  }
+  #io button {
+    font: inherit; background: transparent; color: var(--dim);
+    border: 1px solid var(--dimmer); padding: .15rem .6rem; cursor: pointer; margin-top: .5rem;
+  }
+  #io button:hover { color: var(--gold); border-color: var(--gold-dark); }
+  #io .t { color: var(--gold); margin-bottom: .4rem; }
+</style>
+<div id="scr"></div>
+<span id="meas">██████████</span>
+<div id="io">
+  <div class="t">sauvegarde</div>
+  <textarea id="savefield" spellcheck="false" placeholder="collez une sauvegarde ici pour l'importer"></textarea>
+  <div>
+    <button onclick="doExport()">exporter</button>
+    <button onclick="doImport()">importer</button>
+    <button onclick="closeIO()">fermer</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ================================================================ données */
+
+const RARITIES = {
+  commun:     { label: 'commun',     cls: 'fg-text',   w: 100,  val: 4 },
+  peu:        { label: 'peu commun', cls: 'fg-green',  w: 38,   val: 12 },
+  rare:       { label: 'rare',       cls: 'fg-blue',   w: 11,   val: 45 },
+  epique:     { label: 'épique',     cls: 'fg-purple', w: 2.6,  val: 220 },
+  legendaire: { label: 'légendaire', cls: 'fg-gold',   w: 0.45, val: 1500 },
+};
+const RORDER = ['commun', 'peu', 'rare', 'epique', 'legendaire'];
+
+const BIOMES = {
+  foret:    { name: 'forêt',    cost: 0,       mult: 1,  desc: 'des sous-bois humides où tout bruisse. le point de départ de toute traque.' },
+  marais:   { name: 'marais',   cost: 1000,    mult: 2,  desc: 'de la vase, des bulles, des choses qui clignent des yeux sous la surface.' },
+  montagne: { name: 'montagne', cost: 8000,    mult: 4,  desc: 'des cimes venteuses. les pièges y gèlent mais les prises valent le détour.' },
+  desert:   { name: 'désert',   cost: 50000,   mult: 8,  desc: 'des dunes à perte de vue. tout ce qui y survit vaut cher.' },
+  glacier:  { name: 'glacier',  cost: 300000,  mult: 16, desc: 'un silence bleu et parfait. les espèces y sont rares et magnifiques.' },
+  abysses:  { name: 'abysses',  cost: 2000000, mult: 32, desc: 'là où la lumière renonce. le fond du bestiaire, littéralement.' },
+};
+const BORDER = ['foret', 'marais', 'montagne', 'desert', 'glacier', 'abysses'];
+
+const CREATURES = [
+  { id:'mulotin',    b:'foret', r:'commun', g:'(o.o)',  n:'mulotin',        lore:'un rongeur curieux qui entasse des graines dans les pièges eux-mêmes.' },
+  { id:'sourivole',  b:'foret', r:'commun', g:'~(°>',   n:'sourivole',      lore:'moitié souris, moitié feuille morte. plane mal, atterrit pire.' },
+  { id:'champillon', b:'foret', r:'commun', g:'.ø.',    n:'champillon',     lore:'un champignon qui marche. lentement, mais il marche.' },
+  { id:'bourdonel',  b:'foret', r:'commun', g:'=ö=',    n:'bourdonel',      lore:'bourdonne en permanence, même endormi. surtout endormi.' },
+  { id:'cerfeuil',   b:'foret', r:'peu',    g:'\\|/',   n:'cerfeuil',       lore:'un petit cervidé dont les bois fleurissent au printemps.' },
+  { id:'renardou',   b:'foret', r:'peu',    g:'/\\.',   n:'renardou cendré',lore:'sa fourrure sent le feu de camp éteint. personne ne sait pourquoi.' },
+  { id:'sylvestre',  b:'foret', r:'rare',   g:'{|}',    n:'sylvestre',      lore:'un esprit d\'arbre qui déteste être dérangé mais adore les appâts.' },
+  { id:'lucioleau',  b:'foret', r:'rare',   g:'*.*',    n:'lucioleau',      lore:'clignote en morse. les messages sont rarement polis.' },
+  { id:'dryadelle',  b:'foret', r:'epique', g:'(*)',    n:'dryadelle',      lore:'gardienne des clairières. se laisse capturer uniquement par curiosité.' },
+  { id:'grandcornu', b:'foret', r:'legendaire', g:'\\VV/', n:'grand cornu', lore:'le patron de la forêt. les autres espèces s\'inclinent sur son passage.' },
+
+  { id:'vasouille',  b:'marais', r:'commun', g:'~o~',   n:'vasouille',      lore:'une bulle de vase avec des yeux. pop.' },
+  { id:'crapotin',   b:'marais', r:'commun', g:'(o)~',  n:'crapotin',       lore:'croasse faux. les autres crapauds l\'évitent.' },
+  { id:'limacet',    b:'marais', r:'commun', g:'_@/',   n:'limacet',        lore:'laisse une trace luisante qui épelle son propre nom.' },
+  { id:'moustiflard',b:'marais', r:'commun', g:'-=+',   n:'moustiflard',    lore:'trop gros pour voler discrètement, trop têtu pour arrêter.' },
+  { id:'grenouillard',b:'marais',r:'peu',    g:'(°°)',  n:'grenouillard',   lore:'un vieux sage amphibien. donne des conseils que personne ne demande.' },
+  { id:'sangsurelle',b:'marais', r:'peu',    g:'~~~o',  n:'sangsurelle',    lore:'s\'attache facilement. au sens propre, hélas.' },
+  { id:'brumelin',   b:'marais', r:'rare',   g:'.::.',  n:'brumelin',       lore:'un morceau de brouillard devenu autonome un soir d\'octobre.' },
+  { id:'feufollet',  b:'marais', r:'rare',   g:'!*!',   n:'feufollet',      lore:'attire les voyageurs vers les pièges. techniquement un collègue.' },
+  { id:'hydrelle',   b:'marais', r:'epique', g:'}~{',   n:'hydrelle',       lore:'trois têtes, un seul avis : contre.' },
+  { id:'basilombre', b:'marais', r:'legendaire', g:'~S~', n:'basilombre',   lore:'son regard fige la vase elle-même. ne le fixez pas trop longtemps.' },
+
+  { id:'cailloutin', b:'montagne', r:'commun', g:'[o]', n:'cailloutin',     lore:'un galet qui a décidé d\'avoir des jambes. respectable.' },
+  { id:'marmotton',  b:'montagne', r:'commun', g:'(u)', n:'marmotton',      lore:'dort huit mois par an. les quatre autres, il mange.' },
+  { id:'chamoisel',  b:'montagne', r:'commun', g:'/\\_',n:'chamoisel',      lore:'défie la gravité par principe et les chasseurs par sport.' },
+  { id:'aiglonet',   b:'montagne', r:'commun', g:'\\v/',n:'aiglonet',       lore:'un rapace de poche. vise mal mais avec conviction.' },
+  { id:'cristalpin', b:'montagne', r:'peu',    g:'<*>', n:'cristalpin',     lore:'pousse comme un cristal, pique comme un pin.' },
+  { id:'bouquebrume',b:'montagne', r:'peu',    g:')(',  n:'bouquetin de brume', lore:'on ne voit jamais que ses cornes dépasser du nuage.' },
+  { id:'golemite',   b:'montagne', r:'rare',   g:'[#]', n:'golemite',       lore:'un tas de pierres qui se souvient d\'avoir été une montagne.' },
+  { id:'condorage',  b:'montagne', r:'rare',   g:'\\W/',n:'condorage',      lore:'ses colères déclenchent des avalanches. ses joies aussi.' },
+  { id:'wyvernelle', b:'montagne', r:'epique', g:'s^s', n:'wyvernelle',     lore:'une dragonne de taille modeste et d\'ego considérable.' },
+  { id:'titancimes', b:'montagne', r:'legendaire', g:'/M\\', n:'titan des cimes', lore:'quand il s\'assoit, les cartes doivent être redessinées.' },
+
+  { id:'scarabinet', b:'desert', r:'commun', g:'(=)',   n:'scarabinet',     lore:'pousse une boule de sable partout. c\'est son projet de vie.' },
+  { id:'serpentile', b:'desert', r:'commun', g:'~s',    n:'serpentile',     lore:'écrit des poèmes dans le sable en rampant. illisibles.' },
+  { id:'fennecot',   b:'desert', r:'commun', g:'^..^',  n:'fennecot',       lore:'ses oreilles captent la radio. il préfère le jazz.' },
+  { id:'cactille',   b:'desert', r:'commun', g:'|#|',   n:'cactille',       lore:'un cactus timide. les épines, c\'est de la gêne.' },
+  { id:'scorpiard',  b:'desert', r:'peu',    g:'-E<',   n:'scorpiard',      lore:'brille sous la lune et le sait parfaitement.' },
+  { id:'vautourin',  b:'desert', r:'peu',    g:'\\_/',  n:'vautourin',      lore:'patiente au-dessus des pièges. il a compris le concept.' },
+  { id:'mirageon',   b:'desert', r:'rare',   g:'.?.',   n:'mirageon',       lore:'existe-t-il vraiment ? le piège dit oui. le doute demeure.' },
+  { id:'dunataure',  b:'desert', r:'rare',   g:'=A=',   n:'dunataure',      lore:'mi-homme mi-dune. entièrement insaisissable, ou presque.' },
+  { id:'sphinxel',   b:'desert', r:'epique', g:'[:]',   n:'sphinxel',       lore:'pose une énigme avant chaque capture. le piège ne répond jamais, ça l\'agace.' },
+  { id:'versables',  b:'desert', r:'legendaire', g:'OOO~', n:'ver des sables', lore:'le désert n\'est pas vide. il digère.' },
+
+  { id:'pingolin',   b:'glacier', r:'commun', g:'(v)',  n:'pingolin',       lore:'glisse sur le ventre par efficacité, pas par jeu. enfin, un peu par jeu.' },
+  { id:'frimousse',  b:'glacier', r:'commun', g:'*o*',  n:'frimousse',      lore:'une boule de neige avec un visage. fond au printemps, revient vexée.' },
+  { id:'lievrelin',  b:'glacier', r:'commun', g:'(\\_', n:'lièvrelin',      lore:'blanc sur blanc. on ne capture souvent que ses empreintes.' },
+  { id:'morsille',   b:'glacier', r:'commun', g:':3=',  n:'morsille',       lore:'des défenses imposantes, un caractère de peluche.' },
+  { id:'stalactin',  b:'glacier', r:'peu',    g:'vvv',  n:'stalactin',      lore:'tombe du plafond des grottes sur les pièges. par solidarité.' },
+  { id:'rennelune',  b:'glacier', r:'peu',    g:'|-|',  n:'rennelune',      lore:'ne touche jamais vraiment le sol. vérifiez ses empreintes.' },
+  { id:'yetillon',   b:'glacier', r:'rare',   g:'[Y]',  n:'yétillon',       lore:'un yéti junior. floute lui-même les photos, c\'est de famille.' },
+  { id:'aurorelle',  b:'glacier', r:'rare',   g:'≈≈≈',  n:'aurorelle',      lore:'un ruban d\'aurore boréale qui a pris goût au sol.' },
+  { id:'givrecorne', b:'glacier', r:'epique', g:'|>o',  n:'givrecorne',     lore:'sa corne givre l\'air. les collectionneurs givrent d\'envie.' },
+  { id:'leviablanc', b:'glacier', r:'legendaire', g:'~O~', n:'léviathan blanc', lore:'la banquise, c\'est son dos. réfléchissez-y.' },
+
+  { id:'lanternet',  b:'abysses', r:'commun', g:'-o)',  n:'lanternet',      lore:'sa lampe frontale est en panne un jour sur deux. il fait avec.' },
+  { id:'meduselle',  b:'abysses', r:'commun', g:'(((',  n:'méduselle',      lore:'transparente et fière de l\'être. difficile à compter.' },
+  { id:'crabique',   b:'abysses', r:'commun', g:'}={',  n:'crabique',       lore:'marche de côté même dans ses rêves.' },
+  { id:'anguiliss',  b:'abysses', r:'commun', g:'~~>',  n:'anguiliss',      lore:'un éclair au ralenti. électrise les conversations, littéralement.' },
+  { id:'poulpinet',  b:'abysses', r:'peu',    g:'(8)',  n:'poulpinet',      lore:'ouvre les pièges de l\'intérieur. reste dedans par confort.' },
+  { id:'nocturnix',  b:'abysses', r:'peu',    g:'>:)',  n:'nocturnix',      lore:'sourit dans le noir. c\'est précisément le problème.' },
+  { id:'spectrelle', b:'abysses', r:'rare',   g:'.-.',  n:'spectrelle',     lore:'le fantôme d\'un poisson qui refuse d\'admettre quoi que ce soit.' },
+  { id:'neantin',    b:'abysses', r:'rare',   g:'[ ]',  n:'néantin',        lore:'un morceau de rien, soigneusement encadré.' },
+  { id:'krakenot',   b:'abysses', r:'epique', g:'{X}',  n:'krakenot',       lore:'un kraken de poche. les navires miniatures le redoutent.' },
+  { id:'ancienprof', b:'abysses', r:'legendaire', g:'(Ω)', n:'ancien des profondeurs', lore:'il était là avant les biomes. il sera là après vous.' },
+];
+const CBY = {}; CREATURES.forEach(c => { CBY[c.id] = c; });
+const CBIOME = {}; BORDER.forEach(b => { CBIOME[b] = CREATURES.filter(c => c.b === b); });
+
+const TRAPS = {
+  bois:      { n: 'piège en bois',    cost: 25,     itv: 30, luck: 0,    succ: .55 },
+  fer:       { n: 'cage en fer',      cost: 400,    itv: 24, luck: .15,  succ: .65 },
+  ressort:   { n: 'piège à ressort',  cost: 2500,   itv: 18, luck: .35,  succ: .75 },
+  chrome:    { n: 'piège chromé',     cost: 15000,  itv: 13, luck: .6,   succ: .85 },
+  plasma:    { n: 'piège à plasma',   cost: 90000,  itv: 9,  luck: 1.0,  succ: .92 },
+  quantique: { n: 'piège quantique',  cost: 600000, itv: 6,  luck: 1.6,  succ: .98 },
+};
+const TORDER = ['bois', 'fer', 'ressort', 'chrome', 'plasma', 'quantique'];
+
+const BAITS = {
+  baies:   { n: 'baies sauvages',    cost: 8,    desc: 'vitesse du piège +25%' },
+  viande:  { n: 'viande fumée',      cost: 30,   desc: 'chance +0,35' },
+  nectar:  { n: 'nectar doré',       cost: 120,  desc: 'valeur des prises ×1,5 · chance +0,2' },
+  truffe:  { n: 'truffe des brumes', cost: 400,  desc: 'poids des raretés rare+ ×2,5' },
+  essence: { n: 'essence lunaire',   cost: 1000, desc: 'chance de shiny ×4 · chance +0,3' },
+};
+const BAORDER = ['baies', 'viande', 'nectar', 'truffe', 'essence'];
+
+const LABS = {
+  affutage:  { n: 'affûtage',        max: 10, base: 200,  mult: 2.2, fx: l => 'vitesse des pièges +' + (l * 6) + '%',   desc: 'des mâchoires mieux huilées : +6% de vitesse par niveau.' },
+  flair:     { n: 'flair',           max: 15, base: 300,  mult: 2.1, fx: l => 'chance +' + ((l * 6) / 100).toFixed(2).replace('.', ','), desc: 'l\'instinct du traqueur : +0,06 de chance par niveau.' },
+  negoce:    { n: 'négoce',          max: 15, base: 250,  mult: 2.1, fx: l => 'prix de vente +' + (l * 8) + '%',        desc: 'l\'art de la marge : +8% aux prix de vente par niveau.' },
+  horloge:   { n: 'horlogerie',      max: 11, base: 500,  mult: 2.0, fx: l => 'hors-ligne : ' + (2 + l * 2) + ' h max', desc: 'les pièges travaillent plus longtemps sans vous : +2 h par niveau.' },
+  eclat:     { n: 'chasse nocturne', max: 10, base: 1000, mult: 2.3, fx: l => 'chance de shiny +' + (l * 15) + '%',     desc: 'sortir aux bonnes heures : +15% de chance de shiny par niveau.' },
+  autovente: { n: 'auto-vente',      max: 1,  base: 5000, mult: 1,   fx: l => l ? 'filtres débloqués' : 'non débloquée', desc: 'revend les doublons dès la capture, selon vos filtres (à la boutique).' },
+};
+const LORDER = ['affutage', 'flair', 'negoce', 'horloge', 'eclat', 'autovente'];
+
+const ACHIEVEMENTS = [
+  { id: 'cap1',     n: 'première prise',         d: 'capturer une créature',                r: 50,     t: s => s.captures >= 1 },
+  { id: 'cap100',   n: 'braconnier du dimanche', d: 'capturer 100 créatures',               r: 500,    t: s => s.captures >= 100 },
+  { id: 'cap1000',  n: 'main verte',             d: 'capturer 1 000 créatures',             r: 5000,   t: s => s.captures >= 1000 },
+  { id: 'cap10000', n: 'force de la nature',     d: 'capturer 10 000 créatures',            r: 50000,  t: s => s.captures >= 10000 },
+  { id: 'shiny1',   n: 'ça brille',              d: 'capturer un shiny',                    r: 1000,   t: s => s.shinies >= 1 },
+  { id: 'shiny25',  n: 'aimant à paillettes',    d: 'capturer 25 shinies',                  r: 25000,  t: s => s.shinies >= 25 },
+  { id: 'leg1',     n: 'chasseur de mythes',     d: 'capturer une créature légendaire',     r: 3000,   t: s => Object.keys(s.dex).some(id => CBY[id].r === 'legendaire') },
+  { id: 'dex10',    n: 'carnet de terrain',      d: 'découvrir 10 espèces',                 r: 300,    t: s => Object.keys(s.dex).length >= 10 },
+  { id: 'dex30',    n: 'encyclopédiste',         d: 'découvrir 30 espèces',                 r: 3000,   t: s => Object.keys(s.dex).length >= 30 },
+  { id: 'dex60',    n: 'bestiaire complet',      d: 'découvrir les 60 espèces',             r: 100000, t: s => Object.keys(s.dex).length >= 60 },
+  { id: 'biome2',   n: 'les pieds dans la vase', d: 'débloquer le marais',                  r: 200,    t: s => !!s.biomes.marais },
+  { id: 'biome6',   n: 'au fond du gouffre',     d: 'débloquer les abysses',                r: 200000, t: s => !!s.biomes.abysses },
+  { id: 'rich1',    n: 'premier magot',          d: 'gagner 10 000 écus au total',          r: 1000,   t: s => s.totalEarned >= 10000 },
+  { id: 'rich2',    n: 'fortune faite',          d: 'gagner 1 000 000 d\'écus au total',    r: 50000,  t: s => s.totalEarned >= 1000000 },
+  { id: 'quantum',  n: 'ingénierie douteuse',    d: 'posséder un piège quantique',          r: 30000,  t: s => (s.traps.quantique || 0) >= 1 },
+  { id: 'migr1',    n: 'nouveau départ',         d: 'effectuer une migration',              r: 0,      t: s => s.migrations >= 1 },
+  { id: 'migr5',    n: 'nomade',                 d: 'effectuer 5 migrations',               r: 0,      t: s => s.migrations >= 5 },
+  { id: 'full1',    n: 'forêt domestiquée',      d: 'découvrir les 10 espèces de la forêt', r: 2000,   t: s => CBIOME.foret.every(c => s.dex[c.id]) },
+];
+
+const SHINY_BASE = 1 / 128;
+const SAVE_KEY = 'traquesh_save_v1';
+
+/* =================================================================== état */
+
+function defaultState() {
+  return {
+    v: 1, ecus: 30,
+    totalEarned: 0, runEarned: 0,
+    captures: 0, shinies: 0, attempts: 0,
+    trophies: 0, migrations: 0,
+    traps: { bois: 1 }, baits: {},
+    biomes: { foret: { slots: 2, pl: [null, null] } },
+    inv: {}, dex: {}, lab: {}, autosell: {}, ach: {},
+    lastSeen: Date.now(), created: Date.now(),
+  };
+}
+let S = defaultState();
+
+function fmt(n) {
+  n = Math.floor(n);
+  if (n >= 1e9) return (n / 1e9).toFixed(2).replace('.', ',') + ' Md';
+  if (n >= 1e6) return (n / 1e6).toFixed(2).replace('.', ',') + ' M';
+  if (n >= 10000) return (n / 1e3).toFixed(1).replace(',0', '').replace('.', ',') + ' k';
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+/* ------------------------------------------------------------ calcul bonus */
+
+function completedBiomes() { return BORDER.filter(b => CBIOME[b].every(c => S.dex[c.id])).length; }
+function shinyCompletedBiomes() { return BORDER.filter(b => CBIOME[b].every(c => S.dex[c.id] && S.dex[c.id].s > 0)).length; }
+function globalLuck() { return (S.lab.flair || 0) * .06 + S.trophies * .04 + completedBiomes() * .10; }
+function sellMult() { return (1 + (S.lab.negoce || 0) * .08) * (1 + S.trophies * .04) * (1 + shinyCompletedBiomes() * .10); }
+function speedMult() { return 1 + (S.lab.affutage || 0) * .06; }
+function shinyChance(bait) {
+  let c = SHINY_BASE * (1 + (S.lab.eclat || 0) * .15);
+  if (bait === 'essence') c *= 4;
+  return Math.min(c, .25);
+}
+function offlineCapMs() { return (2 + (S.lab.horloge || 0) * 2) * 3600 * 1000; }
+function trapInterval(tier, bait) {
+  let itv = TRAPS[tier].itv / speedMult();
+  if (bait === 'baies') itv *= 0.8;
+  return itv * 1000;
+}
+function creatureValue(c, shiny) {
+  let v = RARITIES[c.r].val * BIOMES[c.b].mult * sellMult();
+  if (shiny) v *= 15;
+  return Math.max(1, Math.floor(v));
+}
+function labCost(key) { return Math.floor(LABS[key].base * Math.pow(LABS[key].mult, S.lab[key] || 0)); }
+function slotCost(b) {
+  const base = Math.max(250, BIOMES[b].cost);
+  return S.biomes[b].slots === 2 ? Math.floor(base * .5) : Math.floor(base * 2);
+}
+function placedCount(tier) {
+  let n = 0;
+  for (const b in S.biomes) S.biomes[b].pl.forEach(p => { if (p && p.trap === tier) n++; });
+  return n;
+}
+function trophyGain() { return Math.floor(Math.sqrt(S.runEarned / 25000)); }
+
+/* ---------------------------------------------------------------- capture */
+
+function rollCreature(biome, luck, bait) {
+  const pool = CBIOME[biome];
+  const weights = pool.map(c => {
+    const i = RORDER.indexOf(c.r);
+    let w = RARITIES[c.r].w * Math.pow(1 + luck, i);
+    if (bait === 'truffe' && i >= 2) w *= 2.5;
+    return w;
+  });
+  const total = weights.reduce((a, x) => a + x, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
+  return pool[pool.length - 1];
+}
+
+function attempt(biome, pl, silent) {
+  const trap = TRAPS[pl.trap];
+  let bait = null;
+  if (pl.bait && (S.baits[pl.bait] || 0) > 0) {
+    bait = pl.bait;
+    S.baits[bait]--;
+    if (S.baits[bait] <= 0) {
+      delete S.baits[bait];
+      if (!silent) log([['appât épuisé (' + BAITS[bait].n + ') · ' + BIOMES[biome].name, 'fg-dim']]);
+    }
+  }
+  S.attempts++;
+  if (Math.random() > trap.succ) return null;
+
+  let luck = trap.luck + globalLuck();
+  if (bait === 'viande') luck += .35;
+  if (bait === 'nectar') luck += .2;
+  if (bait === 'essence') luck += .3;
+
+  const c = rollCreature(biome, luck, bait);
+  const shiny = Math.random() < shinyChance(bait);
+  const isNew = !S.dex[c.id];
+  const newShiny = shiny && (!S.dex[c.id] || S.dex[c.id].s === 0);
+
+  if (!S.dex[c.id]) S.dex[c.id] = { n: 0, s: 0 };
+  S.dex[c.id].n++;
+  if (shiny) S.dex[c.id].s++;
+  if (!S.inv[c.id]) S.inv[c.id] = { n: 0, s: 0 };
+  if (shiny) S.inv[c.id].s++; else S.inv[c.id].n++;
+  S.captures++;
+  if (shiny) S.shinies++;
+
+  let sold = 0;
+  if ((S.lab.autovente || 0) >= 1 && S.autosell[c.r] && !shiny && S.inv[c.id].n > 1) {
+    const q = S.inv[c.id].n - 1;
+    S.inv[c.id].n = 1;
+    sold = Math.floor(q * creatureValue(c, false) * (bait === 'nectar' ? 1.5 : 1));
+    gain(sold);
+  }
+  return { c, shiny, isNew, newShiny, bait, sold };
+}
+
+function gain(n) { S.ecus += n; S.totalEarned += n; S.runEarned += n; }
+
+function reportCatch(biome, res) {
+  if (!res) return;
+  const { c, shiny, isNew, newShiny, sold } = res;
+  const segs = [
+    [BIOMES[biome].name + ' → ', 'fg-dim'],
+    [c.n + (shiny ? ' ✦' : ''), shiny ? 'shiny' : RARITIES[c.r].cls],
+    [' (' + RARITIES[c.r].label + (shiny ? ' · shiny' : '') + ')', 'fg-dimmer'],
+  ];
+  if (sold) segs.push([' · auto-vente +' + fmt(sold) + ' écus', 'fg-golddark']);
+  log(segs);
+  if (isNew) {
+    log([['nouvelle espèce découverte : ', 'fg-green'], [c.n, RARITIES[c.r].cls], [' !', 'fg-green']]);
+    toast('nouvelle espèce : ' + c.n);
+  }
+  if (newShiny && !isNew) toast('shiny obtenu : ' + c.n + ' ✦');
+  if (c.r === 'legendaire') toast('légendaire capturé : ' + c.n);
+}
+
+/* --------------------------------------------------------------- boucle */
+
+function tick() {
+  const now = Date.now();
+  for (const b in S.biomes) {
+    S.biomes[b].pl.forEach(pl => {
+      if (!pl) return;
+      let guard = 0;
+      while (pl.nextAt <= now && guard++ < 50) {
+        reportCatch(b, attempt(b, pl, false));
+        pl.nextAt += trapInterval(pl.trap, pl.bait && S.baits[pl.bait] ? pl.bait : null);
+      }
+    });
+  }
+  checkAchievements();
+  S.lastSeen = now;
+}
+
+function runOffline() {
+  const now = Date.now();
+  const away = now - S.lastSeen;
+  if (away < 15000) { resetTimers(now); return; }
+  const capped = Math.min(away, offlineCapMs());
+  const from = now - capped;
+  let caught = 0, earned0 = S.totalEarned, discoveries = [], shinies0 = S.shinies;
+  for (const b in S.biomes) {
+    S.biomes[b].pl.forEach(pl => {
+      if (!pl) return;
+      let t = Math.max(pl.nextAt, from);
+      let guard = 0;
+      while (t <= now && guard++ < 4000) {
+        const res = attempt(b, pl, true);
+        if (res) { caught++; if (res.isNew) discoveries.push(res.c); }
+        t += trapInterval(pl.trap, pl.bait && S.baits[pl.bait] ? pl.bait : null);
+      }
+      pl.nextAt = t;
+    });
+  }
+  checkAchievements();
+  if (caught > 0) {
+    const earned = S.totalEarned - earned0, newShinies = S.shinies - shinies0;
+    const h = Math.floor(capped / 3600000), m = Math.floor((capped % 3600000) / 60000);
+    openPanel(offlinePanel(h, m, away > offlineCapMs(), caught, newShinies, earned, discoveries));
+    log([['retour de ' + (h ? h + ' h ' : '') + m + ' min hors-ligne : ' + fmt(caught) + ' captures', 'fg-green']]);
+  }
+  resetTimers(now);
+}
+function resetTimers(now) {
+  for (const b in S.biomes) S.biomes[b].pl.forEach(pl => {
+    if (pl && (pl.nextAt < now || pl.nextAt > now + 120000)) pl.nextAt = now + trapInterval(pl.trap, pl.bait);
+  });
+}
+
+function checkAchievements() {
+  ACHIEVEMENTS.forEach(a => {
+    if (!S.ach[a.id] && a.t(S)) {
+      S.ach[a.id] = true;
+      if (a.r) gain(a.r);
+      log([['succès débloqué : ', 'fg-green'], [a.n, 'fg-gold'], [a.r ? ' (+' + fmt(a.r) + ' écus)' : '', 'fg-dimmer']]);
+      toast('succès : ' + a.n);
+    }
+  });
+}
+
+/* -------------------------------------------------------------- actions */
+
+function buyTrap(tier) {
+  const t = TRAPS[tier];
+  if (S.ecus < t.cost) return;
+  S.ecus -= t.cost;
+  S.traps[tier] = (S.traps[tier] || 0) + 1;
+  log([['acheté : ' + t.n, 'fg-text'], [' (−' + fmt(t.cost) + ' écus)', 'fg-dimmer']]);
+}
+function buyBait(id, q) {
+  const cost = BAITS[id].cost * q;
+  if (S.ecus < cost) return;
+  S.ecus -= cost;
+  S.baits[id] = (S.baits[id] || 0) + q;
+  log([['acheté : ' + q + '× ' + BAITS[id].n, 'fg-text'], [' (−' + fmt(cost) + ' écus)', 'fg-dimmer']]);
+}
+function buyLab(key) {
+  const cost = labCost(key), lv = S.lab[key] || 0;
+  if (lv >= LABS[key].max || S.ecus < cost) return;
+  S.ecus -= cost;
+  S.lab[key] = lv + 1;
+  log([['labo : ' + LABS[key].n + ' niveau ' + (lv + 1), 'fg-blue'], [' (−' + fmt(cost) + ' écus)', 'fg-dimmer']]);
+}
+function unlockBiome(b) {
+  const cost = BIOMES[b].cost;
+  if (S.biomes[b] || S.ecus < cost) return;
+  S.ecus -= cost;
+  S.biomes[b] = { slots: 2, pl: [null, null] };
+  log([['biome débloqué : ' + BIOMES[b].name, 'fg-green']]);
+  toast('biome débloqué : ' + BIOMES[b].name);
+  checkAchievements();
+}
+function buySlot(b) {
+  const cost = slotCost(b);
+  if (S.biomes[b].slots >= 4 || S.ecus < cost) return;
+  S.ecus -= cost;
+  S.biomes[b].slots++;
+  S.biomes[b].pl.push(null);
+  log([['emplacement supplémentaire : ' + BIOMES[b].name, 'fg-text'], [' (−' + fmt(cost) + ' écus)', 'fg-dimmer']]);
+}
+function placeTrap(b, i, tier) {
+  S.biomes[b].pl[i] = { trap: tier, bait: null, nextAt: Date.now() + trapInterval(tier, null) };
+  log([['piège posé : ' + TRAPS[tier].n + ' → ' + BIOMES[b].name, 'fg-text']]);
+}
+function sellCreature(id, shiny, qty) {
+  const c = CBY[id], iv = S.inv[id];
+  if (!iv) return;
+  let q;
+  if (shiny) q = qty === 'all' ? iv.s : Math.min(qty, iv.s);
+  else q = qty === 'all' ? iv.n : (qty === 'keep1' ? Math.max(0, iv.n - 1) : Math.min(qty, iv.n));
+  if (q <= 0) return;
+  const v = creatureValue(c, shiny) * q;
+  if (shiny) iv.s -= q; else iv.n -= q;
+  if (iv.n <= 0 && iv.s <= 0) delete S.inv[id];
+  gain(v);
+  log([['vendu : ' + q + '× ' + c.n + (shiny ? ' ✦' : ''), 'fg-text'], [' (+' + fmt(v) + ' écus)', 'fg-golddark']]);
+}
+function sellDupes() {
+  let total = 0, n = 0;
+  for (const id in S.inv) {
+    const iv = S.inv[id], q = Math.max(0, iv.n - 1);
+    if (q > 0) { total += creatureValue(CBY[id], false) * q; iv.n -= q; n += q; }
+  }
+  if (n === 0) return;
+  gain(total);
+  log([['vendu : ' + fmt(n) + ' doublons', 'fg-text'], [' (+' + fmt(total) + ' écus)', 'fg-golddark']]);
+}
+function doMigration() {
+  const g = trophyGain();
+  if (g < 1) return;
+  S.trophies += g;
+  S.migrations++;
+  S.ecus = 30;
+  S.runEarned = 0;
+  S.traps = { bois: 1 };
+  S.baits = {}; S.inv = {}; S.lab = {}; S.autosell = {};
+  S.biomes = { foret: { slots: 2, pl: [null, null] } };
+  log([['migration effectuée : +' + g + ' trophées. tout recommence, en mieux.', 'fg-gold']]);
+  toast('migration : +' + g + ' trophées');
+  checkAchievements();
+  save();
+}
+
+function save() {
+  S.lastSeen = Date.now();
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* stockage indisponible */ }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) S = Object.assign(defaultState(), JSON.parse(raw));
+  } catch (e) { S = defaultState(); }
+}
+
+/* =========================================================== monde ASCII */
+
+const MAPW = 114, MAPH = 46;
+let W = [];          // cellules {ch, cls, solid}
+const DOORS = [];    // {x, y, id}
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function wput(x, y, ch, cls, solid) {
+  if (x < 0 || y < 0 || x >= MAPW || y >= MAPH) return;
+  W[y][x] = { ch, cls, solid: !!solid };
+}
+function wtext(x, y, str, cls, solid) {
+  for (let i = 0; i < str.length; i++) wput(x + i, y, str[i], cls, solid);
+}
+function scatter(x, y, w, h, glyphs, cls, density, solid, rng) {
+  for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) {
+    if (W[yy] && W[yy][xx] && W[yy][xx].ch === ' ' && rng() < density) {
+      wput(xx, yy, glyphs[Math.floor(rng() * glyphs.length)], cls, solid);
+    }
+  }
+}
+function building(x, y, w, h, label, doorId, doorGlyph) {
+  for (let xx = x; xx < x + w; xx++) { wput(xx, y, '═', 'fg-dim', true); wput(xx, y + h - 1, '═', 'fg-dim', true); }
+  for (let yy = y; yy < y + h; yy++) { wput(x, yy, '║', 'fg-dim', true); wput(x + w - 1, yy, '║', 'fg-dim', true); }
+  wput(x, y, '╔', 'fg-dim', true); wput(x + w - 1, y, '╗', 'fg-dim', true);
+  wput(x, y + h - 1, '╚', 'fg-dim', true); wput(x + w - 1, y + h - 1, '╝', 'fg-dim', true);
+  for (let yy = y + 1; yy < y + h - 1; yy++) for (let xx = x + 1; xx < x + w - 1; xx++) wput(xx, yy, '▒', 'fg-dimmer', true);
+  wtext(x + Math.floor((w - label.length) / 2), y + Math.floor(h / 2), label, 'fg-gold', true);
+  const dx = x + Math.floor(w / 2);
+  wtext(dx - 2, y + h - 1, '╡ ' + doorGlyph + ' ╞', 'fg-gold', false);
+  wput(dx, y + h - 1, doorGlyph, 'fg-gold', false);
+  DOORS.push({ x: dx, y: y + h - 1, id: doorId });
+  DOORS.push({ x: dx, y: y + h, id: doorId });
+}
+
+const ZONES = [
+  { id: 'foret',    x: 1,  y: 2,  w: 33, h: 18 },
+  { id: 'montagne', x: 37, y: 1,  w: 39, h: 9 },
+  { id: 'glacier',  x: 79, y: 1,  w: 34, h: 11 },
+  { id: 'marais',   x: 1,  y: 24, w: 33, h: 21 },
+  { id: 'desert',   x: 79, y: 15, w: 34, h: 13 },
+  { id: 'abysses',  x: 79, y: 31, w: 34, h: 14 },
+];
+const LABELPOS = {
+  foret:    { x: 12, y: 3 },
+  montagne: { x: 50, y: 2 },
+  glacier:  { x: 90, y: 2 },
+  marais:   { x: 12, y: 25 },
+  desert:   { x: 90, y: 16 },
+  abysses:  { x: 90, y: 32 },
+};
+
+function buildWorld() {
+  W = [];
+  for (let y = 0; y < MAPH; y++) {
+    W.push([]);
+    for (let x = 0; x < MAPW; x++) W[y].push({ ch: ' ', cls: 'fg-dimmer', solid: false });
+  }
+  const rng = mulberry32(1337);
+
+  // village : sol
+  for (let y = 12; y <= 33; y++) for (let x = 37; x <= 76; x++)
+    if (rng() < .5) wput(x, y, '░', 'fg-dimmer', false);
+  // chemins vers les biomes
+  const path = (x1, y1, x2, y2) => {
+    let x = x1, y = y1;
+    while (x !== x2) { wput(x, y, '░', 'fg-dimmer', false); x += Math.sign(x2 - x); }
+    while (y !== y2) { wput(x, y, '░', 'fg-dimmer', false); y += Math.sign(y2 - y); }
+  };
+  path(37, 22, 20, 12);  // forêt
+  path(37, 28, 20, 34);  // marais
+  path(56, 12, 56, 6);   // montagne
+  path(76, 20, 95, 6);   // glacier
+  path(76, 24, 95, 21);  // désert
+  path(76, 30, 95, 37);  // abysses
+  // grand corridor du village : traversée est-ouest garantie
+  for (let x = 37; x <= 76; x++) wput(x, 22, '░', 'fg-dimmer', false);
+
+  // biomes : décor
+  scatter(1, 2, 33, 18, ['♣', '♣', '♠', '.'], 'fg-green', .16, true, rng);
+  scatter(37, 1, 39, 9, ['^', '▲', '/\\'[0], '∆'], 'fg-dim', .13, true, rng);
+  scatter(79, 1, 34, 11, ['*', '▲', '·'], 'fg-ice', .12, true, rng);
+  scatter(1, 24, 33, 21, ['~', '~', 'o', '"'], 'fg-marsh', .14, false, rng);
+  scatter(79, 15, 34, 13, ['∙', '≈', '·'], 'fg-golddark', .12, false, rng);
+  scatter(79, 31, 34, 14, ['▓', '▒', '●', '·'], 'fg-abyss', .13, true, rng);
+
+  // plantes du village (avant les bâtiments, pour ne pas pousser dans les portes)
+  scatter(37, 12, 40, 22, ['♣'], 'fg-green', .012, false, rng);
+
+  // bâtiments du village
+  building(39, 14, 16, 6, 'boutique', 'boutique', 'o');
+  building(59, 14, 16, 6, 'labo', 'labo', 'l');
+  building(43, 25, 13, 5, 'bestiaire', 'bestiaire', 'b');
+  building(61, 25, 13, 5, 'trophées', 'succes', 't');
+
+  // fontaine décorative
+  wtext(55, 23, '╭─╮', 'fg-blue', true);
+  wtext(55, 24, '╰─╯', 'fg-blue', true);
+}
+
+/* ============================================================== renderer */
+
+const scr = document.getElementById('scr');
+let COLS = 80, ROWS = 24, CW = 9, CH = 19;
+let buf = [];        // [{ch, cls, act}]
+let actions = [];
+
+function measure() {
+  const m = document.getElementById('meas');
+  CW = m.getBoundingClientRect().width / 10;
+  CH = 19;
+  COLS = Math.max(60, Math.floor(window.innerWidth / CW));
+  ROWS = Math.max(22, Math.floor(window.innerHeight / CH));
+}
+function clearBuf() {
+  buf = [];
+  actions = [];
+  for (let y = 0; y < ROWS; y++) {
+    buf.push([]);
+    for (let x = 0; x < COLS; x++) buf[y].push({ ch: ' ', cls: 'fg-text', act: -1 });
+  }
+}
+function put(x, y, str, cls, act) {
+  if (y < 0 || y >= ROWS) return;
+  let ai = -1;
+  if (act) { ai = actions.length; actions.push(act); }
+  for (let i = 0; i < str.length; i++) {
+    const xx = x + i;
+    if (xx < 0 || xx >= COLS) continue;
+    buf[y][xx] = { ch: str[i], cls, act: ai };
+  }
+}
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function flush() {
+  let html = '';
+  for (let y = 0; y < ROWS; y++) {
+    let runCls = null, runAct = -2, run = '';
+    for (let x = 0; x < COLS; x++) {
+      const c = buf[y][x];
+      if (c.cls !== runCls || c.act !== runAct) {
+        if (run) html += '<span class="' + runCls + (runAct >= 0 ? ' act' : '') + '"' + (runAct >= 0 ? ' data-a="' + runAct + '"' : '') + '>' + esc(run) + '</span>';
+        runCls = c.cls; runAct = c.act; run = '';
+      }
+      run += c.ch;
+    }
+    if (run) html += '<span class="' + runCls + (runAct >= 0 ? ' act' : '') + '"' + (runAct >= 0 ? ' data-a="' + runAct + '"' : '') + '>' + esc(run) + '</span>';
+    html += '\n';
+  }
+  scr.innerHTML = html;
+}
+scr.addEventListener('click', e => {
+  const t = e.target.closest('[data-a]');
+  if (t) { const fn = actions[+t.dataset.a]; if (fn) { fn(); render(); } }
+});
+
+/* ============================================================== journal */
+
+let logLines = [];   // {t, segs}
+function log(segs) {
+  const d = new Date();
+  const t = [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
+  logLines.unshift({ t, segs });
+  if (logLines.length > 80) logLines.length = 80;
+}
+
+let toasts = [];     // {msg, until}
+function toast(msg) { toasts.push({ msg, until: Date.now() + 3800 }); if (toasts.length > 4) toasts.shift(); }
+
+/* =============================================================== joueur */
+
+const P = { x: 50, y: 22 };
+function solidAt(x, y) {
+  if (x < 0 || y < 0 || x >= MAPW || y >= MAPH) return true;
+  return W[y][x].solid;
+}
+function movePlayer(dx, dy) {
+  const nx = P.x + dx, ny = P.y + dy;
+  if (!solidAt(nx, ny)) { P.x = nx; P.y = ny; }
+}
+function zoneAt(x, y) {
+  const d = DOORS.find(d => Math.abs(d.x - x) <= 1 && Math.abs(d.y - y) <= 1);
+  if (d) return d.id;
+  const z = ZONES.find(z => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+  return z ? z.id : null;
+}
+function zoneHint() {
+  const z = zoneAt(P.x, P.y);
+  if (!z) return { txt: 'promenez-vous · Entrée pour interagir près d\'un lieu', cls: 'fg-dimmer' };
+  if (BIOMES[z]) {
+    if (!S.biomes[z]) return { txt: BIOMES[z].name + ' · verrouillé — Entrée : débloquer pour ' + fmt(BIOMES[z].cost) + ' écus', cls: 'fg-red' };
+    const placed = S.biomes[z].pl.filter(Boolean).length;
+    return { txt: BIOMES[z].name + ' · ' + placed + '/' + S.biomes[z].slots + ' pièges posés — Entrée : gérer', cls: 'fg-green' };
+  }
+  const names = { boutique: 'boutique — Entrée : acheter et vendre', labo: 'labo — Entrée : recherches et migration', bestiaire: 'bestiaire — Entrée : consulter', succes: 'trophées — Entrée : succès' };
+  return { txt: names[z] || z, cls: 'fg-gold' };
+}
+function interact() {
+  const z = zoneAt(P.x, P.y);
+  if (!z) return;
+  if (BIOMES[z]) {
+    if (!S.biomes[z]) openPanel(unlockPanel(z));
+    else openPanel(biomePanel(z));
+  }
+  else if (z === 'boutique') openPanel(shopPanel());
+  else if (z === 'labo') openPanel(labPanel());
+  else if (z === 'bestiaire') openPanel(dexPanel());
+  else if (z === 'succes') openPanel(achPanel());
+}
+
+/* ============================================================== panneaux */
+
+/* un panneau : { title, build() -> rows, sel, scroll }
+   row : { segs:[[txt,cls]...], btns:[{label, fn, cls}], act, indent } */
+let panels = [];
+function openPanel(p) { p.sel = 0; p.scroll = 0; panels.push(p); }
+function closePanel() { panels.pop(); }
+function closeAll() { panels = []; }
+function topPanel() { return panels[panels.length - 1] || null; }
+
+function wrap(txt, w) {
+  const words = txt.split(' '), lines = [];
+  let cur = '';
+  words.forEach(word => {
+    if ((cur + ' ' + word).trim().length > w) { lines.push(cur.trim()); cur = word; }
+    else cur += ' ' + word;
+  });
+  if (cur.trim()) lines.push(cur.trim());
+  return lines;
+}
+function trow(txt, cls) { return { segs: [[txt, cls || 'fg-dim']] }; }
+function wrows(txt, w, cls) { return wrap(txt, w).map(l => trow(l, cls)); }
+function hrow(txt) { return { segs: [['── ' + txt + ' ', 'fg-blue'], ['─'.repeat(40), 'fg-dimmer']] }; }
+
+function selectables(rows) {
+  const out = [];
+  rows.forEach((r, i) => {
+    if (r.act) out.push({ r: i, b: -1 });
+    (r.btns || []).forEach((_, j) => out.push({ r: i, b: j }));
+  });
+  return out;
+}
+
+function drawPanel(p) {
+  const rows = p.build();
+  const pw = Math.min(80, COLS - 6);
+  const ph = Math.min(ROWS - 6, rows.length + 4);
+  const px = Math.floor((COLS - pw) / 2), py = Math.floor((ROWS - ph) / 2);
+  const inner = ph - 4;
+
+  const sels = selectables(rows);
+  if (p.sel >= sels.length) p.sel = Math.max(0, sels.length - 1);
+  const cur = sels[p.sel] || null;
+
+  if (cur) {
+    if (cur.r < p.scroll) p.scroll = cur.r;
+    if (cur.r >= p.scroll + inner) p.scroll = cur.r - inner + 1;
+  }
+  p.scroll = Math.max(0, Math.min(p.scroll, Math.max(0, rows.length - inner)));
+
+  // fond
+  for (let y = py; y < py + ph; y++) put(px, y, ' '.repeat(pw), 'hl');
+  // cadre
+  put(px, py, '┌' + '─'.repeat(pw - 2) + '┐', 'fg-dim hl');
+  put(px, py + ph - 1, '└' + '─'.repeat(pw - 2) + '┘', 'fg-dim hl');
+  for (let y = py + 1; y < py + ph - 1; y++) { put(px, y, '│', 'fg-dim hl'); put(px + pw - 1, y, '│', 'fg-dim hl'); }
+  put(px + 2, py, ' ' + p.title + ' ', 'fg-gold hl');
+  if (rows.length > inner) {
+    put(px + pw - 14, py + ph - 1, ' ' + (p.scroll + 1) + '-' + Math.min(rows.length, p.scroll + inner) + '/' + rows.length + ' ', 'fg-dimmer hl');
+  }
+  put(px + 2, py + ph - 1, ' ↑↓ naviguer · Entrée valider · Échap fermer ', 'fg-dimmer hl');
+
+  for (let i = 0; i < inner; i++) {
+    const ri = p.scroll + i;
+    if (ri >= rows.length) break;
+    const r = rows[ri];
+    let x = px + 2 + (r.indent || 0);
+    const y = py + 2 + i;
+    const rowSel = cur && cur.r === ri && cur.b === -1;
+    (r.segs || []).forEach(([txt, cls]) => {
+      put(x, y, txt, (rowSel ? 'sel' : (cls + ' hl')), r.act ? (() => { p.sel = sels.findIndex(s => s.r === ri && s.b === -1); r.act(); }) : null);
+      x += txt.length;
+    });
+    (r.btns || []).forEach((btn, j) => {
+      x += 1;
+      const isSel = cur && cur.r === ri && cur.b === j;
+      const lbl = '[' + btn.label + ']';
+      put(x, y, lbl, isSel ? 'sel' : ((btn.cls || 'fg-blue') + ' hl'),
+        () => { p.sel = sels.findIndex(s => s.r === ri && s.b === j); btn.fn(); });
+      x += lbl.length;
+    });
+  }
+}
+
+function panelKey(p, e) {
+  const rows = p.build();
+  const sels = selectables(rows);
+  const k = e.key;
+  if (k === 'Escape' || k === 'q') { closePanel(); return; }
+  if (!sels.length) return;
+  if (k === 'ArrowDown' || k === 'j' || k === 's') {
+    const r0 = sels[p.sel] ? sels[p.sel].r : 0;
+    let n = p.sel;
+    for (let i = p.sel + 1; i < sels.length; i++) if (sels[i].r > r0) { n = i; break; }
+    p.sel = n;
+  } else if (k === 'ArrowUp' || k === 'k' || k === 'z') {
+    const r0 = sels[p.sel] ? sels[p.sel].r : 0;
+    let n = p.sel;
+    for (let i = p.sel - 1; i >= 0; i--) if (sels[i].r < r0) { n = i; break; }
+    if (n !== p.sel) {
+      const rTarget = sels[n].r;
+      while (n > 0 && sels[n - 1].r === rTarget) n--;
+    }
+    p.sel = n;
+  } else if (k === 'ArrowRight' || k === 'l' || k === 'd') {
+    if (p.sel + 1 < sels.length && sels[p.sel + 1].r === sels[p.sel].r) p.sel++;
+  } else if (k === 'ArrowLeft' || k === 'h') {
+    if (p.sel > 0 && sels[p.sel - 1].r === sels[p.sel].r) p.sel--;
+  } else if (k === 'Enter' || k === ' ') {
+    const s = sels[p.sel];
+    if (!s) return;
+    const r = rows[s.r];
+    if (s.b === -1 && r.act) r.act();
+    else if (r.btns && r.btns[s.b]) r.btns[s.b].fn();
+  }
+}
+
+/* --- panneaux du jeu --- */
+
+function asciiBar(frac, width) {
+  const n = Math.round(Math.max(0, Math.min(1, frac)) * width);
+  return '[' + '█'.repeat(n) + '·'.repeat(width - n) + ']';
+}
+
+function biomePanel(b) {
+  return {
+    title: BIOMES[b].name,
+    build() {
+      const bio = BIOMES[b], st = S.biomes[b], now = Date.now();
+      const found = CBIOME[b].filter(c => S.dex[c.id]).length;
+      const rows = [];
+      wrows(bio.desc, 70, 'fg-dim').forEach(r => rows.push(r));
+      rows.push(trow('bestiaire ' + found + '/10' + (found === 10 ? ' ✓' : '') + ' · valeur des prises ×' + bio.mult, 'fg-dimmer'));
+      rows.push(trow(''));
+      st.pl.forEach((pl, i) => {
+        if (!pl) {
+          rows.push({
+            segs: [['├─ ', 'fg-dimmer'], ['emplacement ' + (i + 1) + ' : vide', 'fg-dim']],
+            btns: [{ label: 'poser un piège', fn: () => openPanel(trapPicker(b, i)), cls: 'fg-green' }],
+          });
+        } else {
+          const itv = trapInterval(pl.trap, pl.bait && S.baits[pl.bait] ? pl.bait : null);
+          const frac = 1 - Math.max(0, pl.nextAt - now) / itv;
+          const sec = Math.max(0, Math.ceil((pl.nextAt - now) / 1000));
+          const baitTxt = pl.bait
+            ? (S.baits[pl.bait] ? BAITS[pl.bait].n + ' ×' + fmt(S.baits[pl.bait]) : BAITS[pl.bait].n + ' épuisé !')
+            : 'sans appât';
+          rows.push({
+            segs: [['├─ ', 'fg-dimmer'], [TRAPS[pl.trap].n + ' ', 'fg-text'],
+                   [asciiBar(frac, 10) + ' ' + sec + 's ', 'fg-green'],
+                   ['· ' + baitTxt, pl.bait && !S.baits[pl.bait] ? 'fg-red' : 'fg-dim']],
+            btns: [
+              { label: 'appât', fn: () => openPanel(baitPicker(b, i)) },
+              { label: 'retirer', fn: () => { S.biomes[b].pl[i] = null; }, cls: 'fg-red' },
+            ],
+          });
+        }
+      });
+      if (st.slots < 4) {
+        const cost = slotCost(b), ok = S.ecus >= cost;
+        rows.push({
+          segs: [['└─ ', 'fg-dimmer']],
+          btns: [{ label: '+ emplacement — ' + fmt(cost) + ' écus', fn: () => buySlot(b), cls: ok ? 'fg-gold' : 'fg-dimmer' }],
+        });
+      }
+      return rows;
+    },
+  };
+}
+
+function trapPicker(b, i) {
+  return {
+    title: 'poser un piège · ' + BIOMES[b].name,
+    build() {
+      const rows = [];
+      const avail = TORDER.filter(t => (S.traps[t] || 0) - placedCount(t) > 0);
+      if (!avail.length) {
+        rows.push(trow('aucun piège en réserve.', 'fg-dim'));
+        rows.push(trow('la boutique du village en vend — au centre de la carte.', 'fg-dimmer'));
+      }
+      avail.forEach(t => {
+        const tr = TRAPS[t], free = (S.traps[t] || 0) - placedCount(t);
+        rows.push({
+          segs: [[tr.n + ' ', 'fg-text'], ['×' + free + ' · ' + tr.itv + 's · ' + Math.round(tr.succ * 100) + '% · chance +' + tr.luck + ' ', 'fg-dimmer']],
+          btns: [{ label: 'poser', fn: () => { placeTrap(b, i, t); closePanel(); }, cls: 'fg-green' }],
+        });
+      });
+      return rows;
+    },
+  };
+}
+
+function baitPicker(b, i) {
+  return {
+    title: 'appât · ' + BIOMES[b].name,
+    build() {
+      const rows = [trow('un appât est consommé à chaque tentative du piège.', 'fg-dimmer'), trow('')];
+      rows.push({ segs: [['aucun appât', 'fg-dim']], btns: [{ label: 'choisir', fn: () => { const pl = S.biomes[b].pl[i]; if (pl) pl.bait = null; closePanel(); } }] });
+      BAORDER.filter(x => (S.baits[x] || 0) > 0).forEach(x => {
+        rows.push({
+          segs: [[BAITS[x].n + ' ', 'fg-text'], ['×' + fmt(S.baits[x]) + ' · ' + BAITS[x].desc + ' ', 'fg-dimmer']],
+          btns: [{ label: 'choisir', fn: () => { const pl = S.biomes[b].pl[i]; if (pl) pl.bait = x; closePanel(); }, cls: 'fg-green' }],
+        });
+      });
+      if (!BAORDER.some(x => S.baits[x] > 0)) rows.push(trow('réserve vide — les appâts s\'achètent à la boutique.', 'fg-dim'));
+      return rows;
+    },
+  };
+}
+
+function unlockPanel(b) {
+  return {
+    title: BIOMES[b].name + ' · verrouillé',
+    build() {
+      const bio = BIOMES[b], ok = S.ecus >= bio.cost;
+      const rows = wrows(bio.desc, 70, 'fg-dim');
+      rows.push(trow('valeur des prises ×' + bio.mult + ' · 10 espèces à découvrir', 'fg-dimmer'));
+      rows.push(trow(''));
+      rows.push({
+        segs: [['droit d\'accès : ', 'fg-text'], [fmt(bio.cost) + ' écus', ok ? 'fg-gold' : 'fg-red'], [' (vous avez ' + fmt(S.ecus) + ')', 'fg-dimmer']],
+        btns: [{ label: 'débloquer', fn: () => { if (ok) { unlockBiome(b); closePanel(); } }, cls: ok ? 'fg-green' : 'fg-dimmer' }],
+      });
+      return rows;
+    },
+  };
+}
+
+function shopPanel() {
+  return {
+    title: 'boutique',
+    build() {
+      const rows = [];
+      rows.push(hrow('pièges'));
+      TORDER.forEach(t => {
+        const tr = TRAPS[t], owned = S.traps[t] || 0, free = owned - placedCount(t), ok = S.ecus >= tr.cost;
+        rows.push({
+          segs: [[tr.n.padEnd(18), 'fg-text'],
+                 [(tr.itv + 's · ' + Math.round(tr.succ * 100) + '% · chance +' + tr.luck).padEnd(26), 'fg-dimmer'],
+                 [('×' + owned + (owned ? ' (' + free + ' libre' + (free > 1 ? 's' : '') + ')' : '')).padEnd(14), 'fg-dim']],
+          btns: [{ label: fmt(tr.cost) + ' écus', fn: () => buyTrap(t), cls: ok ? 'fg-gold' : 'fg-dimmer' }],
+        });
+      });
+      rows.push(trow(''));
+      rows.push(hrow('appâts — consommés à chaque tentative'));
+      BAORDER.forEach(x => {
+        const ba = BAITS[x];
+        rows.push({
+          segs: [[ba.n.padEnd(18), 'fg-text'], [ba.desc.padEnd(38), 'fg-dimmer'], [('×' + fmt(S.baits[x] || 0)).padEnd(7), 'fg-dim']],
+          btns: [
+            { label: '1 — ' + fmt(ba.cost), fn: () => buyBait(x, 1), cls: S.ecus >= ba.cost ? 'fg-gold' : 'fg-dimmer' },
+            { label: '10', fn: () => buyBait(x, 10), cls: S.ecus >= ba.cost * 10 ? 'fg-gold' : 'fg-dimmer' },
+            { label: '100', fn: () => buyBait(x, 100), cls: S.ecus >= ba.cost * 100 ? 'fg-gold' : 'fg-dimmer' },
+          ],
+        });
+      });
+      rows.push(trow(''));
+      rows.push(hrow('comptoir de vente — prix ×' + sellMult().toFixed(2).replace('.', ',')));
+      const ids = Object.keys(S.inv).filter(id => (S.inv[id].n + S.inv[id].s) > 0);
+      if (!ids.length) rows.push(trow('réserve vide. les pièges y remédieront.', 'fg-dim'));
+      else {
+        rows.push({ segs: [['', 'fg-dim']], btns: [{ label: 'vendre tous les doublons (garde 1 de chaque, jamais les shinies)', fn: sellDupes, cls: 'fg-green' }] });
+        BORDER.forEach(bb => {
+          const list = ids.filter(id => CBY[id].b === bb);
+          if (!list.length) return;
+          rows.push(trow('· ' + BIOMES[bb].name, 'fg-blue'));
+          list.sort((x, y) => RORDER.indexOf(CBY[x].r) - RORDER.indexOf(CBY[y].r));
+          list.forEach(id => {
+            const c = CBY[id], iv = S.inv[id];
+            if (iv.n > 0) rows.push({
+              segs: [[(c.g + ' ' + c.n).padEnd(24), RARITIES[c.r].cls], [('×' + fmt(iv.n)).padEnd(7), 'fg-dim'], [(fmt(creatureValue(c, false)) + '/u').padEnd(9), 'fg-golddark']],
+              btns: [
+                { label: '1', fn: () => sellCreature(id, false, 1) },
+                { label: 'sauf 1', fn: () => sellCreature(id, false, 'keep1') },
+                { label: 'tout', fn: () => sellCreature(id, false, 'all'), cls: 'fg-red' },
+              ], indent: 1,
+            });
+            if (iv.s > 0) rows.push({
+              segs: [[(c.g + ' ' + c.n + ' ✦').padEnd(24), 'shiny'], [('×' + fmt(iv.s)).padEnd(7), 'fg-dim'], [(fmt(creatureValue(c, true)) + '/u').padEnd(9), 'fg-golddark']],
+              btns: [{ label: 'vendre 1 shiny', fn: () => sellCreature(id, true, 1), cls: 'fg-red' }], indent: 1,
+            });
+          });
+        });
+      }
+      if ((S.lab.autovente || 0) >= 1) {
+        rows.push(trow(''));
+        rows.push(hrow('auto-vente — garde 1 exemplaire, jamais les shinies'));
+        rows.push({
+          segs: [['', 'fg-dim']],
+          btns: RORDER.map(r => ({
+            label: (S.autosell[r] ? '■ ' : '□ ') + RARITIES[r].label,
+            fn: () => { S.autosell[r] = !S.autosell[r]; },
+            cls: S.autosell[r] ? 'fg-green' : 'fg-dim',
+          })),
+        });
+      }
+      return rows;
+    },
+  };
+}
+
+function labPanel() {
+  return {
+    title: 'labo',
+    build() {
+      const rows = [hrow('recherches')];
+      LORDER.forEach(k => {
+        const l = LABS[k], lv = S.lab[k] || 0, maxed = lv >= l.max, cost = labCost(k), ok = S.ecus >= cost;
+        rows.push({
+          segs: [[l.n.padEnd(17), 'fg-text'], [('niv ' + lv + '/' + l.max).padEnd(11), 'fg-dimmer'], [l.fx(lv).padEnd(26), 'fg-green']],
+          btns: maxed ? [{ label: 'max', fn: () => {}, cls: 'fg-dimmer' }]
+                      : [{ label: fmt(cost) + ' écus', fn: () => buyLab(k), cls: ok ? 'fg-gold' : 'fg-dimmer' }],
+        });
+        rows.push({ segs: [[l.desc, 'fg-dimmer']], indent: 2 });
+      });
+      rows.push(trow(''));
+      rows.push(hrow('migration — ' + S.migrations + ' effectuée' + (S.migrations > 1 ? 's' : '')));
+      wrows('repartir de zéro vers des terres plus giboyeuses. le bestiaire et les succès sont conservés ; écus, pièges, labo et réserve sont perdus. chaque trophée offre définitivement +4% de chance et +4% aux prix de vente.', 72, 'fg-dim')
+        .forEach(r => rows.push(r));
+      const g = trophyGain();
+      rows.push(trow('écus gagnés cette expédition : ' + fmt(S.runEarned) + ' · trophées actuels : ' + S.trophies, 'fg-dimmer'));
+      rows.push({
+        segs: [['trophées à la migration : ', 'fg-text'], ['+' + g, g ? 'fg-gold' : 'fg-dimmer'],
+               [g < 1 ? '  (25 000 écus gagnés = 1er trophée)' : '', 'fg-dimmer']],
+        btns: [{ label: 'migrer', fn: () => { if (g >= 1) openPanel(migrConfirm()); }, cls: g ? 'fg-red' : 'fg-dimmer' }],
+      });
+      rows.push(trow(''));
+      rows.push(hrow('bonus actifs'));
+      rows.push(trow('chance globale +' + globalLuck().toFixed(2).replace('.', ',') + ' · vente ×' + sellMult().toFixed(2).replace('.', ',') + ' · vitesse ×' + speedMult().toFixed(2).replace('.', ','), 'fg-dim'));
+      rows.push(trow('shiny 1/' + Math.round(1 / shinyChance(null)) + ' · hors-ligne ' + (offlineCapMs() / 3600000) + ' h max', 'fg-dim'));
+      return rows;
+    },
+  };
+}
+
+function migrConfirm() {
+  return {
+    title: 'migration — confirmer',
+    build() {
+      const g = trophyGain();
+      const rows = wrows('vos écus, pièges, appâts, améliorations et créatures en réserve disparaissent. le bestiaire et les succès restent. vous gagnez ' + g + ' trophée' + (g > 1 ? 's' : '') + ' permanents.', 66, 'fg-dim');
+      rows.push(trow(''));
+      rows.push({
+        segs: [['', 'fg-dim']],
+        btns: [
+          { label: 'migrer maintenant', fn: () => { doMigration(); closeAll(); }, cls: 'fg-red' },
+          { label: 'rester ici', fn: closePanel, cls: 'fg-green' },
+        ],
+      });
+      return rows;
+    },
+  };
+}
+
+function dexPanel() {
+  return {
+    title: 'bestiaire',
+    build() {
+      const total = Object.keys(S.dex).length;
+      const shinyTotal = Object.values(S.dex).filter(d => d.s > 0).length;
+      const rows = [];
+      rows.push(trow('espèces ' + total + '/60 ' + asciiBar(total / 60, 20) + '   shinies ' + shinyTotal + '/60 ' + asciiBar(shinyTotal / 60, 20), 'fg-text'));
+      rows.push(trow('biome complet : +10% chance · biome 100% shiny : +10% vente — pour toujours', 'fg-dimmer'));
+      BORDER.forEach(b => {
+        const found = CBIOME[b].filter(c => S.dex[c.id]).length;
+        rows.push(trow(''));
+        rows.push(hrow(BIOMES[b].name + ' — ' + found + '/10' + (found === 10 ? ' ✓' : '')));
+        CBIOME[b].forEach(c => {
+          const d = S.dex[c.id];
+          if (!d) {
+            rows.push({ segs: [['├─ ', 'fg-dimmer'], ['???'.padEnd(7), 'fg-dimmer'], ['— inconnu —'.padEnd(26), 'fg-dimmer'], [RARITIES[c.r].label, 'fg-dimmer']] });
+          } else {
+            rows.push({
+              segs: [['├─ ', 'fg-dimmer'], [c.g.padEnd(7), d.s > 0 ? 'shiny' : RARITIES[c.r].cls],
+                     [c.n.padEnd(26), RARITIES[c.r].cls],
+                     [(RARITIES[c.r].label + ' · ×' + fmt(d.n) + (d.s ? ' · ✦' + d.s : '')).padEnd(24), 'fg-dim']],
+              act: () => openPanel(creaturePanel(c.id)),
+            });
+          }
+        });
+      });
+      return rows;
+    },
+  };
+}
+
+function creaturePanel(id) {
+  return {
+    title: CBY[id].n,
+    build() {
+      const c = CBY[id], d = S.dex[id] || { n: 0, s: 0 }, iv = S.inv[id] || { n: 0, s: 0 };
+      const rows = [];
+      rows.push({ segs: [[c.g + '  ', d.s > 0 ? 'shiny' : RARITIES[c.r].cls], [BIOMES[c.b].name + ' · ' + RARITIES[c.r].label, 'fg-dimmer']] });
+      rows.push(trow(''));
+      wrows(c.lore, 66, 'fg-dim').forEach(r => rows.push(r));
+      rows.push(trow(''));
+      rows.push(trow('capturés (total) : ' + fmt(d.n) + (d.s ? ' · shinies : ' + fmt(d.s) + ' ✦' : ''), 'fg-text'));
+      rows.push(trow('en réserve : ' + iv.n + (iv.s ? ' + ' + iv.s + ' ✦' : ''), 'fg-dim'));
+      rows.push(trow('valeur : ' + fmt(creatureValue(c, false)) + ' écus · shiny : ' + fmt(creatureValue(c, true)) + ' écus', 'fg-golddark'));
+      return rows;
+    },
+  };
+}
+
+function achPanel() {
+  return {
+    title: 'succès',
+    build() {
+      const done = ACHIEVEMENTS.filter(a => S.ach[a.id]).length;
+      const rows = [trow(done + '/' + ACHIEVEMENTS.length + ' débloqués', 'fg-dim'), trow('')];
+      ACHIEVEMENTS.forEach(a => {
+        const ok = !!S.ach[a.id];
+        rows.push({
+          segs: [[(ok ? '■ ' : '□ ') + a.n.padEnd(26), ok ? 'fg-green' : 'fg-dimmer'],
+                 [a.d + (a.r ? ' (+' + fmt(a.r) + ' écus)' : ''), 'fg-dimmer']],
+        });
+      });
+      return rows;
+    },
+  };
+}
+
+function helpPanel() {
+  return {
+    title: 'aide',
+    build() {
+      const rows = [];
+      rows.push(hrow('comment jouer'));
+      [
+        'déplacez-vous avec les flèches, zqsd ou hjkl. Entrée pour interagir.',
+        'achetez des pièges à la boutique (village), posez-les dans les biomes.',
+        'chaque piège tente une capture à intervalle régulier, même hors-ligne.',
+        'les appâts améliorent vitesse, rareté ou chance de shiny.',
+        'revendez les doublons au comptoir pour financer pièges, biomes et labo.',
+        'le bestiaire est le vrai objectif : 60 espèces, chacune avec sa variante shiny ✦.',
+        'compléter un biome : +10% de chance. en shiny : +10% à la vente. pour toujours.',
+        'la migration (labo) échange votre progression contre des trophées permanents.',
+      ].forEach(t => rows.push(trow('· ' + t, 'fg-dim')));
+      rows.push(trow(''));
+      rows.push(hrow('raretés'));
+      RORDER.forEach(r => rows.push({ segs: [['· ', 'fg-dimmer'], [RARITIES[r].label.padEnd(13), RARITIES[r].cls], ['valeur de base ' + RARITIES[r].val + ' écus', 'fg-dimmer']] }));
+      rows.push({ segs: [['· ', 'fg-dimmer'], ['shiny ✦'.padEnd(13), 'shiny'], ['1/' + Math.round(1 / SHINY_BASE) + ' de base · valeur ×15', 'fg-dimmer']] });
+      rows.push(trow(''));
+      rows.push(hrow('statistiques'));
+      rows.push(trow('tentatives ' + fmt(S.attempts) + ' · captures ' + fmt(S.captures) + ' · shinies ' + fmt(S.shinies), 'fg-dim'));
+      rows.push(trow('écus gagnés (total) ' + fmt(S.totalEarned) + ' · migrations ' + S.migrations, 'fg-dim'));
+      rows.push(trow(''));
+      rows.push(hrow('sauvegarde'));
+      rows.push({
+        segs: [['automatique dans ce navigateur. ', 'fg-dimmer']],
+        btns: [
+          { label: 'exporter / importer', fn: openIO },
+          { label: 'tout effacer', fn: () => openPanel(resetConfirm()), cls: 'fg-red' },
+        ],
+      });
+      return rows;
+    },
+  };
+}
+
+function resetConfirm() {
+  return {
+    title: 'tout effacer',
+    build() {
+      const rows = wrows('bestiaire, succès, trophées : tout disparaît. définitivement.', 60, 'fg-red');
+      rows.push(trow(''));
+      rows.push({
+        segs: [['', 'fg-dim']],
+        btns: [
+          { label: 'effacer ma partie', fn: () => { localStorage.removeItem(SAVE_KEY); S = defaultState(); logLines = []; closeAll(); }, cls: 'fg-red' },
+          { label: 'annuler', fn: closePanel, cls: 'fg-green' },
+        ],
+      });
+      return rows;
+    },
+  };
+}
+
+function journalPanel() {
+  return {
+    title: 'journal',
+    build() {
+      if (!logLines.length) return [trow('rien à signaler pour l\'instant.', 'fg-dimmer')];
+      return logLines.map(l => ({ segs: [['[' + l.t + '] ', 'fg-dimmer']].concat(l.segs) }));
+    },
+  };
+}
+
+function offlinePanel(h, m, hitCap, caught, newShinies, earned, discoveries) {
+  return {
+    title: 'pendant votre absence',
+    build() {
+      const rows = [];
+      rows.push(trow('vos pièges ont travaillé ' + (h ? h + ' h ' : '') + m + ' min' + (hitCap ? ' (plafond atteint — voir horlogerie au labo)' : ''), 'fg-dim'));
+      rows.push(trow(''));
+      rows.push(trow('├─ captures : ' + fmt(caught), 'fg-green'));
+      if (newShinies) rows.push(trow('├─ shinies : ' + newShinies + ' ✦', 'fg-blue'));
+      if (earned) rows.push(trow('├─ auto-vente : +' + fmt(earned) + ' écus', 'fg-golddark'));
+      rows.push({
+        segs: [['└─ nouvelles espèces : ', 'fg-text']].concat(
+          discoveries.length
+            ? discoveries.slice(0, 6).flatMap((c, i) => [[c.n, RARITIES[c.r].cls], [i < Math.min(discoveries.length, 6) - 1 ? ', ' : (discoveries.length > 6 ? '…' : ''), 'fg-dim']])
+            : [[ 'aucune', 'fg-dimmer' ]]),
+      });
+      rows.push(trow(''));
+      rows.push({ segs: [['', 'fg-dim']], btns: [{ label: 'reprendre la traque', fn: closePanel, cls: 'fg-green' }] });
+      return rows;
+    },
+  };
+}
+
+/* ============================================================ rendu écran */
+
+function render() {
+  clearBuf();
+  const now = Date.now();
+
+  // ---- monde (viewport) ----
+  const vy0 = 1, vy1 = ROWS - 6;               // lignes écran du monde
+  const vh = vy1 - vy0 + 1, vw = COLS - 2;
+  let camX = Math.round(P.x - vw / 2), camY = Math.round(P.y - vh / 2);
+  camX = Math.max(0, Math.min(camX, Math.max(0, MAPW - vw)));
+  camY = Math.max(0, Math.min(camY, Math.max(0, MAPH - vh)));
+  const offX = vw > MAPW ? Math.floor((vw - MAPW) / 2) : 0;
+  const offY = vh > MAPH ? Math.floor((vh - MAPH) / 2) : 0;
+
+  for (let sy = 0; sy < vh; sy++) {
+    const wy = camY + sy - offY;
+    if (wy < 0 || wy >= MAPH) continue;
+    for (let sx = 0; sx < vw; sx++) {
+      const wx = camX + sx - offX;
+      if (wx < 0 || wx >= MAPW) continue;
+      const cell = W[wy][wx];
+      if (cell.ch !== ' ') buf[vy0 + sy][1 + sx] = { ch: cell.ch, cls: cell.cls, act: -1 };
+    }
+  }
+  // étiquettes de biomes (dynamiques : état verrouillé)
+  BORDER.forEach(b => {
+    const lp = LABELPOS[b];
+    const sx = 1 + lp.x - camX + offX, sy = vy0 + lp.y - camY + offY;
+    if (sy < vy0 || sy > vy1) return;
+    const owned = !!S.biomes[b];
+    const lbl = owned ? '╡ ' + BIOMES[b].name + ' ╞' : '╡ ' + BIOMES[b].name + ' × ╞';
+    const cls = owned ? 'fg-white' : 'fg-red';
+    put(sx, sy, lbl, cls, () => { if (owned) openPanel(biomePanel(b)); else openPanel(unlockPanel(b)); });
+    if (owned) {
+      const placed = S.biomes[b].pl.filter(Boolean).length;
+      if (placed) put(sx + 1, sy + 1, placed + ' piège' + (placed > 1 ? 's' : ''), 'fg-golddark');
+    }
+  });
+  // joueur
+  const psx = 1 + P.x - camX + offX, psy = vy0 + P.y - camY + offY;
+  put(psx - 1, psy, '(_)', 'fg-white');
+  put(psx, psy - 1, 'o', 'fg-white');
+
+  // ---- séparateur + contexte ----
+  const hint = zoneHint();
+  const sepY = ROWS - 5;
+  put(0, sepY, '├' + '─'.repeat(COLS - 2) + '┤', 'fg-dimmer');
+  put(3, sepY, ' ' + hint.txt + ' ', hint.cls);
+
+  // ---- journal (3 lignes) ----
+  for (let i = 0; i < 3; i++) {
+    const l = logLines[i];
+    const y = ROWS - 4 + i;
+    if (!l) continue;
+    let x = 2;
+    put(x, y, '[' + l.t + '] ', 'fg-dimmer'); x += 11;
+    l.segs.forEach(([txt, cls]) => {
+      if (x >= COLS - 2) return;
+      const t = txt.slice(0, COLS - 2 - x);
+      put(x, y, t, cls); x += t.length;
+    });
+  }
+
+  // ---- cadre ----
+  put(0, 0, '┌' + '─'.repeat(COLS - 2) + '┐', 'fg-dim');
+  put(0, ROWS - 1, '└' + '─'.repeat(COLS - 2) + '┘', 'fg-dim');
+  for (let y = 1; y < ROWS - 1; y++) { if (y !== sepY) { put(0, y, '│', 'fg-dim'); put(COLS - 1, y, '│', 'fg-dim'); } }
+
+  // titre + stats dans la bordure haute
+  let tx = 2;
+  put(tx, 0, ' traque.sh ', 'fg-green'); tx += 11;
+  put(tx, 0, '▌', 'blink'); tx += 1;
+  const dex = Object.keys(S.dex).length;
+  const stats = [
+    [' ' + fmt(S.ecus) + ' écus ', 'fg-gold'],
+    ['· ' + fmt(S.captures) + ' captures ', 'fg-dim'],
+    ['· bestiaire ' + Math.round(dex / 60 * 100) + '% ', 'fg-blue'],
+  ];
+  if (S.trophies) stats.push(['· ' + S.trophies + ' trophées ', 'fg-golddark']);
+  stats.forEach(([txt, cls]) => { put(tx, 0, txt, cls); tx += txt.length; });
+
+  // raccourcis dans la bordure basse
+  const kb = ' ←↑↓→/zqsd se déplacer · Entrée interagir · [b]estiaire [o] boutique [l]abo [t]rophées [j]ournal [?] aide ';
+  put(2, ROWS - 1, kb.slice(0, COLS - 4), 'fg-dimmer');
+
+  // ---- toasts ----
+  toasts = toasts.filter(t => t.until > now);
+  toasts.forEach((t, i) => {
+    const wdt = Math.min(t.msg.length + 4, COLS - 4);
+    const x = COLS - wdt - 2, y = 2 + i * 3;
+    put(x, y, '┌' + '─'.repeat(wdt - 2) + '┐', 'fg-green');
+    put(x, y + 1, '│ ' + t.msg.slice(0, wdt - 4).padEnd(wdt - 4) + ' │', 'fg-green');
+    put(x, y + 2, '└' + '─'.repeat(wdt - 2) + '┘', 'fg-green');
+  });
+
+  // ---- panneau actif ----
+  const p = topPanel();
+  if (p) drawPanel(p);
+
+  flush();
+}
+
+/* ================================================================ entrées */
+
+const io = document.getElementById('io');
+function openIO() { io.classList.add('open'); }
+window.closeIO = function () { io.classList.remove('open'); };
+window.doExport = function () {
+  const data = btoa(unescape(encodeURIComponent(JSON.stringify(S))));
+  document.getElementById('savefield').value = data;
+  document.getElementById('savefield').select();
+  try { navigator.clipboard.writeText(data); toast('sauvegarde copiée'); } catch (e) { /* sélectionnée pour copie manuelle */ }
+};
+window.doImport = function () {
+  try {
+    const data = JSON.parse(decodeURIComponent(escape(atob(document.getElementById('savefield').value.trim()))));
+    if (!data || typeof data.ecus !== 'number' || !data.biomes) throw new Error('bad');
+    S = Object.assign(defaultState(), data);
+    S.lastSeen = Date.now();
+    resetTimers(Date.now());
+    save();
+    toast('sauvegarde importée');
+    closeIO();
+  } catch (e) { toast('sauvegarde illisible'); }
+};
+
+document.addEventListener('keydown', e => {
+  if (io.classList.contains('open')) {
+    if (e.key === 'Escape') closeIO();
+    return;
+  }
+  const p = topPanel();
+  if (p) {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) e.preventDefault();
+    panelKey(p, e);
+    render();
+    return;
+  }
+  const k = e.key;
+  let moved = true;
+  if (k === 'ArrowUp' || k === 'z' || k === 'w') movePlayer(0, -1);
+  else if (k === 'ArrowDown' || k === 's') movePlayer(0, 1);
+  else if (k === 'ArrowLeft' || k === 'q' || k === 'a') movePlayer(-1, 0);
+  else if (k === 'ArrowRight' || k === 'd') movePlayer(1, 0);
+  else moved = false;
+  if (moved) { e.preventDefault(); render(); return; }
+
+  if (k === 'Enter' || k === ' ') { e.preventDefault(); interact(); }
+  else if (k === 'b') openPanel(dexPanel());
+  else if (k === 'o') openPanel(shopPanel());
+  else if (k === 'l') openPanel(labPanel());
+  else if (k === 't') openPanel(achPanel());
+  else if (k === 'j') openPanel(journalPanel());
+  else if (k === '?' || k === '/') openPanel(helpPanel());
+  else if (k === 'Escape') closeAll();
+  render();
+});
+
+window.addEventListener('resize', () => { measure(); render(); });
+
+/* ================================================================== init */
+
+buildWorld();
+load();
+measure();
+runOffline();
+log([['bienvenue. un piège en bois vous attend en réserve — la forêt est à l\'ouest.', 'fg-green']]);
+render();
+setInterval(() => { tick(); render(); }, 500);
+setInterval(save, 10000);
+window.addEventListener('beforeunload', save);
+</script>
