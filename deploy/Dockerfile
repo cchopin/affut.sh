@@ -7,7 +7,7 @@ COPY src ./src
 RUN cargo build --release
 
 FROM alpine:3.20
-RUN apk add --no-cache openssh-server \
+RUN apk add --no-cache openssh-server tzdata \
     && adduser -D -s /bin/sh affut \
     # compte sans mot de passe mais non verrouillé (auth par clé uniquement)
     && sed -i 's/^affut:!/affut:*/' /etc/shadow \

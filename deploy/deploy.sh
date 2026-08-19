@@ -31,6 +31,7 @@ fi'
 echo "[5/6] (re)lancement du conteneur — port 2322 PUBLIC (jeu seul, clés invitées)"
 $SSH 'docker rm -f affut traque 2>/dev/null || true; docker run -d --name affut \
   --restart unless-stopped \
+  -e TZ=Europe/Paris \
   -p 2322:2222 \
   -v affut_data:/home/affut \
   -v /opt/affut/authorized_keys:/etc/ssh/auth/affut:ro \
