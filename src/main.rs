@@ -1227,11 +1227,15 @@ impl Game {
 
         let mut sold = 0.0;
         let r = CREATURES[ci].r;
-        // l'auto-vente garde le meilleur couple ♂♀ (pour l'enclos), jamais les shinies
-        if self.s.lab[LAB_AUTOVENTE] >= 1 && self.s.autosell[r] && !shiny && self.s.inv2[ci].tn() > 2 {
-            let (_, v) = self.sell_except_pair(ci);
-            sold = (v * if bait == Some(BAIT_NECTAR) { 1.5 } else { 1.0 }).floor();
-            self.gain(sold);
+        // l'auto-vente garde le meilleur couple ♂♀ ET ce que demandent les commandes
+        // en cours (sinon les contrats deviendraient inlivrables) ; jamais les shinies
+        if self.s.lab[LAB_AUTOVENTE] >= 1 && self.s.autosell[r] && !shiny {
+            let keep = 2 + self.contract_need(ci);
+            if self.s.inv2[ci].tn() > keep {
+                let (_, v) = self.sell_surplus(ci);
+                sold = (v * if bait == Some(BAIT_NECTAR) { 1.5 } else { 1.0 }).floor();
+                self.gain(sold);
+            }
         }
         Some((ci, shiny, is_new, new_shiny, sold, rank + sex as usize * 10))
     }    fn report_catch(&mut self, biome: usize, res: Option<(usize, bool, bool, bool, f64, usize)>) {
@@ -1576,8 +1580,8 @@ impl Game {
                 let mut total = 0.0;
                 let mut n = 0u64;
                 for ci in 0..60 {
-                    if self.s.inv2[ci].tn() > 2 {
-                        let (q, v) = self.sell_except_pair(ci);
+                    if self.s.inv2[ci].tn() > 2 + self.contract_need(ci) {
+                        let (q, v) = self.sell_surplus(ci);
                         total += v;
                         n += q;
                     }
@@ -1778,6 +1782,35 @@ impl Game {
             }
             Action::Nothing => {}
         }
+    }
+    /* quantité encore due aux commandes ouvertes pour cette espèce */
+    fn contract_need(&self, ci: usize) -> u64 {
+        let (w, cs) = self.contracts_now();
+        let mut n = 0;
+        for (i, c) in cs.iter().enumerate() {
+            if c.ci == ci {
+                let done = w == self.s.contracts_window && self.s.contracts_done.get(i).copied().unwrap_or(false);
+                if !done {
+                    n += c.qty;
+                }
+            }
+        }
+        n
+    }
+    /* vend le surplus au-delà du meilleur couple ♂♀ ET des commandes en cours */
+    fn sell_surplus(&mut self, ci: usize) -> (u64, f64) {
+        let need = self.contract_need(ci);
+        let bm = self.take_best_sex(ci, false, 0);
+        let bf = self.take_best_sex(ci, false, 1);
+        let q = self.s.inv2[ci].tn().saturating_sub(need);
+        let v = self.take_lowest(ci, false, q);
+        if let Some(r) = bm {
+            self.give_back(ci, false, 0, r);
+        }
+        if let Some(r) = bf {
+            self.give_back(ci, false, 1, r);
+        }
+        (q, v)
     }
     /* contrats du créneau courant (déterministes, 3 à la fois, renouvelés toutes les 2 h) */
     fn contracts_now(&self) -> (u64, Vec<Contract>) {
@@ -2611,7 +2644,7 @@ impl Game {
                 indent: 0,
             });
             for r in wrap_rows(
-                "garde le meilleur couple ♂♀ de chaque espèce, jamais les shinies. la vente écoule d'abord les rangs les plus bas — vos beaux spécimens restent.",
+                "garde le meilleur couple ♂♀ de chaque espèce, met de côté ce qu'exigent les commandes du comptoir, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
                 self.panel_w, C::Dimmer,
             ) {
                 rows.push(r);
@@ -2665,7 +2698,7 @@ impl Game {
         }
         if self.s.lab[LAB_AUTOVENTE] >= 1 {
             rows.push(Row::text("", C::Dim));
-            rows.push(Row::header("auto-vente — garde le meilleur couple ♂♀, jamais les shinies"));
+            rows.push(Row::header("auto-vente — garde le couple ♂♀ et le stock des commandes en cours"));
             rows.push(Row {
                 segs: vec![],
                 btns: (0..5)
@@ -2966,7 +2999,7 @@ impl Game {
             });
         }
         rows.extend(bullet_rows("· ", "chaque spécimen est ♂ ou ♀ (50/50). le bestiaire trace les sexes observés, et l'enclos exige un couple — le vrai défi : obtenir un beau ♂ ET une belle ♀.", w, C::Dim));
-        rows.extend(bullet_rows("· ", "la vente « sauf couple » et l'auto-vente protègent toujours le meilleur ♂ et la meilleure ♀.", w, C::Dim));
+        rows.extend(bullet_rows("· ", "la vente « sauf couple » et l'auto-vente protègent le meilleur ♂ et la meilleure ♀ ; l'auto-vente et la vente groupée réservent aussi le stock des commandes en cours.", w, C::Dim));
         rows.extend(bullet_rows("· ", "le bestiaire retient le meilleur rang obtenu par espèce, à vie.", w, C::Dim));
         rows.extend(bullet_rows("· ", "la vente écoule toujours les rangs les plus bas d'abord : vos beaux spécimens restent.", w, C::Dim));
         rows.push(Row {
