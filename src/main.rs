@@ -2527,11 +2527,16 @@ impl Game {
         } else {
             rows.push(Row {
                 segs: vec![],
-                btns: vec![("vendre les doublons (garde le meilleur couple ♂♀ de chaque espèce, jamais les shinies)".into(), C::Green, Action::SellDupes)],
+                btns: vec![("vendre tous les doublons".into(), C::Green, Action::SellDupes)],
                 act: None,
                 indent: 0,
             });
-            rows.push(Row::text("la vente écoule d'abord les rangs les plus bas — vos beaux spécimens restent.", C::Dimmer));
+            for r in wrap_rows(
+                "garde le meilleur couple ♂♀ de chaque espèce, jamais les shinies. la vente écoule d'abord les rangs les plus bas — vos beaux spécimens restent.",
+                self.panel_w, C::Dimmer,
+            ) {
+                rows.push(r);
+            }
             for b in 0..6 {
                 let mut list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
                 if list.is_empty() {
