@@ -2106,7 +2106,7 @@ impl Game {
                 } else {
                     let bs = self.s.biomes[b].as_ref().unwrap();
                     let placed = bs.pl.iter().flatten().count();
-                    (format!("{} · {}/{} pièges posés — Entrée : gérer", BIOMES[b].name, placed, bs.slots), C::Green)
+                    (format!("{} · emplacements {}/{} — Entrée : gérer", BIOMES[b].name, placed, bs.slots), C::Green)
                 }
             }
             Some(Zone::Boutique) => ("boutique — Entrée : acheter et vendre".into(), C::Gold),
@@ -2597,7 +2597,7 @@ impl Game {
                     let mut segs = vec![
                         ("├─ ".into(), C::Dimmer),
                         (pad(BIOMES[b].name, 10), if boosted { C::Ice } else { C::Text }),
-                        (pad(&format!("{}/{} pièges", placed, bs.slots), 12), if placed == 0 { C::Red } else { C::Dim }),
+                        (pad(&format!("empl. {}/{}", placed, bs.slots), 12), if placed == 0 { C::Red } else { C::Dim }),
                         (pad(&format!("bestiaire {}/{}{}", found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" }), 19), C::Blue),
                     ];
                     match next {
@@ -2785,11 +2785,15 @@ impl Game {
         (bio.name.to_string(), rows)
     }    fn rows_trap_pick(&self, b: usize, i: usize) -> (String, Vec<Row>) {
         let at_cap = self.placed_total() >= self.trap_cap();
-        let mut rows = vec![Row::text(
-            format!("licence de piégeage : {}/{} pièges posés{}", self.placed_total(), self.trap_cap(),
-                if at_cap { " — plafond atteint ! (améliorable au labo)" } else { "" }),
+        let mut rows = wrap_rows(
+            &format!("licence de piégeage : {} piège{} posé{} sur {} autorisés, tous biomes confondus.{}",
+                self.placed_total(), if self.placed_total() > 1 { "s" } else { "" }, if self.placed_total() > 1 { "s" } else { "" },
+                self.trap_cap(),
+                if at_cap { " plafond atteint — retirez un piège ailleurs, ou améliorez « licence de piégeage » au labo." } else { "" }),
+            self.panel_w,
             if at_cap { C::Red } else { C::Dim },
-        ), Row::text("", C::Dim)];
+        );
+        rows.push(Row::text("", C::Dim));
         let avail: Vec<usize> = (0..6).filter(|&t| self.s.traps[t] > self.placed_count(t)).collect();
         if avail.is_empty() {
             rows.push(Row::text("aucun piège en réserve.", C::Dim));
@@ -2802,7 +2806,7 @@ impl Game {
                     (format!("{} ", TRAPS[t].n), C::Text),
                     (format!("×{} · {}s · {}% · chance +{}", free, TRAPS[t].itv, (TRAPS[t].succ * 100.0) as u32, fmt_luck(TRAPS[t].luck)), C::Dimmer),
                 ],
-                btns: vec![("poser".into(), if at_cap { C::Dimmer } else { C::Green }, if at_cap { Action::Nothing } else { Action::Place(b, i, t) })],
+                btns: if at_cap { vec![] } else { vec![("poser".into(), C::Green, Action::Place(b, i, t))] },
                 act: None,
                 indent: 0,
             });
