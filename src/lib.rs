@@ -1437,9 +1437,10 @@ impl Game {
         if let Some((w, b, _)) = self.legend_now() {
             if w != self.legend_seen {
                 self.legend_seen = w;
+                let left = (((w + 1) as f64 * 1_800_000.0 - now) / 60_000.0).ceil() as u64;
                 self.log(vec![
                     ("✧ une silhouette immense rôde ".into(), C::Gold),
-                    (format!("en {} — trouvez-la sur la carte avant qu'elle ne disparaisse !", BIOMES[b].name), C::Gold),
+                    (format!("en {} — {} min pour la trouver (repérez le ✧ sur l'étiquette du biome) !", BIOMES[b].name, left), C::Gold),
                 ]);
                 self.toast(format!("✧ légende errante : {}", BIOMES[b].name));
             }
@@ -3464,8 +3465,13 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
             continue;
         }
         let owned = game.s.biomes[b].is_some();
-        let lbl = if owned { format!("╡ {} ╞", BIOMES[b].name) } else { format!("╡ {} × ╞", BIOMES[b].name) };
-        draw_str(buf, area, sx, sy, &lbl, theme.style(if owned { C::White } else { C::Red }, false));
+        let legend_here = matches!(game.legend_now(), Some((_, lb, _)) if lb == b);
+        let lbl = if owned {
+            if legend_here { format!("╡ {} ✧ ╞", BIOMES[b].name) } else { format!("╡ {} ╞", BIOMES[b].name) }
+        } else {
+            format!("╡ {} × ╞", BIOMES[b].name)
+        };
+        draw_str(buf, area, sx, sy, &lbl, theme.style(if legend_here { C::Gold } else if owned { C::White } else { C::Red }, false));
         if owned {
             let placed = game.s.biomes[b].as_ref().unwrap().pl.iter().flatten().count();
             if placed > 0 && sy + 1 <= vy1 {
@@ -3478,7 +3484,9 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         let sx = 1 + lx as i32 - cam_x + off_x;
         let sy = vy0 + ly as i32 - cam_y + off_y;
         if sy >= vy0 && sy <= vy1 {
+            draw_str(buf, area, sx - 1, sy, ">", theme.style(C::Gold, false));
             draw_str(buf, area, sx, sy, "✧", theme.style(C::Shiny, false));
+            draw_str(buf, area, sx + 1, sy, "<", theme.style(C::Gold, false));
         }
     }
     // joueur
@@ -3495,6 +3503,12 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     let nowc = now_ms();
     let cond = format!(" {} · {} · {} ", SAISONS[season_at(nowc)], METEOS[weather_at(nowc)], if is_night_at(nowc) { "nuit ☽" } else { "jour" });
     draw_str(buf, area, cols - cond.chars().count() as i32 - 3, sep_y, &cond, theme.style(C::Ice, false));
+    if let Some((wid, lb, _)) = game.legend_now() {
+        let left = (((wid + 1) as f64 * 1_800_000.0 - nowc) / 60_000.0).ceil() as u64;
+        let lg = format!(" ✧ légende en {} ({} min) ", BIOMES[lb].name, left);
+        let lx = cols - cond.chars().count() as i32 - lg.chars().count() as i32 - 4;
+        draw_str(buf, area, lx, sep_y, &lg, theme.style(C::Gold, false));
+    }
 
     // ---- journal ----
     for i in 0..3usize {
