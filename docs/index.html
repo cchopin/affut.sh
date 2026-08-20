@@ -91,9 +91,13 @@
 <div id="ver"></div>
 <div id="syncbtn" title="exporter / importer la sauvegarde">⇄ sauvegarde</div>
 <div id="syncdlg">
-  <div class="t">sauvegarde — multi-PC</div>
-  <p>copiez ce texte sur l'autre PC (même page), ou collez ici une sauvegarde à importer.
-     compatible avec le fichier <code>~/.affutsh2.json</code> de la version terminal.</p>
+  <div class="t">session partagée entre vos PC</div>
+  <p>ouvrez ce lien sur un autre ordinateur : même partie, synchronisée
+     automatiquement (la version la plus récente gagne — évitez de jouer
+     sur deux PC en même temps).</p>
+  <p><code id="synclink"></code> <button id="syncLinkCopy">copier le lien</button></p>
+  <p style="margin-top:.8rem">ou manuellement : copiez ce texte sur l'autre PC, ou collez une sauvegarde
+     à importer (compatible avec le <code>~/.affutsh2.json</code> du terminal).</p>
   <textarea id="synctxt" spellcheck="false"></textarea>
   <div class="btns">
     <button id="syncCopy">copier ma sauvegarde</button>
@@ -106,10 +110,39 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820x'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260820y'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+
+// ── session partagée entre PC : la sauvegarde vit aussi sur le serveur.
+// au chargement, la plus récente (locale ou distante) gagne ; ensuite le
+// jeu pousse sa sauvegarde toutes les 30 s. le lien de partage porte le jeton.
+const SYNC = 'https://vps.tely.info:8444/s/';
+let syncState = '…';
+let token = null;
+if (location.hash.startsWith('#s=')) {
+  token = location.hash.slice(3);
+  history.replaceState(null, '', location.pathname);
+}
+token = token || localStorage.getItem('affut_sync_token')
+      || crypto.randomUUID().replaceAll('-', '');
+localStorage.setItem('affut_sync_token', token);
+try {
+  const r = await fetch(SYNC + token, { signal: AbortSignal.timeout(4000) });
+  if (r.ok) {
+    const remote = await r.json();
+    const local = JSON.parse(localStorage.getItem('affutsh_save2') || 'null');
+    if (!local || (remote.last_seen || 0) > (local.last_seen || 0)) {
+      localStorage.setItem('affutsh_save2', JSON.stringify(remote));
+    }
+    syncState = '✓';
+  } else if (r.status === 404) {
+    syncState = '✓'; // première fois : rien sur le serveur encore
+  }
+} catch (e) {
+  syncState = 'hors-ligne';
+}
 const w = new mod.Web();
 document.getElementById('boot').remove();
 
@@ -147,6 +180,29 @@ window.addEventListener('resize', () => { resize(); render(); });
 
 setInterval(() => { w.tick(); render(); }, 500);
 setInterval(() => w.save(), 10000);
+
+function syncUi() {
+  document.getElementById('syncbtn').textContent = '⇄ session partagée · ' + syncState;
+}
+async function syncPush(keepalive = false) {
+  w.save();
+  const body = localStorage.getItem('affutsh_save2');
+  if (!body) return;
+  try {
+    const r = await fetch(SYNC + token, {
+      method: 'PUT', body, keepalive,
+      headers: { 'content-type': 'application/json' },
+    });
+    syncState = r.ok ? '✓' : 'erreur';
+  } catch (e) {
+    syncState = 'hors-ligne';
+  }
+  syncUi();
+}
+syncUi();
+setInterval(() => syncPush(), 30000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) syncPush(true); });
+window.addEventListener('beforeunload', () => syncPush(true));
 window.addEventListener('beforeunload', () => w.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) w.save(); });
 
@@ -155,7 +211,14 @@ const txt = document.getElementById('synctxt');
 document.getElementById('syncbtn').addEventListener('click', () => {
   w.save();
   txt.value = localStorage.getItem('affutsh_save2') || '';
+  document.getElementById('synclink').textContent = location.origin + location.pathname + '#s=' + token;
   dlg.classList.add('open');
+});
+document.getElementById('syncLinkCopy').addEventListener('click', async () => {
+  const l = location.origin + location.pathname + '#s=' + token;
+  try { await navigator.clipboard.writeText(l); } catch (e) {}
+  document.getElementById('syncLinkCopy').textContent = 'copié !';
+  setTimeout(() => document.getElementById('syncLinkCopy').textContent = 'copier le lien', 1500);
 });
 document.getElementById('syncClose').addEventListener('click', () => dlg.classList.remove('open'));
 document.getElementById('syncCopy').addEventListener('click', async () => {

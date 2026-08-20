@@ -42,7 +42,33 @@ $SSH 'docker rm -f affut traque 2>/dev/null || true; docker run -d --name affut 
   --memory 384m --cpus 0.5 \
   affut'
 
-echo "[6/6] vérifications"
+echo "[6/8] synchronisation navigateur (conteneurs affut-sync + proxy TLS)"
+cat > /tmp/affut-tls.conf <<'NGX'
+server {
+    listen 8444 ssl;
+    ssl_certificate     /etc/letsencrypt/live/vps.tely.info/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vps.tely.info/privkey.pem;
+    client_max_body_size 2m;
+    location / {
+        proxy_pass http://affut-sync:2323;
+    }
+}
+NGX
+scp -P 443 -q /tmp/affut-tls.conf "$DEST:/opt/affut/tls.conf"
+$SSH 'docker network inspect affut-net >/dev/null 2>&1 || docker network create affut-net >/dev/null
+docker rm -f affut-sync affut-tls 2>/dev/null || true
+docker run -d --name affut-sync --restart unless-stopped --network affut-net \
+  -v affut_sync:/data --memory 128m --cpus 0.25 affut /usr/local/bin/affut-sync
+docker run -d --name affut-tls --restart unless-stopped --network affut-net \
+  -p 8444:8444 \
+  -v /opt/affut/tls.conf:/etc/nginx/conf.d/default.conf:ro \
+  -v /etc/letsencrypt:/etc/letsencrypt:ro \
+  --memory 64m nginx:alpine >/dev/null'
+
+echo "[7/8] rechargement TLS quotidien (renouvellement des certificats)"
+$SSH 'crontab -l 2>/dev/null | grep -q affut-tls || (crontab -l 2>/dev/null; echo "10 4 * * * docker exec affut-tls nginx -s reload >/dev/null 2>&1") | crontab -'
+
+echo "[8/8] vérifications"
 $SSH 'sleep 1; docker ps --filter name=affut --format "{{.Status}}  {{.Ports}}"'
 
 echo

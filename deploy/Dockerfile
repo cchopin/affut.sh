@@ -14,6 +14,7 @@ RUN apk add --no-cache openssh-server tzdata \
     && ssh-keygen -A \
     && mkdir -p /etc/ssh/auth
 COPY --from=build /src/target/release/affut /usr/local/bin/affut
+COPY --from=build /src/target/release/affut-sync /usr/local/bin/affut-sync
 COPY deploy/sshd_affut.conf /etc/ssh/sshd_config
 # les clés publiques (avec AFFUT_PLAYER=pseudo par joueur) sont fournies au run :
 #   -v .../authorized_keys:/etc/ssh/auth/affut:ro

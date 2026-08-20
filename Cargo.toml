@@ -11,10 +11,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
 
+[[bin]]
+name = "affut-sync"
+path = "src/sync_main.rs"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ratatui = "0.30"
 crossterm = "0.29"
 chrono = "0.4"
+tiny_http = "0.12"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ratatui-core = "0.1"
