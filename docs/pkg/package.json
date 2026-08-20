@@ -1,0 +1,15 @@
+{
+  "name": "affut",
+  "type": "module",
+  "version": "0.2.0",
+  "files": [
+    "affut_bg.wasm",
+    "affut.js",
+    "affut.d.ts"
+  ],
+  "main": "affut.js",
+  "types": "affut.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
