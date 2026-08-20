@@ -3083,6 +3083,15 @@ impl Game {
             C::Dim,
         ));
         rows.push(Row::text(
+            format!("  détail chance : flair +{} · trophées +{} · biomes complets +{} · élan (série j{}) +{}",
+                fmt2(self.s.lab[LAB_FLAIR] as f64 * 0.04),
+                fmt2(self.s.trophies as f64 * 0.008),
+                fmt2(self.completed_biomes() as f64 * 0.04),
+                self.s.streak,
+                fmt2(self.streak_bonus())),
+            C::Dimmer,
+        ));
+        rows.push(Row::text(
             format!("shiny 1/{} · hors-ligne {} h max", (1.0 / self.shiny_chance(None, now_ms())).round() as u64, (self.offline_cap_ms() / 3600000.0) as u64),
             C::Dim,
         ));
