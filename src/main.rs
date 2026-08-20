@@ -339,10 +339,10 @@ impl Default for State {
             dex2: vec![DexE::default(); 60],
             contracts_window: 0,
             contracts_done: vec![false; 3],
-            museum: vec![None; 6],
+            museum: vec![None; 12],
             museum_at: 0.0,
             museum_pool: 0.0,
-            pens: vec![None; 3],
+            pens: vec![None; 6],
             legends_tried: vec![],
             hunts_done: 0,
             contracts_delivered: 0,
@@ -1607,15 +1607,18 @@ impl Game {
                     self.s.traps[0] = 1;
                     self.s.baits = vec![0; 5];
                     self.s.inv2 = vec![InvE::default(); 60];
-                    self.s.museum = vec![None; 6];
+                    self.s.museum = vec![None; 12];
                     self.s.museum_pool = 0.0;
-                    self.s.pens = vec![None; 3];
+                    self.s.pens = vec![None; 6];
                     self.s.contracts_done = vec![false; 3];
-                    self.s.lab = vec![0; 6];
+                    self.s.lab = vec![0; LABS.len()];
                     self.s.autosell = vec![false; 5];
                     let mut biomes = vec![None; 6];
                     biomes[0] = Some(BiomeState { slots: 2, pl: vec![None, None], hunt_at: 0.0 });
                     self.s.biomes = biomes;
+                    // filet de sécurité : garantit les tailles de tous les vecteurs,
+                    // pour que la migration ne puisse plus jamais laisser un état bancal
+                    self.s.normalize();
                     self.panels.clear();
                     self.log(vec![(format!("migration effectuée : +{} trophées. tout recommence, en mieux.", g), C::Gold)]);
                     self.toast(format!("migration : +{} trophées", g));
