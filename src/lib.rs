@@ -229,7 +229,7 @@ const LAB_COURTAGE: usize = 11;
 const LAB_LICENCE: usize = 12;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
-const ACHS: [AchDef; 26] = [
+const ACHS: [AchDef; 27] = [
     AchDef { n: "première prise",         d: "capturer une créature",                r: 50.0 },
     AchDef { n: "braconnier du dimanche", d: "capturer 100 créatures",               r: 500.0 },
     AchDef { n: "main verte",             d: "capturer 1 000 créatures",             r: 5000.0 },
@@ -256,6 +256,7 @@ const ACHS: [AchDef; 26] = [
     AchDef { n: "éleveur",                d: "obtenir une naissance à l'enclos",     r: 2000.0 },
     AchDef { n: "conservateur",           d: "remplir les 6 salles du musée",        r: 15000.0 },
     AchDef { n: "oiseau de nuit",         d: "capturer une espèce nocturne",         r: 1000.0 },
+    AchDef { n: "assidu",                 d: "chasser 7 jours d'affilée",            r: 2000.0 },
 ];
 
 const SHINY_BASE: f64 = 1.0 / 512.0;
@@ -370,6 +371,12 @@ struct State {
     legends_caught: u64,
     #[serde(default)]
     pen_born: u64,
+    #[serde(default)]
+    last_day: u32,
+    #[serde(default)]
+    streak: u32,
+    #[serde(default)]
+    traces_done: Vec<u64>,
     lab: Vec<u32>,
     autosell: Vec<bool>,
     ach: Vec<bool>,
@@ -406,6 +413,9 @@ impl Default for State {
             contracts_delivered: 0,
             legends_caught: 0,
             pen_born: 0,
+            last_day: 0,
+            streak: 0,
+            traces_done: vec![],
             lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
             ach: vec![false; ACHS.len()],
@@ -874,6 +884,7 @@ enum Action {
     PenStart(usize, usize),
     PenCollect(usize),
     LegendTry(usize, u64, Option<usize>),
+    TraceFollow(u64, usize),
     Nothing,
 }
 
@@ -1059,7 +1070,11 @@ impl Game {
         (0..BIOMES.len()).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].s > 0)).count()
     }
     fn global_luck(&self) -> f64 {
-        self.s.lab[LAB_FLAIR] as f64 * 0.04 + self.s.trophies as f64 * 0.008 + self.completed_biomes() as f64 * 0.04
+        self.s.lab[LAB_FLAIR] as f64 * 0.04 + self.s.trophies as f64 * 0.008 + self.completed_biomes() as f64 * 0.04 + self.streak_bonus()
+    }
+    /* l'élan : bonus de chance qui grandit avec les jours de chasse consécutifs */
+    fn streak_bonus(&self) -> f64 {
+        (self.s.streak.min(10)) as f64 * 0.015
     }    fn sell_mult(&self) -> f64 {
         (1.0 + self.s.lab[LAB_NEGOCE] as f64 * 0.05)
             * (1.0 + self.s.trophies as f64 * 0.01)
@@ -1398,6 +1413,20 @@ impl Game {
             self.s.contracts_done = vec![false; 3];
             self.log(vec![("de nouveaux contrats sont affichés à la boutique.".into(), C::Blue)]);
         }
+        // rituel du jour : série de connexions consécutives -> élan + petit cadeau
+        let day = (now / 86_400_000.0) as u32;
+        if self.s.last_day != day {
+            self.s.streak = if self.s.last_day + 1 == day { self.s.streak + 1 } else { 1 };
+            self.s.last_day = day;
+            let gift = (self.s.streak.min(10)) as u64;
+            self.s.baits[BAIT_BAIES] += gift;
+            self.log(vec![
+                (format!("jour de chasse n° {} d'affilée : ", self.s.streak), C::Gold),
+                (format!("élan +{} aujourd'hui · {} baies offertes", fmt2(self.streak_bonus()), gift), C::Green),
+            ]);
+            self.toast(format!("série : jour {} — élan +{}", self.s.streak, fmt2(self.streak_bonus())));
+            self.check_achievements();
+        }
         // légende errante : annoncer son apparition (une fois par fenêtre)
         if let Some((w, b, _)) = self.legend_now() {
             if w != self.legend_seen {
@@ -1545,6 +1574,7 @@ impl Game {
             23 => s.pen_born >= 1,
             24 => s.museum.iter().flatten().count() >= 6,
             25 => NOCTURNES.iter().any(|&c| s.dex2[c].n > 0),
+            26 => s.streak >= 7,
             _ => false,
         }
     }    fn check_achievements(&mut self) {
@@ -1901,6 +1931,34 @@ impl Game {
                     self.panels.pop();
                 }
             }
+            Action::TraceFollow(key, biome) => {
+                if !self.s.traces_done.contains(&key) {
+                    self.s.traces_done.push(key);
+                    if self.s.traces_done.len() > 40 {
+                        self.s.traces_done.remove(0);
+                    }
+                    let now = now_ms();
+                    let roll = rand::thread_rng().gen::<f64>();
+                    if roll < 0.60 {
+                        // la piste aboutit : capture ciblée
+                        let luck = self.biome_luck(biome, now) + 0.1;
+                        let ci = self.roll_creature(biome, luck, None, now);
+                        let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now);
+                        let rank = self.roll_rank(luck);
+                        let (is_new, new_shiny, sex) = self.add_specimen(ci, shiny, rank);
+                        self.report_catch(biome, Some((ci, shiny, is_new, new_shiny, 0.0, rank + sex as usize * 10)));
+                        self.log(vec![(format!("les traces menaient droit au gîte ({}).", BIOMES[biome].name), C::Green)]);
+                    } else if roll < 0.85 {
+                        self.log(vec![("les traces se perdent dans les fourrés. la prochaine fois.".into(), C::Dim)]);
+                    } else {
+                        let gift = 1 + (rand::thread_rng().gen_range(0..2)) as u64;
+                        let bt = [BAIT_VIANDE, BAIT_BAIES][rand::thread_rng().gen_range(0..2)];
+                        self.s.baits[bt] += gift;
+                        self.log(vec![(format!("au bout de la piste, une cache abandonnée : {}× {}.", gift, BAITS[bt].n), C::Gold)]);
+                        self.toast(format!("trouvaille : {}× {}", gift, BAITS[bt].n));
+                    }
+                }
+            }
             Action::Nothing => {}
         }
     }
@@ -1959,6 +2017,30 @@ impl Game {
         }
         (w, out)
     }
+    /* traces fraîches : par fenêtre de 10 min, ~1 biome débloqué sur 4 en porte */
+    fn traces_now(&self) -> Vec<(u64, usize, (usize, usize))> {
+        let w = (now_ms() / 600_000.0) as u64;
+        let mut out = vec![];
+        for b in 0..BIOMES.len() {
+            if self.s.biomes[b].is_none() {
+                continue;
+            }
+            if splitmix(w ^ (b as u64) ^ 0x7124CE5) % 100 >= 22 {
+                continue;
+            }
+            let key = w * 16 + b as u64;
+            if self.s.traces_done.contains(&key) {
+                continue;
+            }
+            let (lx, ly) = LEGEND_SPOTS[b];
+            let offs: [(i32, i32); 3] = [(-6, 3), (5, -2), (-2, 6)];
+            let (dx, dy) = offs[(splitmix(w ^ 0xF00 ^ b as u64) % 3) as usize];
+            let x = (lx as i32 + dx).clamp(2, MAPW as i32 - 3) as usize;
+            let y = (ly as i32 + dy).clamp(2, MAPH as i32 - 3) as usize;
+            out.push((key, b, (x, y)));
+        }
+        out
+    }
     /* légende errante : fenêtre de 30 min, 30% de chance, position fixe par biome */
     fn legend_now(&self) -> Option<(u64, usize, (usize, usize))> {
         let w = (now_ms() / 1_800_000.0) as u64;
@@ -1977,6 +2059,12 @@ impl Game {
         if let Some((w, b, (lx, ly))) = self.legend_now() {
             if (lx as i32 - self.px).abs() <= 1 && (ly as i32 - self.py).abs() <= 1 {
                 self.panels.push(Panel::new(PanelKind::Legend(b, w)));
+                return;
+            }
+        }
+        for (key, b, (tx, ty)) in self.traces_now() {
+            if (tx as i32 - self.px).abs() <= 1 && (ty as i32 - self.py).abs() <= 1 {
+                self.apply(Action::TraceFollow(key, b));
                 return;
             }
         }
@@ -2003,6 +2091,11 @@ impl Game {
         if let Some((_, _, (lx, ly))) = self.legend_now() {
             if (lx as i32 - self.px).abs() <= 1 && (ly as i32 - self.py).abs() <= 1 {
                 return ("une silhouette étrange rôde — Entrée : l'approcher".into(), C::Gold);
+            }
+        }
+        for (_, _, (tx, ty)) in self.traces_now() {
+            if (tx as i32 - self.px).abs() <= 1 && (ty as i32 - self.py).abs() <= 1 {
+                return ("des traces fraîches — Entrée : les suivre".into(), C::Gold);
             }
         }
         match self.world.zone_at(self.px as usize, self.py as usize) {
@@ -2381,6 +2474,12 @@ impl Game {
         });
         rows.push(Row::text(format!("météo : {} — change dans {} min", weather_desc(w), next_w.ceil() as u64), C::Dim));
         rows.push(Row::text(format!("saison : {}", season_desc(sea)), C::Dim));
+        if self.s.streak > 0 {
+            rows.push(Row::text(
+                format!("série : jour {} d'affilée · élan +{} de chance aujourd'hui", self.s.streak, fmt2(self.streak_bonus())),
+                C::Gold,
+            ));
+        }
         if let Some((wid, b, _)) = self.legend_now() {
             let left = (((wid + 1) as f64 * 1_800_000.0 - now) / 60_000.0).ceil() as u64;
             rows.push(Row::text(
@@ -2389,6 +2488,64 @@ impl Game {
             ));
         }
         rows.push(Row::text("", C::Dim));
+
+        // ── à faire maintenant : le conseiller de session
+        let mut todo: Vec<Row> = vec![];
+        let hunts_ready: Vec<&str> = (0..BIOMES.len())
+            .filter(|&b| self.s.biomes[b].as_ref().map(|bs| bs.hunt_at <= now).unwrap_or(false))
+            .map(|b| BIOMES[b].name)
+            .collect();
+        if !hunts_ready.is_empty() {
+            todo.push(Row::text(format!("· battue prête : {}", hunts_ready.join(", ")), C::Gold));
+        }
+        let (cw2, contracts) = self.contracts_now();
+        for (i, c) in contracts.iter().enumerate() {
+            let done = cw2 == self.s.contracts_window && self.s.contracts_done.get(i).copied().unwrap_or(false);
+            if !done && self.deliverable(c.ci) >= c.qty {
+                todo.push(Row {
+                    segs: vec![(format!("· contrat livrable : {}× {} (+{} écus)", c.qty, CREATURES[c.ci].n, fmt(c.reward)), C::Gold)],
+                    btns: vec![],
+                    act: Some(Action::Open(PanelKind::Contracts)),
+                    indent: 0,
+                });
+            }
+        }
+        let pool2 = self.s.museum_pool + self.museum_rate() * (now - self.s.museum_at).max(0.0);
+        let cap2 = self.museum_rate() * self.museum_cap_h() * 3_600_000.0;
+        if cap2 > 0.0 && pool2 >= cap2 * 0.9 {
+            todo.push(Row {
+                segs: vec![(format!("· la cagnotte du musée déborde ({} écus) — encaissez", fmt(pool2)), C::Gold)],
+                btns: vec![],
+                act: Some(Action::Open(PanelKind::Museum)),
+                indent: 0,
+            });
+        }
+        let free_pen = (0..self.pen_slots()).any(|i| self.s.pens[i].is_none());
+        let couple_ready = (0..CREATURES.len()).any(|ci| self.s.inv2[ci].tm() >= 1 && self.s.inv2[ci].tf() >= 1 && self.s.inv2[ci].tn() > 2);
+        if free_pen && couple_ready {
+            todo.push(Row {
+                segs: vec![("· un enclos est libre et des couples attendent".into(), C::Gold)],
+                btns: vec![],
+                act: Some(Action::Open(PanelKind::Pens)),
+                indent: 0,
+            });
+        }
+        for (_, b, _) in self.traces_now() {
+            todo.push(Row::text(format!("· des traces fraîches en {} (∵ sur la carte)", BIOMES[b].name), C::Gold));
+        }
+        let boosted_empty: Vec<&str> = (0..BIOMES.len())
+            .filter(|&b| self.s.biomes[b].as_ref().map(|bs| bs.pl.iter().flatten().count() == 0).unwrap_or(false))
+            .filter(|&b| weather_luck(w, b) + season_luck(sea, b) > 0.0)
+            .map(|b| BIOMES[b].name)
+            .collect();
+        if !boosted_empty.is_empty() && self.placed_total() > 0 {
+            todo.push(Row::text(format!("· conditions favorables sans piège : {} — déplacer ?", boosted_empty.join(", ")), C::Ice));
+        }
+        if !todo.is_empty() {
+            rows.push(Row::header("à faire maintenant"));
+            rows.extend(todo);
+            rows.push(Row::text("", C::Dim));
+        }
 
         rows.push(Row::header("expédition"));
         rows.push(Row::text(
@@ -3193,6 +3350,8 @@ impl Game {
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
             "légende errante : une silhouette ✧ apparaît parfois sur la carte. approchez-la et tentez votre chance — une seule fois. créature épique ou légendaire, rang A minimum.",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
+            "des traces fraîches ∵ apparaissent sur la carte : suivez-les (Entrée) — capture ciblée, cache d'appâts, ou rien du tout.",
+            "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
@@ -3455,6 +3614,14 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
             if placed > 0 && sy + 1 <= vy1 {
                 draw_str(buf, area, sx + 1, sy + 1, &format!("{} piège{}", placed, if placed > 1 { "s" } else { "" }), theme.style(C::GoldDark, false));
             }
+        }
+    }
+    // traces fraîches
+    for (_, _, (tx, ty)) in game.traces_now() {
+        let sx = 1 + tx as i32 - cam_x + off_x;
+        let sy = vy0 + ty as i32 - cam_y + off_y;
+        if sy >= vy0 && sy <= vy1 {
+            draw_str(buf, area, sx, sy, "∵", theme.style(C::Gold, false));
         }
     }
     // légende errante
