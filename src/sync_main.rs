@@ -21,7 +21,7 @@ fn main() {
 
     for mut req in server.incoming_requests() {
         let cors = [
-            tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+            tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"https://cchopin.github.io"[..]).unwrap(),
             tiny_http::Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, PUT, OPTIONS"[..]).unwrap(),
             tiny_http::Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"content-type"[..]).unwrap(),
         ];
@@ -50,10 +50,19 @@ fn main() {
             },
             tiny_http::Method::Put => {
                 let mut body = String::new();
-                let ok = req.as_reader().take(1_000_000).read_to_string(&mut body).is_ok();
-                if !ok || body.len() < 2 || serde_json::from_str::<serde_json::Value>(&body).is_err() {
-                    respond(req, 400, "json invalide");
+                let ok = req.as_reader().take(512_000).read_to_string(&mut body).is_ok();
+                if !ok || body.len() < 2 || body.len() >= 512_000 || serde_json::from_str::<serde_json::Value>(&body).is_err() {
+                    respond(req, 400, "json invalide ou trop gros");
                     continue;
+                }
+                // quota : un NOUVEAU jeton n'est accepté que sous le plafond global
+                // (les jetons existants restent toujours modifiables)
+                if !std::path::Path::new(&path).exists() {
+                    let count = std::fs::read_dir(&data_dir).map(|d| d.count()).unwrap_or(0);
+                    if count >= 500 {
+                        respond(req, 507, "plus de place — contactez le gardien du comptoir");
+                        continue;
+                    }
                 }
                 let tmp = format!("{}.tmp", path);
                 if std::fs::write(&tmp, &body).is_ok() && std::fs::rename(&tmp, &path).is_ok() {

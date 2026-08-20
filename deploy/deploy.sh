@@ -44,12 +44,14 @@ $SSH 'docker rm -f affut traque 2>/dev/null || true; docker run -d --name affut 
 
 echo "[6/8] synchronisation navigateur (conteneurs affut-sync + proxy TLS)"
 cat > /tmp/affut-tls.conf <<'NGX'
+limit_req_zone $binary_remote_addr zone=affutsync:1m rate=5r/s;
 server {
     listen 8444 ssl;
     ssl_certificate     /etc/letsencrypt/live/vps.tely.info/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/vps.tely.info/privkey.pem;
     client_max_body_size 2m;
     location / {
+        limit_req zone=affutsync burst=15;
         proxy_pass http://affut-sync:2323;
     }
 }
