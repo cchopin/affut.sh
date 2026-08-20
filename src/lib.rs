@@ -61,26 +61,33 @@ struct CreatureDef {
     lore: &'static str,
 }
 const CREATURES: [CreatureDef; 98] = [
+    // ---- forêt (13)
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
     CreatureDef { b: 0, r: 0, g: ".ø.",   n: "champillon",       lore: "un champignon qui marche. lentement, mais il marche." },
     CreatureDef { b: 0, r: 0, g: "=ö=",   n: "bourdonel",        lore: "bourdonne en permanence, même endormi. surtout endormi." },
+    CreatureDef { b: 0, r: 0, g: "(:>",   n: "hérissou",         lore: "roule en boule au moindre bruit. se déroule pour les baies." },
     CreatureDef { b: 0, r: 1, g: "\\|/",  n: "cerfeuil",         lore: "un petit cervidé dont les bois fleurissent au printemps." },
     CreatureDef { b: 0, r: 1, g: "/\\.",  n: "renardou cendré",  lore: "sa fourrure sent le feu de camp éteint. personne ne sait pourquoi." },
+    CreatureDef { b: 0, r: 1, g: ".w.",   n: "papillotte",       lore: "un papillon qui se prend pour une feuille. les feuilles votent contre." },
     CreatureDef { b: 0, r: 2, g: "{|}",   n: "sylvestre",        lore: "un esprit d'arbre qui déteste être dérangé mais adore les appâts." },
     CreatureDef { b: 0, r: 2, g: "*.*",   n: "lucioleau",        lore: "clignote en morse. les messages sont rarement polis." },
+    CreatureDef { b: 0, r: 2, g: "(-)",   n: "taupinard",        lore: "creuse des tunnels qui débouchent toujours dans un piège. troublant." },
     CreatureDef { b: 0, r: 3, g: "(*)",   n: "dryadelle",        lore: "gardienne des clairières. se laisse capturer uniquement par curiosité." },
     CreatureDef { b: 0, r: 4, g: "\\VV/", n: "grand cornu",      lore: "le patron de la forêt. les autres espèces s'inclinent sur son passage." },
+    // ---- marais (11)
     CreatureDef { b: 1, r: 0, g: "~o~",   n: "vasouille",        lore: "une bulle de vase avec des yeux. pop." },
     CreatureDef { b: 1, r: 0, g: "(o)~",  n: "crapotin",         lore: "croasse faux. les autres crapauds l'évitent." },
     CreatureDef { b: 1, r: 0, g: "_@/",   n: "limacet",          lore: "laisse une trace luisante qui épelle son propre nom." },
     CreatureDef { b: 1, r: 0, g: "-=+",   n: "moustiflard",      lore: "trop gros pour voler discrètement, trop têtu pour arrêter." },
     CreatureDef { b: 1, r: 1, g: "(°°)",  n: "grenouillard",     lore: "un vieux sage amphibien. donne des conseils que personne ne demande." },
     CreatureDef { b: 1, r: 1, g: "~~~o",  n: "sangsurelle",      lore: "s'attache facilement. au sens propre, hélas." },
+    CreatureDef { b: 1, r: 1, g: "@~",    n: "tourbillard",      lore: "un petit tourbillon de tourbe. poli, mais collant." },
     CreatureDef { b: 1, r: 2, g: ".::.",  n: "brumelin",         lore: "un morceau de brouillard devenu autonome un soir d'octobre." },
     CreatureDef { b: 1, r: 2, g: "!*!",   n: "feufollet",        lore: "attire les voyageurs vers les pièges. techniquement un collègue." },
     CreatureDef { b: 1, r: 3, g: "}~{",   n: "hydrelle",         lore: "trois têtes, un seul avis : contre." },
     CreatureDef { b: 1, r: 4, g: "~S~",   n: "basilombre",       lore: "son regard fige la vase elle-même. ne le fixez pas trop longtemps." },
+    // ---- montagne (10)
     CreatureDef { b: 2, r: 0, g: "[o]",   n: "cailloutin",       lore: "un galet qui a décidé d'avoir des jambes. respectable." },
     CreatureDef { b: 2, r: 0, g: "(u)",   n: "marmotton",        lore: "dort huit mois par an. les quatre autres, il mange." },
     CreatureDef { b: 2, r: 0, g: "/\\_",  n: "chamoisel",        lore: "défie la gravité par principe et les chasseurs par sport." },
@@ -91,74 +98,76 @@ const CREATURES: [CreatureDef; 98] = [
     CreatureDef { b: 2, r: 2, g: "\\W/",  n: "condorage",        lore: "ses colères déclenchent des avalanches. ses joies aussi." },
     CreatureDef { b: 2, r: 3, g: "s^s",   n: "wyvernelle",       lore: "une dragonne de taille modeste et d'ego considérable." },
     CreatureDef { b: 2, r: 4, g: "/M\\",  n: "titan des cimes",  lore: "quand il s'assoit, les cartes doivent être redessinées." },
+    // ---- désert (12)
     CreatureDef { b: 3, r: 0, g: "(=)",   n: "scarabinet",       lore: "pousse une boule de sable partout. c'est son projet de vie." },
     CreatureDef { b: 3, r: 0, g: "~s",    n: "serpentile",       lore: "écrit des poèmes dans le sable en rampant. illisibles." },
     CreatureDef { b: 3, r: 0, g: "^..^",  n: "fennecot",         lore: "ses oreilles captent la radio. il préfère le jazz." },
     CreatureDef { b: 3, r: 0, g: "|#|",   n: "cactille",         lore: "un cactus timide. les épines, c'est de la gêne." },
+    CreatureDef { b: 3, r: 0, g: "-*-",   n: "rosable",          lore: "une rose des sables qui bourgeonne. personne n'arrose, elle insiste." },
     CreatureDef { b: 3, r: 1, g: "-E<",   n: "scorpiard",        lore: "brille sous la lune et le sait parfaitement." },
     CreatureDef { b: 3, r: 1, g: "\\_/",  n: "vautourin",        lore: "patiente au-dessus des pièges. il a compris le concept." },
     CreatureDef { b: 3, r: 2, g: ".?.",   n: "mirageon",         lore: "existe-t-il vraiment ? le piège dit oui. le doute demeure." },
     CreatureDef { b: 3, r: 2, g: "=A=",   n: "dunataure",        lore: "mi-homme mi-dune. entièrement insaisissable, ou presque." },
+    CreatureDef { b: 3, r: 2, g: "^!^",   n: "chacalin",         lore: "rit tout seul dans les dunes. on préfère ne pas savoir de quoi." },
     CreatureDef { b: 3, r: 3, g: "[:]",   n: "sphinxel",         lore: "pose une énigme avant chaque capture. le piège ne répond jamais, ça l'agace." },
     CreatureDef { b: 3, r: 4, g: "OOO~",  n: "ver des sables",   lore: "le désert n'est pas vide. il digère." },
+    // ---- glacier (11)
     CreatureDef { b: 4, r: 0, g: "(v)",   n: "pingolin",         lore: "glisse sur le ventre par efficacité, pas par jeu. enfin, un peu par jeu." },
     CreatureDef { b: 4, r: 0, g: "*o*",   n: "frimousse",        lore: "une boule de neige avec un visage. fond au printemps, revient vexée." },
     CreatureDef { b: 4, r: 0, g: "(\\_",  n: "lièvrelin",        lore: "blanc sur blanc. on ne capture souvent que ses empreintes." },
     CreatureDef { b: 4, r: 0, g: ":3=",   n: "morsille",         lore: "des défenses imposantes, un caractère de peluche." },
+    CreatureDef { b: 4, r: 0, g: ".:.",   n: "neigelin",         lore: "un flocon trop gros pour fondre, trop léger pour tomber." },
     CreatureDef { b: 4, r: 1, g: "vvv",   n: "stalactin",        lore: "tombe du plafond des grottes sur les pièges. par solidarité." },
     CreatureDef { b: 4, r: 1, g: "|-|",   n: "rennelune",        lore: "ne touche jamais vraiment le sol. vérifiez ses empreintes." },
     CreatureDef { b: 4, r: 2, g: "[Y]",   n: "yétillon",         lore: "un yéti junior. floute lui-même les photos, c'est de famille." },
     CreatureDef { b: 4, r: 2, g: "≈≈≈",   n: "aurorelle",        lore: "un ruban d'aurore boréale qui a pris goût au sol." },
     CreatureDef { b: 4, r: 3, g: "|>o",   n: "givrecorne",       lore: "sa corne givre l'air. les collectionneurs givrent d'envie." },
     CreatureDef { b: 4, r: 4, g: "~O~",   n: "léviathan blanc",  lore: "la banquise, c'est son dos. réfléchissez-y." },
+    // ---- abysses (11)
     CreatureDef { b: 5, r: 0, g: "-o)",   n: "lanternet",        lore: "sa lampe frontale est en panne un jour sur deux. il fait avec." },
     CreatureDef { b: 5, r: 0, g: "(((",   n: "méduselle",        lore: "transparente et fière de l'être. difficile à compter." },
     CreatureDef { b: 5, r: 0, g: "}={",   n: "crabique",         lore: "marche de côté même dans ses rêves." },
     CreatureDef { b: 5, r: 0, g: "~~>",   n: "anguiliss",        lore: "un éclair au ralenti. électrise les conversations, littéralement." },
     CreatureDef { b: 5, r: 1, g: "(8)",   n: "poulpinet",        lore: "ouvre les pièges de l'intérieur. reste dedans par confort." },
     CreatureDef { b: 5, r: 1, g: ">:)",   n: "nocturnix",        lore: "sourit dans le noir. c'est précisément le problème." },
+    CreatureDef { b: 5, r: 1, g: "_o_",   n: "fondrille",        lore: "vit encore plus bas que le fond. remonte pour les grandes occasions." },
     CreatureDef { b: 5, r: 2, g: ".-.",   n: "spectrelle",       lore: "le fantôme d'un poisson qui refuse d'admettre quoi que ce soit." },
     CreatureDef { b: 5, r: 2, g: "[ ]",   n: "néantin",          lore: "un morceau de rien, soigneusement encadré." },
     CreatureDef { b: 5, r: 3, g: "{X}",   n: "krakenot",         lore: "un kraken de poche. les navires miniatures le redoutent." },
     CreatureDef { b: 5, r: 4, g: "(Ω)",   n: "ancien des profondeurs", lore: "il était là avant les biomes. il sera là après vous." },
-    CreatureDef { b: 6, r: 0, g: "(∴)",  n: "bracille",          lore: "un lézard qui dort sur les braises. les braises apprécient." },
-    CreatureDef { b: 6, r: 0, g: "-·-",  n: "cendrillot",        lore: "fait des tas de cendres bien rangés. les défait. recommence." },
-    CreatureDef { b: 6, r: 0, g: ")))",  n: "fumerol",           lore: "un serpentin de fumée qui a des opinions." },
-    CreatureDef { b: 6, r: 1, g: "[≈]",  n: "magmite",           lore: "une flaque de lave apprivoisée. ne pas caresser." },
-    CreatureDef { b: 6, r: 1, g: "*!*",  n: "soufrelin",         lore: "sent l'œuf pourri et en joue." },
-    CreatureDef { b: 6, r: 2, g: "{#}",  n: "pyroclaste",        lore: "il explose par politesse, pour prévenir." },
-    CreatureDef { b: 6, r: 3, g: "~§~",  n: "salamandragore",    lore: "sa morsure brûle, son lore aussi." },
-    CreatureDef { b: 6, r: 4, g: "(♦)",  n: "cœur-de-forge",     lore: "le volcan bat à son rythme. littéralement." },
-    CreatureDef { b: 7, r: 0, g: ":o:",  n: "corailleau",        lore: "un bout de corail qui a pris la mer au sérieux." },
-    CreatureDef { b: 7, r: 0, g: "°o°",  n: "bulleret",          lore: "produit des bulles carrées. refuse d'expliquer." },
-    CreatureDef { b: 7, r: 0, g: "?~",   n: "hippocampette",     lore: "se déplace uniquement à la verticale, par principe." },
-    CreatureDef { b: 7, r: 0, g: ".*.",  n: "étoilette",         lore: "compte ses branches en boucle. cinq. toujours cinq." },
-    CreatureDef { b: 7, r: 0, g: "=o=",  n: "clownard",          lore: "vit dans une anémone, en colocation conflictuelle." },
-    CreatureDef { b: 7, r: 1, g: "}i{",  n: "languste",          lore: "joue de ses antennes comme d'un violon." },
-    CreatureDef { b: 7, r: 1, g: "<^>",  n: "raiettine",         lore: "plane sous l'eau. l'eau n'a rien remarqué." },
-    CreatureDef { b: 7, r: 1, g: "~e~",  n: "murénia",           lore: "sourit beaucoup trop pour quelqu'un qui vit dans un trou." },
-    CreatureDef { b: 7, r: 2, g: "(@)",  n: "nautilange",        lore: "porte sa maison en spirale. déménage sans le savoir." },
-    CreatureDef { b: 7, r: 2, g: ">=>",  n: "barracuml",         lore: "rapide, nerveux, incapable de nager en ligne droite." },
-    CreatureDef { b: 7, r: 3, g: "(o)",  n: "perlamère",         lore: "sa perle vaut une fortune. elle le sait. elle négocie." },
-    CreatureDef { b: 7, r: 4, g: "≈C≈",  n: "chantecoral",       lore: "le chant du récif. l'entendre, c'est déjà l'avoir cherché trop longtemps." },
-    CreatureDef { b: 8, r: 0, g: "[.]",  n: "gravelin",          lore: "un caillou taillé qui se souvient d'avoir été une colonne." },
-    CreatureDef { b: 8, r: 0, g: "...",  n: "poussiéreux",       lore: "il est littéralement de la poussière. motivée." },
-    CreatureDef { b: 8, r: 1, g: "}{",   n: "liergne",           lore: "du lierre qui grimpe sur ce qui n'existe plus." },
-    CreatureDef { b: 8, r: 1, g: "#:#",  n: "mosaïquin",         lore: "des tesselles qui se recomposent la nuit." },
-    CreatureDef { b: 8, r: 1, g: "!i!",  n: "chandelmoine",      lore: "une bougie qui fait des rondes. par habitude." },
-    CreatureDef { b: 8, r: 2, g: "|o|",  n: "gardogol",          lore: "il garde une porte. la porte n'existe plus. il garde quand même." },
-    CreatureDef { b: 8, r: 2, g: "<?>",  n: "oraclyphe",         lore: "il prédit le passé avec une précision remarquable." },
-    CreatureDef { b: 8, r: 3, g: ".^.",  n: "spectrarque",       lore: "l'ancien maître des lieux. très à cheval sur l'étiquette." },
-    CreatureDef { b: 8, r: 3, g: "{t}",  n: "chronolithe",       lore: "le temps passe autour de lui, jamais à travers." },
-    CreatureDef { b: 8, r: 4, g: "/#\\", n: "bâtisseur oublié",  lore: "il a construit les ruines. neuves, à l'époque." },
-    CreatureDef { b: 0, r: 0, g: "(:>",  n: "hérissou",          lore: "roule en boule au moindre bruit. se déroule pour les baies." },
-    CreatureDef { b: 0, r: 1, g: ".w.",  n: "papillotte",        lore: "un papillon qui se prend pour une feuille. les feuilles votent contre." },
-    CreatureDef { b: 0, r: 2, g: "(-)",  n: "taupinard",         lore: "creuse des tunnels qui débouchent toujours dans un piège. troublant." },
-    CreatureDef { b: 1, r: 1, g: "@~",   n: "tourbillard",       lore: "un petit tourbillon de tourbe. poli, mais collant." },
-    CreatureDef { b: 3, r: 0, g: "-*-",  n: "rosable",           lore: "une rose des sables qui bourgeonne. personne n'arrose, elle insiste." },
-    CreatureDef { b: 3, r: 2, g: "^!^",  n: "chacalin",          lore: "rit tout seul dans les dunes. on préfère ne pas savoir de quoi." },
-    CreatureDef { b: 4, r: 0, g: ".:.",  n: "neigelin",          lore: "un flocon trop gros pour fondre, trop léger pour tomber." },
-    CreatureDef { b: 5, r: 1, g: "_o_",  n: "fondrille",         lore: "vit encore plus bas que le fond. remonte pour les grandes occasions." },
+    // ---- volcan (8)
+    CreatureDef { b: 6, r: 0, g: "(∴)",   n: "bracille",         lore: "un lézard qui dort sur les braises. les braises apprécient." },
+    CreatureDef { b: 6, r: 0, g: "-·-",   n: "cendrillot",       lore: "fait des tas de cendres bien rangés. les défait. recommence." },
+    CreatureDef { b: 6, r: 0, g: ")))",   n: "fumerol",          lore: "un serpentin de fumée qui a des opinions." },
+    CreatureDef { b: 6, r: 1, g: "[≈]",   n: "magmite",          lore: "une flaque de lave apprivoisée. ne pas caresser." },
+    CreatureDef { b: 6, r: 1, g: "*!*",   n: "soufrelin",        lore: "sent l'œuf pourri et en joue." },
+    CreatureDef { b: 6, r: 2, g: "{#}",   n: "pyroclaste",       lore: "il explose par politesse, pour prévenir." },
+    CreatureDef { b: 6, r: 3, g: "~§~",   n: "salamandragore",   lore: "sa morsure brûle, son lore aussi." },
+    CreatureDef { b: 6, r: 4, g: "(♦)",   n: "cœur-de-forge",    lore: "le volcan bat à son rythme. littéralement." },
+    // ---- récif (12)
+    CreatureDef { b: 7, r: 0, g: ":o:",   n: "corailleau",       lore: "un bout de corail qui a pris la mer au sérieux." },
+    CreatureDef { b: 7, r: 0, g: "°o°",   n: "bulleret",         lore: "produit des bulles carrées. refuse d'expliquer." },
+    CreatureDef { b: 7, r: 0, g: "?~",    n: "hippocampette",    lore: "se déplace uniquement à la verticale, par principe." },
+    CreatureDef { b: 7, r: 0, g: ".*.",   n: "étoilette",        lore: "compte ses branches en boucle. cinq. toujours cinq." },
+    CreatureDef { b: 7, r: 0, g: "=o=",   n: "clownard",         lore: "vit dans une anémone, en colocation conflictuelle." },
+    CreatureDef { b: 7, r: 1, g: "}i{",   n: "languste",         lore: "joue de ses antennes comme d'un violon." },
+    CreatureDef { b: 7, r: 1, g: "<^>",   n: "raiettine",        lore: "plane sous l'eau. l'eau n'a rien remarqué." },
+    CreatureDef { b: 7, r: 1, g: "~e~",   n: "murénia",          lore: "sourit beaucoup trop pour quelqu'un qui vit dans un trou." },
+    CreatureDef { b: 7, r: 2, g: "(@)",   n: "nautilange",       lore: "porte sa maison en spirale. déménage sans le savoir." },
+    CreatureDef { b: 7, r: 2, g: ">=>",   n: "barracuml",        lore: "rapide, nerveux, incapable de nager en ligne droite." },
+    CreatureDef { b: 7, r: 3, g: "(o)",   n: "perlamère",        lore: "sa perle vaut une fortune. elle le sait. elle négocie." },
+    CreatureDef { b: 7, r: 4, g: "≈C≈",   n: "chantecoral",      lore: "le chant du récif. l'entendre, c'est déjà l'avoir cherché trop longtemps." },
+    // ---- ruines (10)
+    CreatureDef { b: 8, r: 0, g: "[.]",   n: "gravelin",         lore: "un caillou taillé qui se souvient d'avoir été une colonne." },
+    CreatureDef { b: 8, r: 0, g: "...",   n: "poussiéreux",      lore: "il est littéralement de la poussière. motivée." },
+    CreatureDef { b: 8, r: 1, g: "}{",    n: "liergne",          lore: "du lierre qui grimpe sur ce qui n'existe plus." },
+    CreatureDef { b: 8, r: 1, g: "#:#",   n: "mosaïquin",        lore: "des tesselles qui se recomposent la nuit." },
+    CreatureDef { b: 8, r: 1, g: "!i!",   n: "chandelmoine",     lore: "une bougie qui fait des rondes. par habitude." },
+    CreatureDef { b: 8, r: 2, g: "|o|",   n: "gardogol",         lore: "il garde une porte. la porte n'existe plus. il garde quand même." },
+    CreatureDef { b: 8, r: 2, g: "<?>",   n: "oraclyphe",        lore: "il prédit le passé avec une précision remarquable." },
+    CreatureDef { b: 8, r: 3, g: ".^.",   n: "spectrarque",      lore: "l'ancien maître des lieux. très à cheval sur l'étiquette." },
+    CreatureDef { b: 8, r: 3, g: "{t}",   n: "chronolithe",      lore: "le temps passe autour de lui, jamais à travers." },
+    CreatureDef { b: 8, r: 4, g: "/#\\",  n: "bâtisseur oublié", lore: "il a construit les ruines. neuves, à l'époque." },
 ];
 
 fn biome_creatures(b: usize) -> impl Iterator<Item = usize> {
@@ -254,7 +263,7 @@ const SHINY_BASE: f64 = 1.0 / 512.0;
 const SAISONS: [&str; 4] = ["printemps", "été", "automne", "hiver"];
 const METEOS: [&str; 6] = ["ciel clair", "pluie", "brume", "canicule", "tempête", "nuit étoilée"];
 /* espèces qui ne sortent que la nuit (21 h – 7 h) */
-const NOCTURNES: [usize; 7] = [7, 17, 24, 36, 47, 55, 84]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
+const NOCTURNES: [usize; 7] = [9, 21, 28, 41, 54, 62, 92]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
 const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
 const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
@@ -279,19 +288,12 @@ struct BiomeState {
     hunt_at: f64, // prochaine battue autorisée
 }
 
-/* réserve par espèce : compteurs par rang (C,B,A,S), par sexe, normaux et shinies.
-   n/s sont les anciens compteurs sans sexe (migrés puis à zéro). */
+/* réserve par espèce : compteurs par rang (C,B,A,S), par sexe, normaux et shinies */
 #[derive(Serialize, Deserialize, Clone, Default)]
 struct InvE {
-    n: [u64; 4],
-    s: [u64; 4],
-    #[serde(default)]
     m: [u64; 4],
-    #[serde(default)]
     f: [u64; 4],
-    #[serde(default)]
     sm: [u64; 4],
-    #[serde(default)]
     sf: [u64; 4],
 }
 impl InvE {
@@ -342,8 +344,6 @@ struct State {
     traps: Vec<u32>,
     baits: Vec<u64>,
     biomes: Vec<Option<BiomeState>>,
-    inv: Vec<(u64, u64)>, // hérité (anciennes sauvegardes), migré vers inv2
-    dex: Vec<(u64, u64)>, // hérité, migré vers dex2
     #[serde(default)]
     inv2: Vec<InvE>,
     #[serde(default)]
@@ -370,8 +370,6 @@ struct State {
     legends_caught: u64,
     #[serde(default)]
     pen_born: u64,
-    #[serde(default)]
-    balance_v: u32,
     lab: Vec<u32>,
     autosell: Vec<bool>,
     ach: Vec<bool>,
@@ -395,8 +393,6 @@ impl Default for State {
             traps,
             baits: vec![0; 5],
             biomes,
-            inv: vec![],
-            dex: vec![],
             inv2: vec![InvE::default(); CREATURES.len()],
             dex2: vec![DexE::default(); CREATURES.len()],
             contracts_window: 0,
@@ -410,7 +406,6 @@ impl Default for State {
             contracts_delivered: 0,
             legends_caught: 0,
             pen_born: 0,
-            balance_v: 1,
             lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
             ach: vec![false; ACHS.len()],
@@ -422,7 +417,6 @@ impl State {
     fn normalize(&mut self) {
         self.traps.resize(6, 0);
         self.baits.resize(5, 0);
-        // resize ne doit jamais TRONQUER les biomes (il agrandit seulement)
         if self.biomes.len() < BIOMES.len() {
             self.biomes.resize(BIOMES.len(), None);
         }
@@ -434,48 +428,6 @@ impl State {
         self.contracts_done.resize(3, false);
         self.museum.resize(12, None);
         self.pens.resize(6, None);
-        // migration des sauvegardes d'avant les rangs : tout passe en rang C
-        if self.dex2.iter().all(|d| d.n == 0) && self.dex.iter().any(|d| d.0 > 0) {
-            for (ci, &(n, s)) in self.dex.iter().enumerate().take(60) {
-                self.dex2[ci] = DexE { n, s, best: if n > 0 { 1 } else { 0 }, bests: if s > 0 { 1 } else { 0 }, mf: 0 };
-            }
-            for (ci, &(n, s)) in self.inv.iter().enumerate().take(60) {
-                self.inv2[ci].n[0] = n;
-                self.inv2[ci].s[0] = s;
-            }
-        }
-        self.inv = vec![];
-        self.dex = vec![];
-        // rééquilibrage du 2026-08-20 : conversion unique des trophées vers la
-        // nouvelle courbe (l'ancienne en distribuait ~13× trop)
-        if self.balance_v == 0 {
-            self.balance_v = 1;
-            if self.trophies > 0 {
-                self.trophies = (self.trophies as f64).sqrt().round() as u32;
-            }
-        }
-        // migration v2 -> sexes : répartir les anciens compteurs sans sexe ~50/50
-        let no_sex = self.inv2.iter().all(|e| e.m.iter().all(|&x| x == 0) && e.f.iter().all(|&x| x == 0) && e.sm.iter().all(|&x| x == 0) && e.sf.iter().all(|&x| x == 0));
-        let has_old = self.inv2.iter().any(|e| e.n.iter().any(|&x| x > 0) || e.s.iter().any(|&x| x > 0));
-        if no_sex && has_old {
-            for e in self.inv2.iter_mut() {
-                for r in 0..4 {
-                    e.m[r] = (e.n[r] + 1) / 2;
-                    e.f[r] = e.n[r] / 2;
-                    e.sm[r] = (e.s[r] + 1) / 2;
-                    e.sf[r] = e.s[r] / 2;
-                    e.n[r] = 0;
-                    e.s[r] = 0;
-                }
-            }
-            for d in self.dex2.iter_mut() {
-                if d.n >= 2 {
-                    d.mf = 3;
-                } else if d.n == 1 {
-                    d.mf = 1;
-                }
-            }
-        }
     }
 }
 
@@ -596,13 +548,9 @@ fn save_path() -> std::path::PathBuf {
         .map(|p| p.chars().filter(|c| c.is_ascii_alphanumeric()).take(24).collect::<String>())
         .filter(|p| !p.is_empty());
     match player {
-        Some(p) => std::path::Path::new(&home).join(format!(".affutsh-{}.json", p)),
-        None => std::path::Path::new(&home).join(".affutsh.json"),
+        Some(p) => std::path::Path::new(&home).join(format!(".affutsh2-{}.json", p)),
+        None => std::path::Path::new(&home).join(".affutsh2.json"),
     }
-}
-fn legacy_save_path() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    std::path::Path::new(&home).join(".traquesh.json")
 }
 #[cfg(not(target_arch = "wasm32"))]
 fn save_raw(json: &str) {
@@ -610,13 +558,7 @@ fn save_raw(json: &str) {
 }
 #[cfg(not(target_arch = "wasm32"))]
 fn load_raw() -> Option<String> {
-    std::fs::read_to_string(save_path()).ok().or_else(|| {
-        if std::env::var("AFFUT_PLAYER").is_err() {
-            std::fs::read_to_string(legacy_save_path()).ok()
-        } else {
-            None
-        }
-    })
+    std::fs::read_to_string(save_path()).ok()
 }
 #[cfg(target_arch = "wasm32")]
 fn web_storage() -> Option<web_sys::Storage> {
@@ -625,12 +567,12 @@ fn web_storage() -> Option<web_sys::Storage> {
 #[cfg(target_arch = "wasm32")]
 fn save_raw(json: &str) {
     if let Some(st) = web_storage() {
-        let _ = st.set_item("affutsh_save", json);
+        let _ = st.set_item("affutsh_save2", json);
     }
 }
 #[cfg(target_arch = "wasm32")]
 fn load_raw() -> Option<String> {
-    web_storage()?.get_item("affutsh_save").ok().flatten()
+    web_storage()?.get_item("affutsh_save2").ok().flatten()
 }
 
 /* ================================================================ couleurs */
