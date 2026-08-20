@@ -1566,7 +1566,24 @@ impl Game {
     /* écus par milliseconde générés par les salles occupées */
     fn museum_rate(&self) -> f64 {
         self.s.museum.iter().flatten().map(|m| self.creature_value_r(m.ci, m.shiny, m.rank) * 0.001 / 60_000.0).sum()
-    }    fn run_offline(&mut self) {
+    }
+
+    pub fn welcome(&mut self, fresh: bool) {
+        let msg = if fresh {
+            "bienvenue. un piège en bois vous attend en réserve — la forêt est à l'ouest.".into()
+        } else {
+            let poses: usize = self.s.biomes.iter().flatten().map(|b| b.pl.iter().flatten().count()).sum();
+            format!(
+                "bon retour. {} écus · {} captures · {} piège(s) en service.",
+                fmt(self.s.ecus),
+                fmt(self.s.captures as f64),
+                poses
+            )
+        };
+        self.log(vec![(msg, C::Green)]);
+    }
+
+    fn run_offline(&mut self) {
         let now = now_ms();
         let away = now - self.s.last_seen;
         if away < 15000.0 {
@@ -3525,7 +3542,7 @@ impl Game {
             "[v] tableau de bord · [i] inventaire · [b] bestiaire · [o] boutique · [c] contrats",
             "[l] labo · [m] musée · [e] enclos · [t] trophées · [j] journal · [?] cette aide",
             "panneaux : ↑↓/jk naviguer · ←→ changer de bouton · Entrée valider · PgUp/PgDn défiler",
-            if cfg!(target_arch = "wasm32") { "fermez l'onglet quand vous voulez — la partie est sauvegardée toutes les 10 s. les touches + et - ajustent la densité d'affichage." } else { "quitter : ctrl+c — la partie est sauvegardée à la sortie (et toutes les 10 s de toute façon)." },
+            if cfg!(target_arch = "wasm32") { "fermez l'onglet quand vous voulez — la partie est sauvegardée toutes les 10 s. les touches + et - ajustent la taille du texte." } else { "quitter : ctrl+c — la partie est sauvegardée à la sortie (et toutes les 10 s de toute façon)." },
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dimmer));
         }
@@ -3842,7 +3859,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     }
     // raccourcis
     let kb = if cfg!(target_arch = "wasm32") {
-        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · +/- densité "
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · +/- taille "
     } else {
         " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · ctrl+c quitter "
     };
@@ -4118,10 +4135,7 @@ pub fn run() -> std::io::Result<()> {
     use std::time::{Duration, Instant};
     let (mut game, fresh) = Game::new();
     game.run_offline();
-    game.log(vec![(
-        "bienvenue. un piège en bois vous attend en réserve — la forêt est à l'ouest.".into(),
-        C::Green,
-    )]);
+    game.welcome(fresh);
     if fresh {
         // première partie : ouvrir le guide directement
         game.panels.push(Panel::new(PanelKind::Help));
@@ -4205,10 +4219,7 @@ mod webapp {
         pub fn new() -> Web {
             let (mut game, fresh) = Game::new();
             game.run_offline();
-            game.log(vec![(
-                "bienvenue. un piège en bois vous attend en réserve — la forêt est à l'ouest.".into(),
-                C::Green,
-            )]);
+            game.welcome(fresh);
             if fresh {
                 game.panels.push(Panel::new(PanelKind::Help));
             }
