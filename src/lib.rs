@@ -3059,18 +3059,22 @@ impl Game {
             rows.push(r);
         }
         let g = self.trophy_gain();
-        rows.push(Row::text(
-            format!("écus gagnés cette expédition : {} · trophées actuels : {}", fmt(self.s.run_earned), self.s.trophies),
-            C::Dimmer,
-        ));
         let mcost = self.migration_cost();
         let can = g >= 1 && self.s.ecus >= mcost;
+        rows.push(Row {
+            segs: vec![
+                (format!("écus gagnés : {} · ", fmt(self.s.run_earned)), C::Dimmer),
+                (format!("frais de voyage : {} écus", fmt(mcost)), if self.s.ecus >= mcost { C::GoldDark } else { C::Red }),
+            ],
+            btns: vec![],
+            act: None,
+            indent: 0,
+        });
         rows.push(Row {
             segs: vec![
                 ("trophées à la migration : ".into(), C::Text),
                 (format!("+{}", g), if g > 0 { C::Gold } else { C::Dimmer }),
                 (if g < 1 { "  (1 M d'écus gagnés = 1er trophée)".into() } else { String::new() }, C::Dimmer),
-                (format!("  · frais de voyage : {} écus", fmt(mcost)), if self.s.ecus >= mcost { C::GoldDark } else { C::Red }),
             ],
             btns: vec![("migrer".into(), if can { C::Red } else { C::Dimmer }, if can { Action::Open(PanelKind::MigrConfirm) } else { Action::Nothing })],
             act: None,
