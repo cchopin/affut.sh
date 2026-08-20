@@ -53,7 +53,7 @@
   @media (pointer: coarse) { #pad { display: grid; } }
   #ver {
     position: fixed; bottom: 4px; left: 8px; z-index: 4;
-    font-size: 10px; color: #3a4250; pointer-events: none;
+    font-size: 11px; color: #7e8a9b; opacity: .75; pointer-events: none;
   }
   #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #7e8a9b; background: #101318; }
 </style>
@@ -68,7 +68,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820p'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260820q'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
