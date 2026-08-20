@@ -3834,28 +3834,36 @@ fn panel_key(game: &mut Game, code: GKey) {
             p.scroll = p.scroll.saturating_sub(inner);
         }
         GKey::Down | GKey::Char('j') | GKey::Char('s') => {
-            if sels.is_empty() {
-                let p = game.panels.last_mut().unwrap();
-                p.scroll = (p.scroll + 1).min(max_scroll);
-            } else if let Some(&(r0, _)) = sels.get(sel) {
-                if let Some(n) = (sel + 1..sels.len()).find(|&i| sels[i].0 > r0) {
+            let p_scroll = game.panels.last().unwrap().scroll;
+            let next = sels.get(sel).and_then(|&(r0, _)| (sel + 1..sels.len()).find(|&i| sels[i].0 > r0));
+            match next {
+                // la cible est visible (ou à une ligne) : on la sélectionne
+                Some(n) if sels[n].0 < p_scroll + inner => {
                     let p = game.panels.last_mut().unwrap();
                     p.sel = n;
                     snap(p, sels[n].0);
                 }
+                // sinon : simple défilement d'une ligne, la lecture d'abord
+                _ => {
+                    let p = game.panels.last_mut().unwrap();
+                    p.scroll = (p.scroll + 1).min(max_scroll);
+                }
             }
         }
         GKey::Up | GKey::Char('k') | GKey::Char('z') => {
-            if sels.is_empty() {
-                let p = game.panels.last_mut().unwrap();
-                p.scroll = p.scroll.saturating_sub(1);
-            } else if let Some(&(r0, _)) = sels.get(sel) {
-                if let Some(n) = (0..sel).rev().find(|&i| sels[i].0 < r0) {
+            let p_scroll = game.panels.last().unwrap().scroll;
+            let prev = sels.get(sel).and_then(|&(r0, _)| (0..sel).rev().find(|&i| sels[i].0 < r0));
+            match prev {
+                Some(n) if sels[n].0 >= p_scroll => {
                     let rt = sels[n].0;
                     let first = (0..=n).rev().take_while(|&i| sels[i].0 == rt).last().unwrap();
                     let p = game.panels.last_mut().unwrap();
                     p.sel = first;
                     snap(p, rt);
+                }
+                _ => {
+                    let p = game.panels.last_mut().unwrap();
+                    p.scroll = p.scroll.saturating_sub(1);
                 }
             }
         }
