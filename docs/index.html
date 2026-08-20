@@ -11,10 +11,11 @@
   body {
     background: #14181f; color: #c2cdda;
     font-family: "Menlo", ui-monospace, SFMono-Regular, Consolas, "DejaVu Sans Mono", monospace;
+    display: flex; align-items: center; justify-content: center;
   }
   #scr {
     font-size: 15px; line-height: 19px; white-space: pre;
-    position: absolute; inset: 0; overflow: hidden;
+    overflow: hidden;
     user-select: none; -webkit-user-select: none; cursor: default;
   }
   #meas { position: absolute; visibility: hidden; top: -100px; font-size: 15px; }
@@ -28,7 +29,7 @@
   }
   #pad button:active { background: #2b3240; }
   @media (pointer: coarse) { #pad { display: grid; } }
-  #boot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #7e8a9b; }
+  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #7e8a9b; background: #14181f; }
 </style>
 </head>
 <body>
