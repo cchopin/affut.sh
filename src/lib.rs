@@ -2092,11 +2092,18 @@ impl Game {
         let w = (now_ms() / 7_200_000.0) as u64;
         let mut rng = StdRng::seed_from_u64(splitmix(w ^ 0xC0117AC7));
         let unlocked: Vec<usize> = (0..BIOMES.len()).filter(|&b| self.s.biomes[b].is_some()).collect();
-        let mut out = vec![];
+        let mut out: Vec<Contract> = vec![];
         for _ in 0..3 {
-            let b = unlocked[rng.gen_range(0..unlocked.len())];
-            let pool: Vec<usize> = biome_creatures(b).filter(|&i| CREATURES[i].r <= 2).collect();
-            let ci = pool[rng.gen_range(0..pool.len())];
+            // trois espèces distinctes : on retire (de façon déterministe) en cas de doublon
+            let mut ci = 0;
+            for _essai in 0..8 {
+                let b = unlocked[rng.gen_range(0..unlocked.len())];
+                let pool: Vec<usize> = biome_creatures(b).filter(|&i| CREATURES[i].r <= 2).collect();
+                ci = pool[rng.gen_range(0..pool.len())];
+                if !out.iter().any(|c| c.ci == ci) {
+                    break;
+                }
+            }
             let qty = match CREATURES[ci].r {
                 0 => rng.gen_range(4..=8),
                 1 => rng.gen_range(3..=5),
