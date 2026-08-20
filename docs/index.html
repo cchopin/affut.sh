@@ -31,7 +31,7 @@
     display: flex; align-items: center; justify-content: center;
   }
   #scr {
-    white-space: pre; letter-spacing: 0.5px;
+    white-space: pre; letter-spacing: 0;
     overflow: hidden;
     background: #171c24; /* fond plein sur toute la grille, carte comprise */
     user-select: none; -webkit-user-select: none; cursor: default;
@@ -40,7 +40,7 @@
      toute la cellule — plus de bandes entre les lignes, comme un vrai terminal */
   #scr div { height: var(--lh, 17px); }
   #scr span { display: inline-block; height: 100%; vertical-align: top; }
-  #meas { position: absolute; visibility: hidden; top: -100px; letter-spacing: 0.5px; }
+  #meas { position: absolute; visibility: hidden; top: -100px; letter-spacing: 0; }
   #pad {
     display: none; position: fixed; bottom: 10px; right: 10px; z-index: 5;
     grid-template-columns: repeat(3, 46px); gap: 6px; opacity: .85;
@@ -135,7 +135,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821a'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821b'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -228,8 +228,9 @@ const meas = document.getElementById('meas');
 let cols = 110, rows = 40;
 
 // densité de la grille, ajustable avec + / − (mémorisée)
-const SIZES = [[11, 14], [12, 15], [13, 17], [14, 18], [15, 19], [16, 21], [18, 23]];
-let sizeIdx = Math.min(SIZES.length - 1, Math.max(0, parseInt(localStorage.getItem('affut_fs') ?? '2', 10) || 2));
+// interligne ×1,5, lettres à chasse naturelle — le rendu de la boîte de dialogue
+const SIZES = [[11, 17], [12, 18], [13, 20], [14, 21], [15, 23], [16, 24], [18, 27]];
+let sizeIdx = Math.min(SIZES.length - 1, Math.max(0, parseInt(localStorage.getItem('affut_fs2') ?? '3', 10) || 3));
 let ch = 17;
 function applySize() {
   const [fs, lh] = SIZES[sizeIdx];
@@ -238,7 +239,7 @@ function applySize() {
   scr.style.lineHeight = lh + 'px';
   scr.style.setProperty('--lh', lh + 'px');
   meas.style.fontSize = fs + 'px';
-  localStorage.setItem('affut_fs', String(sizeIdx));
+  localStorage.setItem('affut_fs2', String(sizeIdx));
   document.getElementById('ver').textContent = 'v' + V + ' · ' + fs + 'px (+/− pour ajuster)';
 }
 
