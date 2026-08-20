@@ -354,6 +354,8 @@ struct State {
     #[serde(default)]
     contracts_done: Vec<bool>,
     #[serde(default)]
+    contracts: Vec<(usize, u64, f64)>,
+    #[serde(default)]
     museum: Vec<Option<MusE>>,
     #[serde(default)]
     museum_at: f64,
@@ -404,6 +406,7 @@ impl Default for State {
             dex2: vec![DexE::default(); CREATURES.len()],
             contracts_window: 0,
             contracts_done: vec![false; 3],
+            contracts: vec![],
             museum: vec![None; 12],
             museum_at: 0.0,
             museum_pool: 0.0,
@@ -1498,8 +1501,9 @@ impl Game {
         }
         // contrats : renouvellement toutes les 2 h
         let cw = (now / 7_200_000.0) as u64;
-        if self.s.contracts_window != cw {
+        if self.s.contracts_window != cw || self.s.contracts.is_empty() {
             self.s.contracts_window = cw;
+            self.s.contracts = self.gen_contracts(cw);
             self.s.contracts_done = vec![false; 3];
             self.log(vec![("de nouveaux contrats sont affichés à la boutique.".into(), C::Blue)]);
         }
@@ -1831,6 +1835,7 @@ impl Game {
                     self.s.museum_pool = 0.0;
                     self.s.pens = vec![None; 6];
                     self.s.contracts_done = vec![false; 3];
+                    self.s.contracts = vec![];
                     self.s.lab = vec![0; LABS.len()];
                     self.s.autosell = vec![false; 5];
                     let mut biomes = vec![None; BIOMES.len()];
@@ -1884,8 +1889,8 @@ impl Game {
                 }
             }
             Action::Deliver(idx) => {
-                let (w, contracts) = self.contracts_now();
-                if w == self.s.contracts_window && idx < contracts.len() && !self.s.contracts_done[idx] {
+                let (_, contracts) = self.contracts_now();
+                if idx < contracts.len() && !self.s.contracts_done[idx] {
                     let c = &contracts[idx];
                     if self.deliverable(c.ci) >= c.qty {
                         let (ci, qty, reward) = (c.ci, c.qty, c.reward);
@@ -2060,14 +2065,11 @@ impl Game {
     }
     /* quantité encore due aux commandes ouvertes pour cette espèce */
     fn contract_need(&self, ci: usize) -> u64 {
-        let (w, cs) = self.contracts_now();
+        let (_, cs) = self.contracts_now();
         let mut n = 0;
         for (i, c) in cs.iter().enumerate() {
-            if c.ci == ci {
-                let done = w == self.s.contracts_window && self.s.contracts_done.get(i).copied().unwrap_or(false);
-                if !done {
-                    n += c.qty;
-                }
+            if c.ci == ci && !self.s.contracts_done.get(i).copied().unwrap_or(false) {
+                n += c.qty;
             }
         }
         n
@@ -2087,22 +2089,28 @@ impl Game {
         }
         (q, v)
     }
-    /* contrats du créneau courant (déterministes, 3 à la fois, renouvelés toutes les 2 h) */
-    fn contracts_now(&self) -> (u64, Vec<Contract>) {
-        let w = (now_ms() / 7_200_000.0) as u64;
+    /* les commandes sont générées au début de chaque créneau de 2 h et figées en
+       sauvegarde : trois espèces DISTINCTES, choisies parmi celles que le joueur
+       a déjà découvertes (repli sur les communs des biomes débloqués en tout
+       début de partie) — jamais une espèce inconnue ni d'un biome verrouillé */
+    fn gen_contracts(&self, w: u64) -> Vec<(usize, u64, f64)> {
         let mut rng = StdRng::seed_from_u64(splitmix(w ^ 0xC0117AC7));
-        let unlocked: Vec<usize> = (0..BIOMES.len()).filter(|&b| self.s.biomes[b].is_some()).collect();
-        let mut out: Vec<Contract> = vec![];
+        let mut cand: Vec<usize> = (0..CREATURES.len())
+            .filter(|&i| self.s.biomes[CREATURES[i].b].is_some() && CREATURES[i].r <= 2 && self.s.dex2[i].n > 0)
+            .collect();
+        if cand.len() < 3 {
+            cand = (0..CREATURES.len())
+                .filter(|&i| self.s.biomes[CREATURES[i].b].is_some() && CREATURES[i].r == 0)
+                .collect();
+        }
+        let mut out: Vec<(usize, u64, f64)> = vec![];
         for _ in 0..3 {
-            // trois espèces distinctes : on retire (de façon déterministe) en cas de doublon
-            let mut ci = 0;
-            for _essai in 0..8 {
-                let b = unlocked[rng.gen_range(0..unlocked.len())];
-                let pool: Vec<usize> = biome_creatures(b).filter(|&i| CREATURES[i].r <= 2).collect();
-                ci = pool[rng.gen_range(0..pool.len())];
-                if !out.iter().any(|c| c.ci == ci) {
+            let mut ci = cand[rng.gen_range(0..cand.len())];
+            for _essai in 0..10 {
+                if !out.iter().any(|c| c.0 == ci) {
                     break;
                 }
+                ci = cand[rng.gen_range(0..cand.len())];
             }
             let qty = match CREATURES[ci].r {
                 0 => rng.gen_range(4..=8),
@@ -2110,9 +2118,14 @@ impl Game {
                 _ => rng.gen_range(2..=3),
             };
             let reward = ((qty as f64 * self.creature_value(ci, false) * 1.8 + 25.0) * (1.0 + self.s.lab[LAB_COURTAGE] as f64 * 0.15)).floor();
-            out.push(Contract { ci, qty, reward });
+            out.push((ci, qty, reward));
         }
-        (w, out)
+        out
+    }
+    fn contracts_now(&self) -> (u64, Vec<Contract>) {
+        let w = (now_ms() / 7_200_000.0) as u64;
+        let list = self.s.contracts.iter().map(|&(ci, qty, reward)| Contract { ci, qty, reward }).collect();
+        (w, list)
     }
     /* traces fraîches : par fenêtre de 10 min, ~1 biome débloqué sur 4 en porte */
     fn traces_now(&self) -> Vec<(u64, usize, (usize, usize))> {
@@ -2602,9 +2615,9 @@ impl Game {
         if !hunts_ready.is_empty() {
             todo.push(Row::text(format!("· battue prête : {}", hunts_ready.join(", ")), C::Gold));
         }
-        let (cw2, contracts) = self.contracts_now();
+        let (_, contracts) = self.contracts_now();
         for (i, c) in contracts.iter().enumerate() {
-            let done = cw2 == self.s.contracts_window && self.s.contracts_done.get(i).copied().unwrap_or(false);
+            let done = self.s.contracts_done.get(i).copied().unwrap_or(false);
             if !done && self.deliverable(c.ci) >= c.qty {
                 todo.push(Row {
                     segs: vec![(format!("· contrat livrable : {}× {} (+{} écus)", c.qty, CREATURES[c.ci].n, fmt(c.reward)), C::Gold)],

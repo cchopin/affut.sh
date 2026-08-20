@@ -71,6 +71,9 @@ pseudo via `environment=` dans `authorized_keys`).
 # inviter un ami — sa clé, son pseudo, son monde à lui
 ./deploy/invite.sh alice "ssh-ed25519 AAAA... alice@laptop"
 
+# ajouter un de VOS appareils (même monde, session partagée entre PC)
+./deploy/invite.sh --appareil "ssh-ed25519 AAAA... pc-portable"
+
 # lister / révoquer
 ./deploy/invite.sh --list
 ./deploy/invite.sh --remove alice

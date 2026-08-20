@@ -3,6 +3,7 @@
 #
 #   ./deploy/invite.sh --demande                                   message à envoyer à l'ami pour obtenir sa clé
 #   ./deploy/invite.sh alice "ssh-ed25519 AAAA... alice@laptop"   inviter
+#   ./deploy/invite.sh --appareil "ssh-ed25519 AAAA... pc2"       ajouter un de VOS appareils (même monde que vous)
 #   ./deploy/invite.sh --list                                      lister les joueurs
 #   ./deploy/invite.sh --remove alice                              révoquer
 #
@@ -40,6 +41,18 @@ MSG
     echo "joueurs invités :"
     $SSH "grep -o 'AFFUT_PLAYER=[a-zA-Z0-9]*' $KEYS 2>/dev/null | cut -d= -f2 | sort -u" || true
     echo "(les lignes sans pseudo sont les clés du propriétaire)"
+    exit 0
+    ;;
+  --appareil)
+    KEY="${2:?il manque la clé publique du nouvel appareil}"
+    case "$KEY" in
+      ssh-ed25519\ *|ssh-rsa\ *|ecdsa-*) : ;;
+      *) echo "clé publique invalide (attendu : « ssh-ed25519 AAAA... »)" >&2; exit 1 ;;
+    esac
+    # sans pseudo AFFUT_PLAYER : la clé rejoint VOTRE monde (celui du propriétaire)
+    printf '%s\n' "$KEY" | $SSH "cat >> $KEYS"
+    echo "appareil ajouté à votre monde. depuis ce PC :"
+    echo "    ssh -p 2322 affut@$GAME_HOST"
     exit 0
     ;;
   --remove)

@@ -55,6 +55,32 @@
     position: fixed; bottom: 4px; left: 8px; z-index: 4;
     font-size: 11px; color: #7e8a9b; opacity: .75; pointer-events: none;
   }
+  #syncbtn {
+    position: fixed; bottom: 4px; right: 10px; z-index: 5;
+    font-size: 11px; color: #7e8a9b; opacity: .75; cursor: pointer;
+  }
+  #syncbtn:hover { color: #c2cdda; }
+  #syncdlg {
+    display: none; position: fixed; z-index: 20;
+    left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(44rem, 92vw); background: #171c24; border: 1px solid #4a5462;
+    padding: 1rem 1.2rem; font-size: 13px; letter-spacing: 0;
+  }
+  #syncdlg.open { display: block; }
+  #syncdlg .t { color: #ffc45c; margin-bottom: .5rem; }
+  #syncdlg p { color: #7e8a9b; margin-bottom: .6rem; line-height: 1.4; }
+  #syncdlg code { color: #c2cdda; }
+  #syncdlg textarea {
+    width: 100%; min-height: 7rem; resize: vertical;
+    background: #101318; color: #c2cdda; border: 1px solid #4a5462;
+    font: inherit; padding: .4rem;
+  }
+  #syncdlg .btns { margin-top: .6rem; display: flex; gap: .6rem; }
+  #syncdlg button {
+    font: inherit; background: transparent; color: #7e8a9b;
+    border: 1px solid #4a5462; padding: .2rem .7rem; cursor: pointer;
+  }
+  #syncdlg button:hover { color: #ffc45c; border-color: #d6a04b; }
   #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #7e8a9b; background: #101318; }
 </style>
 </head>
@@ -63,12 +89,24 @@
 <pre id="scr"></pre>
 <span id="meas">██████████</span>
 <div id="ver"></div>
+<div id="syncbtn" title="exporter / importer la sauvegarde">⇄ sauvegarde</div>
+<div id="syncdlg">
+  <div class="t">sauvegarde — multi-PC</div>
+  <p>copiez ce texte sur l'autre PC (même page), ou collez ici une sauvegarde à importer.
+     compatible avec le fichier <code>~/.affutsh2.json</code> de la version terminal.</p>
+  <textarea id="synctxt" spellcheck="false"></textarea>
+  <div class="btns">
+    <button id="syncCopy">copier ma sauvegarde</button>
+    <button id="syncImport">importer ce texte</button>
+    <button id="syncClose">fermer</button>
+  </div>
+</div>
 <div id="pad">
   <button data-k="Escape">✕</button><button data-k="ArrowUp">↑</button><button data-k="Enter">↵</button>
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820v'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260820x'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -112,7 +150,39 @@ setInterval(() => w.save(), 10000);
 window.addEventListener('beforeunload', () => w.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) w.save(); });
 
+const dlg = document.getElementById('syncdlg');
+const txt = document.getElementById('synctxt');
+document.getElementById('syncbtn').addEventListener('click', () => {
+  w.save();
+  txt.value = localStorage.getItem('affutsh_save2') || '';
+  dlg.classList.add('open');
+});
+document.getElementById('syncClose').addEventListener('click', () => dlg.classList.remove('open'));
+document.getElementById('syncCopy').addEventListener('click', async () => {
+  w.save();
+  txt.value = localStorage.getItem('affutsh_save2') || '';
+  txt.select();
+  try { await navigator.clipboard.writeText(txt.value); } catch (e) {}
+  document.getElementById('syncCopy').textContent = 'copiée !';
+  setTimeout(() => document.getElementById('syncCopy').textContent = 'copier ma sauvegarde', 1500);
+});
+document.getElementById('syncImport').addEventListener('click', () => {
+  try {
+    const d = JSON.parse(txt.value.trim());
+    if (typeof d.ecus !== 'number' || !Array.isArray(d.dex2)) throw new Error('format');
+    localStorage.setItem('affutsh_save2', JSON.stringify(d));
+    location.reload();
+  } catch (e) {
+    document.getElementById('syncImport').textContent = 'sauvegarde illisible';
+    setTimeout(() => document.getElementById('syncImport').textContent = 'importer ce texte', 2000);
+  }
+});
+
 document.addEventListener('keydown', e => {
+  if (dlg.classList.contains('open')) {
+    if (e.key === 'Escape') dlg.classList.remove('open');
+    return;
+  }
   if (e.metaKey) return;
   if (e.key === '+' || e.key === '=' || e.key === '-') {
     sizeIdx = Math.min(SIZES.length - 1, Math.max(0, sizeIdx + (e.key === '-' ? -1 : 1)));
