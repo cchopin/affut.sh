@@ -3037,13 +3037,14 @@ impl Game {
                 LAB_ENCLOS => format!("{} enclos", 3 + lv),
                 LAB_LIGNEES => format!("montée de rang : {}%", 35 + lv * 5),
                 LAB_TRAQUEUR => format!("battue toutes les {} s", 300 - lv * 30),
-                _ => format!("primes de contrats +{}%", lv * 20),
+                LAB_COURTAGE => format!("primes de contrats +{}%", lv * 15),
+                _ => format!("{} pièges posés autorisés", 2 + lv),
             };
             rows.push(Row {
                 segs: vec![
-                    (pad(LABS[k].n, 17), C::Text),
-                    (pad(&format!("niv {}/{}", lv, LABS[k].max), 11), C::Dimmer),
-                    (pad(&fx, 26), C::Green),
+                    (pad(LABS[k].n, 20), C::Text),
+                    (pad(&format!("niv {}/{}", lv, LABS[k].max), 10), C::Dimmer),
+                    (pad(&fx, 24), C::Green),
                 ],
                 btns: if maxed {
                     vec![("max".into(), C::Dimmer, Action::Nothing)]
@@ -3090,15 +3091,18 @@ impl Game {
             format!("chance globale +{} · vente ×{} · vitesse ×{}", fmt2(self.global_luck()), fmt2(self.sell_mult()), fmt2(self.speed_mult())),
             C::Dim,
         ));
-        rows.push(Row::text(
-            format!("  détail chance : flair +{} · trophées +{} · biomes complets +{} · élan (série j{}) +{}",
+        for r in wrap_rows(
+            &format!("détail chance : flair +{} · trophées +{} · biomes complets +{} · élan (série j{}) +{}",
                 fmt2(self.s.lab[LAB_FLAIR] as f64 * 0.04),
                 fmt2(self.s.trophies as f64 * 0.008),
                 fmt2(self.completed_biomes() as f64 * 0.04),
                 self.s.streak,
                 fmt2(self.streak_bonus())),
+            self.panel_w.saturating_sub(2),
             C::Dimmer,
-        ));
+        ) {
+            rows.push(Row { segs: r.segs, btns: vec![], act: None, indent: 2 });
+        }
         rows.push(Row::text(
             format!("shiny 1/{} · hors-ligne {} h max", (1.0 / self.shiny_chance(None, now_ms())).round() as u64, (self.offline_cap_ms() / 3600000.0) as u64),
             C::Dim,
