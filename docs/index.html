@@ -81,6 +81,23 @@
     border: 1px solid #4a5462; padding: .2rem .7rem; cursor: pointer;
   }
   #syncdlg button:hover { color: #ffc45c; border-color: #d6a04b; }
+  #pause {
+    display: none; position: fixed; inset: 0; z-index: 30;
+    background: rgba(16, 19, 24, .92);
+    align-items: center; justify-content: center;
+  }
+  #pause.open { display: flex; }
+  #pause .box {
+    background: #171c24; border: 1px solid #4a5462; padding: 1.2rem 1.5rem;
+    max-width: 30rem; font-size: 14px; letter-spacing: 0;
+  }
+  #pause .t { color: #ffc45c; margin-bottom: .5rem; }
+  #pause p { color: #7e8a9b; line-height: 1.5; margin-bottom: .8rem; }
+  #pause button {
+    font: inherit; background: transparent; color: #83d691;
+    border: 1px solid #4a5462; padding: .3rem 1rem; cursor: pointer;
+  }
+  #pause button:hover { border-color: #83d691; }
   #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #7e8a9b; background: #101318; }
 </style>
 </head>
@@ -89,6 +106,14 @@
 <pre id="scr"></pre>
 <span id="meas">██████████</span>
 <div id="ver"></div>
+<div id="pause">
+  <div class="box">
+    <div class="t">partie active sur un autre appareil</div>
+    <p>cette session est en cours ailleurs (autre PC ou autre onglet).
+       pour éviter que les deux jouent en parallèle, celui-ci est en pause.</p>
+    <button id="takeover">jouer ici</button>
+  </div>
+</div>
 <div id="syncbtn" title="exporter / importer la sauvegarde">⇄ sauvegarde</div>
 <div id="syncdlg">
   <div class="t">session partagée entre vos PC</div>
@@ -110,7 +135,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820z'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821a'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -147,8 +172,55 @@ try {
 } catch (e) {
   syncState = 'hors-ligne';
 }
+// ── verrou de session : un seul appareil/onglet actif à la fois.
+// l'actif entretient un battement de cœur ; les autres démarrent en pause.
+const TAB = sessionStorage.getItem('affut_tab_id') || crypto.randomUUID();
+sessionStorage.setItem('affut_tab_id', TAB);
+const LOCK = SYNC + token + '-lock';
+let paused = false;
+async function lockRead() {
+  try {
+    const r = await fetch(LOCK, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) return await r.json();
+  } catch (e) {}
+  return null;
+}
+function lockWrite(t, keepalive = false) {
+  return fetch(LOCK, {
+    method: 'PUT', keepalive,
+    body: JSON.stringify({ id: TAB, t }),
+    headers: { 'content-type': 'application/json' },
+  }).catch(() => {});
+}
+{
+  const l = await lockRead();
+  if (l && l.id !== TAB && Date.now() - (l.t || 0) < 25000) {
+    paused = true;
+  } else {
+    await lockWrite(Date.now());
+  }
+}
+
 const w = new mod.Web();
 document.getElementById('boot').remove();
+if (paused) document.getElementById('pause').classList.add('open');
+document.getElementById('takeover').addEventListener('click', async () => {
+  await lockWrite(Date.now());
+  location.reload(); // au rechargement : verrou à nous + dernière sauvegarde tirée
+});
+setInterval(async () => {
+  const l = await lockRead();
+  if (paused) return;
+  if (l && l.id !== TAB && Date.now() - (l.t || 0) < 25000) {
+    // un autre appareil a pris la main : on s'efface sans pousser par-dessus
+    paused = true;
+    document.getElementById('pause').classList.add('open');
+    syncState = 'en pause';
+    syncUi();
+  } else {
+    lockWrite(Date.now());
+  }
+}, 10000);
 
 
 const scr = document.getElementById('scr');
@@ -182,13 +254,14 @@ resize();
 render();
 window.addEventListener('resize', () => { resize(); render(); });
 
-setInterval(() => { w.tick(); render(); }, 500);
-setInterval(() => w.save(), 10000);
+setInterval(() => { if (!paused) { w.tick(); render(); } }, 500);
+setInterval(() => { if (!paused) w.save(); }, 10000);
 
 function syncUi() {
   document.getElementById('syncbtn').textContent = '⇄ session partagée · ' + syncState;
 }
 async function syncPush(keepalive = false) {
+  if (paused) return;
   w.save();
   const body = localStorage.getItem('affutsh_save2');
   if (!body) return;
@@ -206,7 +279,12 @@ async function syncPush(keepalive = false) {
 syncUi();
 setInterval(() => syncPush(), 30000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) syncPush(true); });
-window.addEventListener('beforeunload', () => syncPush(true));
+window.addEventListener('beforeunload', () => {
+  if (!paused) {
+    syncPush(true);
+    lockWrite(0, true); // libère le verrou : l'autre appareil peut reprendre sans attendre
+  }
+});
 window.addEventListener('beforeunload', () => w.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) w.save(); });
 
@@ -246,6 +324,7 @@ document.getElementById('syncImport').addEventListener('click', () => {
 });
 
 document.addEventListener('keydown', e => {
+  if (paused) return;
   if (dlg.classList.contains('open')) {
     if (e.key === 'Escape') dlg.classList.remove('open');
     return;
