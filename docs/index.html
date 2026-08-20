@@ -9,11 +9,21 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
+  /* Iosevka : tracés et trames pixel-perfect, comme un vrai terminal */
+  @font-face {
+    font-family: "Iosevka Affut";
+    src: url("./fonts/iosevka-affut-300.woff2") format("woff2");
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+  }
+</style>
+<style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
   body {
-    background: #14181f; color: #c2cdda;
-    font-family: "JetBrains Mono", "Menlo", ui-monospace, SFMono-Regular, Consolas, "DejaVu Sans Mono", monospace;
+    background: #0f1318; color: #c2cdda;
+    font-family: "Iosevka Affut", "JetBrains Mono", "Menlo", ui-monospace, SFMono-Regular, Consolas, "DejaVu Sans Mono", monospace;
     font-weight: 300;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -36,7 +46,7 @@
   }
   #pad button:active { background: #2b3240; }
   @media (pointer: coarse) { #pad { display: grid; } }
-  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #7e8a9b; background: #14181f; }
+  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #7e8a9b; background: #0f1318; }
 </style>
 </head>
 <body>
@@ -48,7 +58,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820d'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260820e'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
