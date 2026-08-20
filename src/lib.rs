@@ -984,6 +984,96 @@ fn wrap_lines(s: &str, w: usize) -> Vec<String> {
 fn wrap_rows(s: &str, w: usize, c: C) -> Vec<Row> {
     wrap_lines(s, w).into_iter().map(|l| Row::text(l, c)).collect()
 }
+/* replie toute ligne plus large que le panneau : texte coupé aux espaces,
+   boutons regroupés sur des lignes suivantes, filets d'en-tête raccourcis */
+fn reflow_rows(rows: Vec<Row>, w: usize) -> Vec<Row> {
+    let mut out: Vec<Row> = Vec::with_capacity(rows.len());
+    for r in rows {
+        let avail = w.saturating_sub(r.indent as usize).max(24);
+        let seg_len: usize = r.segs.iter().map(|(t, _)| t.chars().count()).sum();
+        let btn_len: usize = r.btns.iter().map(|(l, _, _)| l.chars().count() + 3).sum();
+        if seg_len + btn_len <= avail {
+            out.push(r);
+            continue;
+        }
+        // en-tête à filet : on raccourcit les '─' au lieu de replier
+        if r.btns.is_empty() {
+            if let Some((last, lc)) = r.segs.last().cloned() {
+                if !last.is_empty() && last.chars().all(|ch| ch == '─') {
+                    let fixed = seg_len - last.chars().count();
+                    if fixed < avail {
+                        let mut segs = r.segs.clone();
+                        segs.pop();
+                        segs.push(("─".repeat(avail - fixed), lc));
+                        out.push(Row { segs, btns: vec![], act: r.act.clone(), indent: r.indent });
+                        continue;
+                    }
+                }
+            }
+        }
+        // replier le texte en lignes ≤ avail, en préservant les couleurs
+        let mut lines: Vec<Vec<(String, C)>> = vec![vec![]];
+        let mut cur = 0usize;
+        for (text, c) in &r.segs {
+            let mut rest: String = text.clone();
+            loop {
+                let space = avail - cur;
+                let n = rest.chars().count();
+                if n <= space {
+                    if n > 0 {
+                        lines.last_mut().unwrap().push((rest.clone(), *c));
+                        cur += n;
+                    }
+                    break;
+                }
+                let hard = rest.char_indices().nth(space).map(|(i, _)| i).unwrap_or(rest.len());
+                let cut = match rest[..hard].rfind(' ') {
+                    Some(p) if p > 0 => p + 1,
+                    _ if cur > 0 => 0, // rien ne tient sur cette ligne entamée : à la ligne
+                    _ => hard,
+                };
+                if cut > 0 {
+                    lines.last_mut().unwrap().push((rest[..cut].trim_end().to_string(), *c));
+                    rest = rest[cut..].trim_start().to_string();
+                }
+                lines.push(vec![]);
+                cur = 0;
+                if rest.is_empty() {
+                    break;
+                }
+            }
+        }
+        // répartir les boutons : d'abord en fin de dernière ligne, puis lignes dédiées
+        let mut btn_groups: Vec<Vec<(String, C, Action)>> = vec![vec![]];
+        let mut bw = lines.last().map(|l| l.iter().map(|(t, _)| t.chars().count()).sum::<usize>()).unwrap_or(0);
+        for b in r.btns {
+            let need = b.0.chars().count() + 3;
+            if bw + need > avail && bw > 0 {
+                btn_groups.push(vec![]);
+                bw = 0;
+            }
+            btn_groups.last_mut().unwrap().push(b);
+            bw += need;
+        }
+        let n_lines = lines.len();
+        for (i, line) in lines.into_iter().enumerate() {
+            let is_last = i + 1 == n_lines;
+            out.push(Row {
+                segs: line,
+                btns: if is_last { btn_groups[0].clone() } else { vec![] },
+                act: if i == 0 { r.act.clone() } else { None },
+                indent: if i == 0 { r.indent } else { r.indent + 2 },
+            });
+        }
+        for g in btn_groups.into_iter().skip(1) {
+            if !g.is_empty() {
+                out.push(Row { segs: vec![], btns: g, act: None, indent: r.indent + 2 });
+            }
+        }
+    }
+    out
+}
+
 /* liste à puce/numéro avec retrait suspendu, repliée à la largeur du panneau */
 fn bullet_rows(prefix: &str, s: &str, w: usize, c: C) -> Vec<Row> {
     let pl = prefix.chars().count();
@@ -2121,6 +2211,13 @@ impl Game {
     /* ---------------------------------------------- construction panneaux */
 
     fn build_rows(&self, kind: &PanelKind) -> (String, Vec<Row>) {
+        let (title, rows) = self.build_rows_raw(kind);
+        // filet de sécurité global : aucune ligne ne peut déborder du panneau.
+        // les lignes trop larges sont repliées (coupure aux espaces), les boutons
+        // passent à la ligne sans être coupés, les filets d'en-tête sont raccourcis.
+        (title, reflow_rows(rows, self.panel_w))
+    }
+    fn build_rows_raw(&self, kind: &PanelKind) -> (String, Vec<Row>) {
         match kind {
             PanelKind::Dashboard => self.rows_dashboard(),
             PanelKind::Inventory => self.rows_inventory(),
