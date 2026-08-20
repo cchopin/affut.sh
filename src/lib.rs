@@ -1367,7 +1367,21 @@ impl Game {
             }
         }
         Some((ci, shiny, is_new, new_shiny, sold, rank + sex as usize * 10))
-    }    fn report_catch(&mut self, biome: usize, res: Option<(usize, bool, bool, bool, f64, usize)>) {
+    }    /* battue sans piège : une tentative à mains nues */
+    fn bare_attempt(&mut self, biome: usize, at: f64) -> Option<(usize, bool, bool, bool, f64, usize)> {
+        self.s.attempts += 1;
+        let succ = (0.35 + weather_succ_mod(weather_at(at), biome)).clamp(0.05, 0.99);
+        if rand::thread_rng().gen::<f64>() > succ {
+            return None;
+        }
+        let luck = self.biome_luck(biome, at) + 0.2;
+        let ci = self.roll_creature(biome, luck, None, at);
+        let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, at);
+        let rank = self.roll_rank(luck);
+        let (is_new, new_shiny, sex) = self.add_specimen(ci, shiny, rank);
+        Some((ci, shiny, is_new, new_shiny, 0.0, rank + sex as usize * 10))
+    }
+    fn report_catch(&mut self, biome: usize, res: Option<(usize, bool, bool, bool, f64, usize)>) {
         let Some((ci, shiny, is_new, new_shiny, sold, rank_sex)) = res else { return };
         let (rank, sex) = (rank_sex % 10, rank_sex / 10);
         let c = &CREATURES[ci];
@@ -1772,7 +1786,16 @@ impl Game {
                 let ok = self.s.biomes[b].as_ref().map(|bs| bs.hunt_at <= now).unwrap_or(false);
                 if ok {
                     let slots = self.s.biomes[b].as_ref().unwrap().pl.len();
+                    let placed = self.s.biomes[b].as_ref().unwrap().pl.iter().flatten().count();
                     let mut hits = 0;
+                    if placed == 0 {
+                        // à mains nues : une seule tentative, modeste mais toujours possible
+                        let res = self.bare_attempt(b, now);
+                        if res.is_some() {
+                            hits += 1;
+                        }
+                        self.report_catch(b, res);
+                    }
                     for i in 0..slots {
                         if self.s.biomes[b].as_ref().unwrap().pl[i].is_some() {
                             let res = self.attempt(b, i, now, 0.2, false);
@@ -2638,13 +2661,15 @@ impl Game {
         let left = ((bs.hunt_at - now).max(0.0) / 1000.0).ceil() as u64;
         rows.push(Row {
             segs: vec![(
-                if ready { "battre les fourrés vous-même (chance +0,2) :".into() } else { format!("prochaine battue possible dans {} s", left) },
+                if !ready { format!("prochaine battue possible dans {} s", left) }
+                else if placed > 0 { "battre les fourrés vous-même (chance +0,2) :".into() }
+                else { "battre les fourrés à mains nues (une seule tentative) :".into() },
                 if ready { C::Text } else { C::Dimmer },
             )],
             btns: vec![(
                 "battue !".into(),
-                if ready && placed > 0 { C::Gold } else { C::Dimmer },
-                if ready && placed > 0 { Action::Hunt(b) } else { Action::Nothing },
+                if ready { C::Gold } else { C::Dimmer },
+                if ready { Action::Hunt(b) } else { Action::Nothing },
             )],
             act: None,
             indent: 0,
@@ -3211,7 +3236,7 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("sur le terrain"));
         for t in [
-            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance (repos 5 min, réductible au labo).",
+            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo).",
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
             "légende errante : une silhouette ✧ apparaît parfois sur la carte. approchez-la et tentez votre chance — une seule fois. créature épique ou légendaire, rang A minimum.",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
