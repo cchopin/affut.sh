@@ -33,6 +33,7 @@
   #scr {
     white-space: pre; letter-spacing: 0.5px;
     overflow: hidden;
+    background: #171c24; /* fond plein sur toute la grille, carte comprise */
     user-select: none; -webkit-user-select: none; cursor: default;
   }
   /* chaque ligne est un bloc de hauteur fixe ; les segments colorés remplissent
@@ -67,7 +68,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820i'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260820j'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
