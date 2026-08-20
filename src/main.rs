@@ -15,8 +15,11 @@ use serde::{Deserialize, Serialize};
 /* ================================================================ données */
 
 const RAR_LABEL: [&str; 5] = ["commun", "peu commun", "rare", "épique", "légendaire"];
-const RAR_W: [f64; 5] = [100.0, 38.0, 11.0, 2.6, 0.45];
-const RAR_VAL: [f64; 5] = [4.0, 12.0, 45.0, 220.0, 1500.0];
+const RAR_W: [f64; 5] = [100.0, 28.0, 5.0, 0.7, 0.08];
+const RAR_VAL: [f64; 5] = [3.0, 9.0, 30.0, 150.0, 900.0];
+/* la chance agit linéairement (plafonnée), plus jamais exponentiellement */
+const RAR_LUCK_FACT: [f64; 5] = [0.0, 0.35, 0.6, 0.8, 1.0];
+const LUCK_CAP: f64 = 3.0;
 
 struct BiomeDef {
     name: &'static str,
@@ -24,13 +27,16 @@ struct BiomeDef {
     mult: f64,
     desc: &'static str,
 }
-const BIOMES: [BiomeDef; 6] = [
-    BiomeDef { name: "forêt",    cost: 0.0,       mult: 1.0,  desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
-    BiomeDef { name: "marais",   cost: 1000.0,    mult: 2.0,  desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
-    BiomeDef { name: "montagne", cost: 8000.0,    mult: 4.0,  desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
-    BiomeDef { name: "désert",   cost: 50000.0,   mult: 8.0,  desc: "des dunes à perte de vue. tout ce qui y survit vaut cher." },
-    BiomeDef { name: "glacier",  cost: 300000.0,  mult: 16.0, desc: "un silence bleu et parfait. les espèces y sont rares et magnifiques." },
-    BiomeDef { name: "abysses",  cost: 2000000.0, mult: 32.0, desc: "là où la lumière renonce. le fond du bestiaire, littéralement." },
+const BIOMES: [BiomeDef; 9] = [
+    BiomeDef { name: "forêt",    cost: 0.0,       mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
+    BiomeDef { name: "marais",   cost: 2500.0,    mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
+    BiomeDef { name: "montagne", cost: 20000.0,   mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
+    BiomeDef { name: "désert",   cost: 120000.0,  mult: 4.0, desc: "des dunes à perte de vue. tout ce qui y survit vaut cher." },
+    BiomeDef { name: "glacier",  cost: 700000.0,  mult: 6.5, desc: "un silence bleu et parfait. les espèces y sont rares et magnifiques." },
+    BiomeDef { name: "abysses",  cost: 4000000.0, mult: 10.0, desc: "là où la lumière renonce. le fond du bestiaire, littéralement." },
+    BiomeDef { name: "volcan",   cost: 12000000.0, mult: 13.0, desc: "la montagne qui fume. huit espèces y vivent, aucune n'a froid." },
+    BiomeDef { name: "récif",    cost: 35000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
+    BiomeDef { name: "ruines",   cost: 100000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
 ];
 
 struct CreatureDef {
@@ -40,7 +46,7 @@ struct CreatureDef {
     n: &'static str,
     lore: &'static str,
 }
-const CREATURES: [CreatureDef; 60] = [
+const CREATURES: [CreatureDef; 90] = [
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
     CreatureDef { b: 0, r: 0, g: ".ø.",   n: "champillon",       lore: "un champignon qui marche. lentement, mais il marche." },
@@ -101,6 +107,36 @@ const CREATURES: [CreatureDef; 60] = [
     CreatureDef { b: 5, r: 2, g: "[ ]",   n: "néantin",          lore: "un morceau de rien, soigneusement encadré." },
     CreatureDef { b: 5, r: 3, g: "{X}",   n: "krakenot",         lore: "un kraken de poche. les navires miniatures le redoutent." },
     CreatureDef { b: 5, r: 4, g: "(Ω)",   n: "ancien des profondeurs", lore: "il était là avant les biomes. il sera là après vous." },
+    CreatureDef { b: 6, r: 0, g: "(∴)",  n: "bracille",          lore: "un lézard qui dort sur les braises. les braises apprécient." },
+    CreatureDef { b: 6, r: 0, g: "-·-",  n: "cendrillot",        lore: "fait des tas de cendres bien rangés. les défait. recommence." },
+    CreatureDef { b: 6, r: 0, g: ")))",  n: "fumerol",           lore: "un serpentin de fumée qui a des opinions." },
+    CreatureDef { b: 6, r: 1, g: "[≈]",  n: "magmite",           lore: "une flaque de lave apprivoisée. ne pas caresser." },
+    CreatureDef { b: 6, r: 1, g: "*!*",  n: "soufrelin",         lore: "sent l'œuf pourri et en joue." },
+    CreatureDef { b: 6, r: 2, g: "{#}",  n: "pyroclaste",        lore: "il explose par politesse, pour prévenir." },
+    CreatureDef { b: 6, r: 3, g: "~§~",  n: "salamandragore",    lore: "sa morsure brûle, son lore aussi." },
+    CreatureDef { b: 6, r: 4, g: "(♦)",  n: "cœur-de-forge",     lore: "le volcan bat à son rythme. littéralement." },
+    CreatureDef { b: 7, r: 0, g: ":o:",  n: "corailleau",        lore: "un bout de corail qui a pris la mer au sérieux." },
+    CreatureDef { b: 7, r: 0, g: "°o°",  n: "bulleret",          lore: "produit des bulles carrées. refuse d'expliquer." },
+    CreatureDef { b: 7, r: 0, g: "?~",   n: "hippocampette",     lore: "se déplace uniquement à la verticale, par principe." },
+    CreatureDef { b: 7, r: 0, g: ".*.",  n: "étoilette",         lore: "compte ses branches en boucle. cinq. toujours cinq." },
+    CreatureDef { b: 7, r: 0, g: "=o=",  n: "clownard",          lore: "vit dans une anémone, en colocation conflictuelle." },
+    CreatureDef { b: 7, r: 1, g: "}i{",  n: "languste",          lore: "joue de ses antennes comme d'un violon." },
+    CreatureDef { b: 7, r: 1, g: "<^>",  n: "raiettine",         lore: "plane sous l'eau. l'eau n'a rien remarqué." },
+    CreatureDef { b: 7, r: 1, g: "~e~",  n: "murénia",           lore: "sourit beaucoup trop pour quelqu'un qui vit dans un trou." },
+    CreatureDef { b: 7, r: 2, g: "(@)",  n: "nautilange",        lore: "porte sa maison en spirale. déménage sans le savoir." },
+    CreatureDef { b: 7, r: 2, g: ">=>",  n: "barracuml",         lore: "rapide, nerveux, incapable de nager en ligne droite." },
+    CreatureDef { b: 7, r: 3, g: "(o)",  n: "perlamère",         lore: "sa perle vaut une fortune. elle le sait. elle négocie." },
+    CreatureDef { b: 7, r: 4, g: "≈C≈",  n: "chantecoral",       lore: "le chant du récif. l'entendre, c'est déjà l'avoir cherché trop longtemps." },
+    CreatureDef { b: 8, r: 0, g: "[.]",  n: "gravelin",          lore: "un caillou taillé qui se souvient d'avoir été une colonne." },
+    CreatureDef { b: 8, r: 0, g: "...",  n: "poussiéreux",       lore: "il est littéralement de la poussière. motivée." },
+    CreatureDef { b: 8, r: 1, g: "}{",   n: "liergne",           lore: "du lierre qui grimpe sur ce qui n'existe plus." },
+    CreatureDef { b: 8, r: 1, g: "#:#",  n: "mosaïquin",         lore: "des tesselles qui se recomposent la nuit." },
+    CreatureDef { b: 8, r: 1, g: "!i!",  n: "chandelmoine",      lore: "une bougie qui fait des rondes. par habitude." },
+    CreatureDef { b: 8, r: 2, g: "|o|",  n: "gardogol",          lore: "il garde une porte. la porte n'existe plus. il garde quand même." },
+    CreatureDef { b: 8, r: 2, g: "<?>",  n: "oraclyphe",         lore: "il prédit le passé avec une précision remarquable." },
+    CreatureDef { b: 8, r: 3, g: ".^.",  n: "spectrarque",       lore: "l'ancien maître des lieux. très à cheval sur l'étiquette." },
+    CreatureDef { b: 8, r: 3, g: "{t}",  n: "chronolithe",       lore: "le temps passe autour de lui, jamais à travers." },
+    CreatureDef { b: 8, r: 4, g: "/#\\", n: "bâtisseur oublié",  lore: "il a construit les ruines. neuves, à l'époque." },
 ];
 
 fn biome_creatures(b: usize) -> impl Iterator<Item = usize> {
@@ -109,21 +145,21 @@ fn biome_creatures(b: usize) -> impl Iterator<Item = usize> {
 
 struct TrapDef { n: &'static str, cost: f64, itv: f64, luck: f64, succ: f64 }
 const TRAPS: [TrapDef; 6] = [
-    TrapDef { n: "piège en bois",   cost: 25.0,     itv: 30.0, luck: 0.0,  succ: 0.55 },
-    TrapDef { n: "cage en fer",     cost: 400.0,    itv: 24.0, luck: 0.15, succ: 0.65 },
-    TrapDef { n: "piège à ressort", cost: 2500.0,   itv: 18.0, luck: 0.35, succ: 0.75 },
-    TrapDef { n: "piège chromé",    cost: 15000.0,  itv: 13.0, luck: 0.6,  succ: 0.85 },
-    TrapDef { n: "piège à plasma",  cost: 90000.0,  itv: 9.0,  luck: 1.0,  succ: 0.92 },
-    TrapDef { n: "piège quantique", cost: 600000.0, itv: 6.0,  luck: 1.6,  succ: 0.98 },
+    TrapDef { n: "piège en bois",   cost: 40.0,      itv: 60.0, luck: 0.0,  succ: 0.45 },
+    TrapDef { n: "cage en fer",     cost: 800.0,     itv: 50.0, luck: 0.06, succ: 0.52 },
+    TrapDef { n: "piège à ressort", cost: 8000.0,    itv: 42.0, luck: 0.14, succ: 0.60 },
+    TrapDef { n: "piège chromé",    cost: 60000.0,   itv: 34.0, luck: 0.24, succ: 0.68 },
+    TrapDef { n: "piège à plasma",  cost: 400000.0,  itv: 27.0, luck: 0.36, succ: 0.76 },
+    TrapDef { n: "piège quantique", cost: 2500000.0, itv: 20.0, luck: 0.50, succ: 0.85 },
 ];
 
 struct BaitDef { n: &'static str, cost: f64, desc: &'static str }
 const BAITS: [BaitDef; 5] = [
-    BaitDef { n: "baies sauvages",    cost: 8.0,    desc: "vitesse du piège +25%" },
-    BaitDef { n: "viande fumée",      cost: 30.0,   desc: "chance +0,35" },
-    BaitDef { n: "nectar doré",       cost: 120.0,  desc: "valeur des prises ×1,5 · chance +0,2" },
-    BaitDef { n: "truffe des brumes", cost: 400.0,  desc: "poids des raretés rare+ ×2,5" },
-    BaitDef { n: "essence lunaire",   cost: 1000.0, desc: "chance de shiny ×4 · chance +0,3" },
+    BaitDef { n: "baies sauvages",    cost: 15.0,   desc: "vitesse du piège +15%" },
+    BaitDef { n: "viande fumée",      cost: 60.0,   desc: "chance +0,12" },
+    BaitDef { n: "nectar doré",       cost: 300.0,  desc: "valeur des prises ×1,3 · chance +0,08" },
+    BaitDef { n: "truffe des brumes", cost: 1200.0, desc: "poids des raretés rare+ ×1,8" },
+    BaitDef { n: "essence lunaire",   cost: 4000.0, desc: "chance de shiny ×3 · chance +0,1" },
 ];
 const BAIT_BAIES: usize = 0;
 const BAIT_VIANDE: usize = 1;
@@ -132,19 +168,20 @@ const BAIT_TRUFFE: usize = 3;
 const BAIT_ESSENCE: usize = 4;
 
 struct LabDef { n: &'static str, max: u32, base: f64, mult: f64, desc: &'static str }
-const LABS: [LabDef; 12] = [
-    LabDef { n: "affûtage",        max: 10, base: 200.0,  mult: 2.2, desc: "des mâchoires mieux huilées : +6% de vitesse par niveau." },
-    LabDef { n: "flair",           max: 15, base: 300.0,  mult: 2.1, desc: "l'instinct du traqueur : +0,06 de chance par niveau." },
-    LabDef { n: "négoce",          max: 15, base: 250.0,  mult: 2.1, desc: "l'art de la marge : +8% aux prix de vente par niveau." },
-    LabDef { n: "horlogerie",      max: 11, base: 500.0,  mult: 2.0, desc: "progression hors-ligne simulée au retour : 2 h de base, +2 h par niveau. les pièges, eux, ne s'usent jamais." },
-    LabDef { n: "chasse nocturne", max: 10, base: 1000.0, mult: 2.3, desc: "sortir aux bonnes heures : +15% de chance de shiny par niveau." },
-    LabDef { n: "auto-vente",      max: 1,  base: 5000.0, mult: 1.0, desc: "revend les doublons dès la capture, selon vos filtres (à la boutique)." },
-    LabDef { n: "conservation",    max: 10, base: 2000.0, mult: 1.9, desc: "de meilleures vitrines : la cagnotte du musée accumule +2 h par niveau (4 h de base)." },
-    LabDef { n: "ailes du musée",  max: 6,  base: 5000.0, mult: 2.2, desc: "on pousse les murs : +1 salle d'exposition par niveau." },
-    LabDef { n: "grands enclos",   max: 3,  base: 4000.0, mult: 2.5, desc: "plus de place pour les couples : +1 enclos par niveau." },
-    LabDef { n: "lignées",         max: 5,  base: 3000.0, mult: 2.2, desc: "registres d'élevage : +5% de chance qu'une naissance monte d'un rang (35% de base)." },
-    LabDef { n: "traqueur",        max: 5,  base: 1500.0, mult: 2.0, desc: "meilleure endurance : le repos entre deux battues diminue de 30 s par niveau (5 min de base)." },
-    LabDef { n: "courtage",        max: 5,  base: 2500.0, mult: 2.1, desc: "carnet d'adresses : les primes de contrats augmentent de 20% par niveau." },
+const LABS: [LabDef; 13] = [
+    LabDef { n: "affûtage",        max: 10, base: 600.0,  mult: 2.4, desc: "des mâchoires mieux huilées : +4% de vitesse par niveau." },
+    LabDef { n: "flair",           max: 15, base: 900.0,  mult: 2.3, desc: "l'instinct du traqueur : +0,04 de chance par niveau." },
+    LabDef { n: "négoce",          max: 15, base: 800.0,  mult: 2.3, desc: "l'art de la marge : +5% aux prix de vente par niveau." },
+    LabDef { n: "horlogerie",      max: 11, base: 1200.0, mult: 2.1, desc: "progression hors-ligne simulée au retour : 2 h de base, +2 h par niveau. les pièges, eux, ne s'usent jamais." },
+    LabDef { n: "chasse nocturne", max: 10, base: 3000.0, mult: 2.4, desc: "sortir aux bonnes heures : +10% de chance de shiny par niveau." },
+    LabDef { n: "auto-vente",      max: 1,  base: 15000.0, mult: 1.0, desc: "revend les doublons dès la capture, selon vos filtres (à la boutique)." },
+    LabDef { n: "conservation",    max: 10, base: 5000.0, mult: 2.0, desc: "de meilleures vitrines : la cagnotte du musée accumule +2 h par niveau (4 h de base)." },
+    LabDef { n: "ailes du musée",  max: 6,  base: 12000.0, mult: 2.4, desc: "on pousse les murs : +1 salle d'exposition par niveau." },
+    LabDef { n: "grands enclos",   max: 3,  base: 10000.0, mult: 2.8, desc: "plus de place pour les couples : +1 enclos par niveau." },
+    LabDef { n: "lignées",         max: 5,  base: 8000.0, mult: 2.4, desc: "registres d'élevage : +4% de chance qu'une naissance monte d'un rang (25% de base)." },
+    LabDef { n: "traqueur",        max: 5,  base: 4000.0, mult: 2.2, desc: "meilleure endurance : le repos entre deux battues diminue de 30 s par niveau (5 min de base)." },
+    LabDef { n: "courtage",        max: 5,  base: 6000.0, mult: 2.3, desc: "carnet d'adresses : les primes de contrats augmentent de 15% par niveau." },
+    LabDef { n: "licence de piégeage", max: 6, base: 3000.0, mult: 2.6, desc: "l'administration est tatillonne : 2 pièges posés autorisés de base, +1 par niveau." },
 ];
 const LAB_AFFUTAGE: usize = 0;
 const LAB_FLAIR: usize = 1;
@@ -158,6 +195,7 @@ const LAB_ENCLOS: usize = 8;
 const LAB_LIGNEES: usize = 9;
 const LAB_TRAQUEUR: usize = 10;
 const LAB_COURTAGE: usize = 11;
+const LAB_LICENCE: usize = 12;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
 const ACHS: [AchDef; 26] = [
@@ -170,7 +208,7 @@ const ACHS: [AchDef; 26] = [
     AchDef { n: "chasseur de mythes",     d: "capturer une créature légendaire",     r: 3000.0 },
     AchDef { n: "carnet de terrain",      d: "découvrir 10 espèces",                 r: 300.0 },
     AchDef { n: "encyclopédiste",         d: "découvrir 30 espèces",                 r: 3000.0 },
-    AchDef { n: "bestiaire complet",      d: "découvrir les 60 espèces",             r: 100000.0 },
+    AchDef { n: "bestiaire complet",      d: "découvrir toutes les espèces",             r: 100000.0 },
     AchDef { n: "les pieds dans la vase", d: "débloquer le marais",                  r: 200.0 },
     AchDef { n: "au fond du gouffre",     d: "débloquer les abysses",                r: 200000.0 },
     AchDef { n: "premier magot",          d: "gagner 10 000 écus au total",          r: 1000.0 },
@@ -189,18 +227,18 @@ const ACHS: [AchDef; 26] = [
     AchDef { n: "oiseau de nuit",         d: "capturer une espèce nocturne",         r: 1000.0 },
 ];
 
-const SHINY_BASE: f64 = 1.0 / 128.0;
+const SHINY_BASE: f64 = 1.0 / 512.0;
 
 const SAISONS: [&str; 4] = ["printemps", "été", "automne", "hiver"];
 const METEOS: [&str; 6] = ["ciel clair", "pluie", "brume", "canicule", "tempête", "nuit étoilée"];
 /* espèces qui ne sortent que la nuit (21 h – 7 h) */
-const NOCTURNES: [usize; 6] = [7, 17, 24, 36, 47, 55]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
+const NOCTURNES: [usize; 7] = [7, 17, 24, 36, 47, 55, 84]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
 const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
-const RANK_MULT: [f64; 4] = [1.0, 1.6, 2.8, 6.0];
+const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
-const LEGEND_SPOTS: [(usize, usize); 6] = [(16, 9), (16, 33), (56, 4), (95, 20), (95, 5), (95, 38)];
+const LEGEND_SPOTS: [(usize, usize); 9] = [(16, 9), (16, 33), (56, 4), (95, 20), (95, 5), (95, 38), (132, 7), (132, 31), (16, 55)];
 /* durée de couvaison à l'enclos, par rareté (minutes) */
-const PEN_MIN: [f64; 5] = [10.0, 20.0, 45.0, 120.0, 360.0];
+const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
 /* =================================================================== état */
 
@@ -310,6 +348,8 @@ struct State {
     legends_caught: u64,
     #[serde(default)]
     pen_born: u64,
+    #[serde(default)]
+    balance_v: u32,
     lab: Vec<u32>,
     autosell: Vec<bool>,
     ach: Vec<bool>,
@@ -317,7 +357,7 @@ struct State {
 }
 impl Default for State {
     fn default() -> Self {
-        let mut biomes = vec![None; 6];
+        let mut biomes = vec![None; BIOMES.len()];
         biomes[0] = Some(BiomeState { slots: 2, pl: vec![None, None], hunt_at: 0.0 });
         let mut traps = vec![0; 6];
         traps[0] = 1;
@@ -335,8 +375,8 @@ impl Default for State {
             biomes,
             inv: vec![],
             dex: vec![],
-            inv2: vec![InvE::default(); 60],
-            dex2: vec![DexE::default(); 60],
+            inv2: vec![InvE::default(); CREATURES.len()],
+            dex2: vec![DexE::default(); CREATURES.len()],
             contracts_window: 0,
             contracts_done: vec![false; 3],
             museum: vec![None; 12],
@@ -348,6 +388,7 @@ impl Default for State {
             contracts_delivered: 0,
             legends_caught: 0,
             pen_born: 0,
+            balance_v: 1,
             lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
             ach: vec![false; ACHS.len()],
@@ -359,12 +400,15 @@ impl State {
     fn normalize(&mut self) {
         self.traps.resize(6, 0);
         self.baits.resize(5, 0);
-        self.biomes.resize(6, None);
+        // resize ne doit jamais TRONQUER les biomes (il agrandit seulement)
+        if self.biomes.len() < BIOMES.len() {
+            self.biomes.resize(BIOMES.len(), None);
+        }
         self.lab.resize(LABS.len(), 0);
         self.autosell.resize(5, false);
         self.ach.resize(ACHS.len(), false);
-        self.inv2.resize(60, InvE::default());
-        self.dex2.resize(60, DexE::default());
+        self.inv2.resize(CREATURES.len(), InvE::default());
+        self.dex2.resize(CREATURES.len(), DexE::default());
         self.contracts_done.resize(3, false);
         self.museum.resize(12, None);
         self.pens.resize(6, None);
@@ -380,6 +424,14 @@ impl State {
         }
         self.inv = vec![];
         self.dex = vec![];
+        // rééquilibrage du 2026-08-20 : conversion unique des trophées vers la
+        // nouvelle courbe (l'ancienne en distribuait ~13× trop)
+        if self.balance_v == 0 {
+            self.balance_v = 1;
+            if self.trophies > 0 {
+                self.trophies = (self.trophies as f64).sqrt().round() as u32;
+            }
+        }
         // migration v2 -> sexes : répartir les anciens compteurs sans sexe ~50/50
         let no_sex = self.inv2.iter().all(|e| e.m.iter().all(|&x| x == 0) && e.f.iter().all(|&x| x == 0) && e.sm.iter().all(|&x| x == 0) && e.sf.iter().all(|&x| x == 0));
         let has_old = self.inv2.iter().any(|e| e.n.iter().any(|&x| x > 0) || e.s.iter().any(|&x| x > 0));
@@ -584,8 +636,8 @@ impl Theme {
 
 /* =================================================================== monde */
 
-const MAPW: usize = 114;
-const MAPH: usize = 46;
+const MAPW: usize = 150;
+const MAPH: usize = 64;
 
 #[derive(Clone, Copy)]
 struct Cell { ch: char, c: C, solid: bool }
@@ -606,15 +658,18 @@ enum Zone {
     Enclos,
 }
 
-const ZONE_RECTS: [(usize, usize, usize, usize, usize); 6] = [
-    (1, 2, 33, 18, 0),   // forêt
-    (1, 24, 33, 21, 1),  // marais
-    (37, 1, 39, 9, 2),   // montagne
-    (79, 15, 34, 13, 3), // désert
-    (79, 1, 34, 11, 4),  // glacier
-    (79, 31, 34, 14, 5), // abysses
+const ZONE_RECTS: [(usize, usize, usize, usize, usize); 9] = [
+    (1, 2, 33, 18, 0),    // forêt
+    (1, 24, 33, 21, 1),   // marais
+    (37, 1, 39, 9, 2),    // montagne
+    (79, 15, 34, 13, 3),  // désert
+    (79, 1, 34, 11, 4),   // glacier
+    (79, 31, 34, 14, 5),  // abysses
+    (116, 1, 33, 13, 6),  // volcan
+    (116, 22, 33, 18, 7), // récif
+    (1, 47, 33, 16, 8),   // ruines
 ];
-const LABEL_POS: [(usize, usize); 6] = [(12, 3), (12, 25), (50, 2), (90, 16), (90, 2), (90, 32)];
+const LABEL_POS: [(usize, usize); 9] = [(12, 3), (12, 25), (50, 2), (90, 16), (90, 2), (90, 32), (128, 2), (128, 23), (12, 48)];
 
 impl WorldMap {
     fn put(&mut self, x: usize, y: usize, ch: char, c: C, solid: bool) {
@@ -696,6 +751,9 @@ impl WorldMap {
         path(&mut w, 76, 20, 95, 6);
         path(&mut w, 76, 24, 95, 21);
         path(&mut w, 76, 30, 95, 37);
+        path(&mut w, 110, 6, 122, 7);   // glacier -> volcan
+        path(&mut w, 110, 21, 122, 30); // désert -> récif
+        path(&mut w, 20, 44, 20, 50);   // marais -> ruines
         // grand corridor du village : traversée est-ouest garantie
         for x in 37..=76 {
             w.put(x, 22, '░', C::Dimmer, false);
@@ -708,6 +766,10 @@ impl WorldMap {
         w.scatter(1, 24, 33, 21, &['~', '~', 'o', '"'], C::Marsh, 0.14, false, &mut rng);
         w.scatter(79, 15, 34, 13, &['∙', '≈', '·'], C::GoldDark, 0.12, false, &mut rng);
         w.scatter(79, 31, 34, 14, &['▓', '▒', '●', '·'], C::Abyss, 0.13, true, &mut rng);
+        w.scatter(116, 1, 33, 13, &['^', '∴', '*'], C::Red, 0.12, true, &mut rng);
+        w.scatter(116, 22, 33, 18, &['~', '≈', 'o', ':'], C::Blue, 0.14, false, &mut rng);
+        w.scatter(1, 47, 33, 16, &['#', '[', ']'], C::Dim, 0.06, true, &mut rng);
+        w.scatter(1, 47, 33, 16, &['.', ','], C::Dim, 0.08, false, &mut rng);
 
         // plantes du village : purement décoratives, jamais bloquantes
         w.scatter(37, 12, 40, 22, &['♣'], C::Green, 0.012, false, &mut rng);
@@ -976,29 +1038,27 @@ impl Game {
     /* ------------------------------------------------------------- bonus */
 
     fn completed_biomes(&self) -> usize {
-        (0..6).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].n > 0)).count()
+        (0..BIOMES.len()).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].n > 0)).count()
     }
     fn shiny_completed_biomes(&self) -> usize {
-        (0..6).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].s > 0)).count()
+        (0..BIOMES.len()).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].s > 0)).count()
     }
     fn global_luck(&self) -> f64 {
-        self.s.lab[LAB_FLAIR] as f64 * 0.06 + self.s.trophies as f64 * 0.04 + self.completed_biomes() as f64 * 0.10
-    }
-    fn sell_mult(&self) -> f64 {
-        (1.0 + self.s.lab[LAB_NEGOCE] as f64 * 0.08)
-            * (1.0 + self.s.trophies as f64 * 0.04)
-            * (1.0 + self.shiny_completed_biomes() as f64 * 0.10)
-    }
-    fn speed_mult(&self) -> f64 {
-        1.0 + self.s.lab[LAB_AFFUTAGE] as f64 * 0.06
-    }
-    fn shiny_chance(&self, bait: Option<usize>, at: f64) -> f64 {
-        let mut c = SHINY_BASE * (1.0 + self.s.lab[LAB_ECLAT] as f64 * 0.15) * weather_shiny_mult(weather_at(at));
+        self.s.lab[LAB_FLAIR] as f64 * 0.04 + self.s.trophies as f64 * 0.008 + self.completed_biomes() as f64 * 0.04
+    }    fn sell_mult(&self) -> f64 {
+        (1.0 + self.s.lab[LAB_NEGOCE] as f64 * 0.05)
+            * (1.0 + self.s.trophies as f64 * 0.01)
+            * (1.0 + self.shiny_completed_biomes() as f64 * 0.05)
+    }    fn speed_mult(&self) -> f64 {
+        1.0 + self.s.lab[LAB_AFFUTAGE] as f64 * 0.04
+    }    fn shiny_chance(&self, bait: Option<usize>, at: f64) -> f64 {
+        let mut c = SHINY_BASE * (1.0 + self.s.lab[LAB_ECLAT] as f64 * 0.10) * weather_shiny_mult(weather_at(at));
         if bait == Some(BAIT_ESSENCE) {
-            c *= 4.0;
+            c *= 3.0;
         }
-        c.min(0.25)
-    }    fn offline_cap_ms(&self) -> f64 {
+        c.min(1.0 / 128.0)
+    }
+    fn offline_cap_ms(&self) -> f64 {
         (2.0 + self.s.lab[LAB_HORLOGE] as f64 * 2.0) * 3600.0 * 1000.0
     }
     fn trap_interval(&self, tier: usize, bait: Option<usize>, biome: usize, at: f64) -> f64 {
@@ -1024,15 +1084,11 @@ impl Game {
     }
     fn roll_rank(&self, luck: f64) -> usize {
         let r = rand::thread_rng().gen::<f64>();
-        let boost = 1.0 + luck * 0.35;
-        let ps = 0.03 * boost;
-        let pa = 0.12 * boost;
-        if r < ps { 3 } else if r < ps + pa { 2 } else if r < ps + pa + 0.30 { 1 } else { 0 }
-    }
-    /* retire jusqu'à q spécimens en commençant par les rangs les plus bas ; renvoie la valeur */
-    /* retire jusqu'à q spécimens : rangs les plus bas d'abord, sexe majoritaire d'abord
-       (pour préserver les couples) ; renvoie la valeur */
-    fn take_lowest(&mut self, ci: usize, shiny: bool, mut q: u64) -> f64 {
+        let lk = luck.min(LUCK_CAP);
+        let ps = (0.008 * (1.0 + lk * 0.15)).min(0.025);
+        let pa = (0.06 * (1.0 + lk * 0.2)).min(0.12);
+        if r < ps { 3 } else if r < ps + pa { 2 } else if r < ps + pa + 0.25 { 1 } else { 0 }
+    }    fn take_lowest(&mut self, ci: usize, shiny: bool, mut q: u64) -> f64 {
         let mut v = 0.0;
         for r in 0..4 {
             let val = self.creature_value_r(ci, shiny, r);
@@ -1153,9 +1209,17 @@ impl Game {
         n
     }
     fn trophy_gain(&self) -> u32 {
-        (self.s.run_earned / 25000.0).sqrt().floor() as u32
+        (self.s.run_earned / 1_000_000.0).sqrt().floor() as u32
     }
-    fn gain(&mut self, n: f64) {
+    fn migration_cost(&self) -> f64 {
+        100_000.0 * 2f64.powi(self.s.migrations.min(12) as i32)
+    }
+    fn trap_cap(&self) -> u32 {
+        2 + self.s.lab[LAB_LICENCE]
+    }
+    fn placed_total(&self) -> u32 {
+        (0..6).map(|t| self.placed_count(t)).sum()
+    }    fn gain(&mut self, n: f64) {
         self.s.ecus += n;
         self.s.total_earned += n;
         self.s.run_earned += n;
@@ -1173,9 +1237,10 @@ impl Game {
                     return 0.0;
                 }
                 let r = CREATURES[i].r;
-                let mut w = RAR_W[r] * (1.0 + luck).powi(r as i32);
+                let lk = luck.min(LUCK_CAP);
+                let mut w = RAR_W[r] * (1.0 + lk * RAR_LUCK_FACT[r]);
                 if bait == Some(BAIT_TRUFFE) && r >= 2 {
-                    w *= 2.5;
+                    w *= 1.8;
                 }
                 w
             })
@@ -1212,13 +1277,13 @@ impl Game {
         }
         let mut luck = TRAPS[pl.trap].luck + self.biome_luck(biome, at) + bonus_luck;
         if bait == Some(BAIT_VIANDE) {
-            luck += 0.35;
+            luck += 0.12;
         }
         if bait == Some(BAIT_NECTAR) {
-            luck += 0.2;
+            luck += 0.08;
         }
         if bait == Some(BAIT_ESSENCE) {
-            luck += 0.3;
+            luck += 0.1;
         }
         let ci = self.roll_creature(biome, luck, bait, at);
         let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(bait, at);
@@ -1233,7 +1298,7 @@ impl Game {
             let keep = 2 + self.contract_need(ci);
             if self.s.inv2[ci].tn() > keep {
                 let (_, v) = self.sell_surplus(ci);
-                sold = (v * if bait == Some(BAIT_NECTAR) { 1.5 } else { 1.0 }).floor();
+                sold = (v * if bait == Some(BAIT_NECTAR) { 1.3 } else { 1.0 }).floor();
                 self.gain(sold);
             }
         }
@@ -1272,7 +1337,7 @@ impl Game {
         }
     }    fn tick(&mut self) {
         let now = now_ms();
-        for b in 0..6 {
+        for b in 0..BIOMES.len() {
             let slots = match &self.s.biomes[b] {
                 Some(bs) => bs.pl.len(),
                 None => continue,
@@ -1340,14 +1405,13 @@ impl Game {
         3 + self.s.lab[LAB_ENCLOS] as usize
     }
     fn pen_rankup(&self) -> f64 {
-        0.35 + self.s.lab[LAB_LIGNEES] as f64 * 0.05
-    }
-    fn hunt_cooldown_ms(&self) -> f64 {
+        0.25 + self.s.lab[LAB_LIGNEES] as f64 * 0.04
+    }    fn hunt_cooldown_ms(&self) -> f64 {
         (300.0 - self.s.lab[LAB_TRAQUEUR] as f64 * 30.0) * 1000.0
     }
     /* écus par milliseconde générés par les salles occupées */
     fn museum_rate(&self) -> f64 {
-        self.s.museum.iter().flatten().map(|m| self.creature_value_r(m.ci, m.shiny, m.rank) * 0.003 / 60_000.0).sum()
+        self.s.museum.iter().flatten().map(|m| self.creature_value_r(m.ci, m.shiny, m.rank) * 0.001 / 60_000.0).sum()
     }    fn run_offline(&mut self) {
         let now = now_ms();
         let away = now - self.s.last_seen;
@@ -1359,7 +1423,7 @@ impl Game {
         let from = now - capped;
         let (mut caught, earned0, shinies0) = (0u64, self.s.total_earned, self.s.shinies);
         let mut discoveries = vec![];
-        for b in 0..6 {
+        for b in 0..BIOMES.len() {
             let slots = match &self.s.biomes[b] {
                 Some(bs) => bs.pl.len(),
                 None => continue,
@@ -1409,7 +1473,7 @@ impl Game {
         }
         self.reset_timers(now);
     }    fn reset_timers(&mut self, now: f64) {
-        for b in 0..6 {
+        for b in 0..BIOMES.len() {
             let Some(bs) = self.s.biomes[b].as_ref() else { continue };
             for i in 0..bs.pl.len() {
                 let Some(pl) = self.s.biomes[b].as_ref().unwrap().pl[i].clone() else { continue };
@@ -1430,10 +1494,10 @@ impl Game {
             3 => s.captures >= 10000,
             4 => s.shinies >= 1,
             5 => s.shinies >= 25,
-            6 => (0..60).any(|c| CREATURES[c].r == 4 && s.dex2[c].n > 0),
-            7 => (0..60).filter(|&c| s.dex2[c].n > 0).count() >= 10,
-            8 => (0..60).filter(|&c| s.dex2[c].n > 0).count() >= 30,
-            9 => (0..60).all(|c| s.dex2[c].n > 0),
+            6 => (0..CREATURES.len()).any(|c| CREATURES[c].r == 4 && s.dex2[c].n > 0),
+            7 => (0..CREATURES.len()).filter(|&c| s.dex2[c].n > 0).count() >= 10,
+            8 => (0..CREATURES.len()).filter(|&c| s.dex2[c].n > 0).count() >= 30,
+            9 => (0..CREATURES.len()).all(|c| s.dex2[c].n > 0),
             10 => s.biomes[1].is_some(),
             11 => s.biomes[5].is_some(),
             12 => s.total_earned >= 10000.0,
@@ -1442,8 +1506,8 @@ impl Game {
             15 => s.migrations >= 1,
             16 => s.migrations >= 5,
             17 => biome_creatures(0).all(|c| s.dex2[c].n > 0),
-            18 => (0..60).any(|c| s.dex2[c].best >= 4),
-            19 => (0..60).filter(|&c| s.dex2[c].best >= 4).count() >= 10,
+            18 => (0..CREATURES.len()).any(|c| s.dex2[c].best >= 4),
+            19 => (0..CREATURES.len()).filter(|&c| s.dex2[c].best >= 4).count() >= 10,
             20 => s.hunts_done >= 1,
             21 => s.contracts_delivered >= 5,
             22 => s.legends_caught >= 1,
@@ -1536,6 +1600,10 @@ impl Game {
                 }
             }
             Action::Place(b, i, t) => {
+                if self.placed_total() >= self.trap_cap() {
+                    self.log(vec![(format!("licence de piégeage : {} pièges posés maximum (voir le labo).", self.trap_cap()), C::Red)]);
+                    return;
+                }
                 let itv = self.trap_interval(t, None, b, now_ms());
                 if let Some(bs) = self.s.biomes[b].as_mut() {
                     bs.pl[i] = Some(Placement { trap: t, bait: None, next_at: now_ms() + itv });
@@ -1579,7 +1647,7 @@ impl Game {
             Action::SellDupes => {
                 let mut total = 0.0;
                 let mut n = 0u64;
-                for ci in 0..60 {
+                for ci in 0..CREATURES.len() {
                     if self.s.inv2[ci].tn() > 2 + self.contract_need(ci) {
                         let (q, v) = self.sell_surplus(ci);
                         total += v;
@@ -1598,7 +1666,8 @@ impl Game {
             Action::ToggleAutosell(r) => self.s.autosell[r] = !self.s.autosell[r],
             Action::Migrate => {
                 let g = self.trophy_gain();
-                if g >= 1 {
+                let cost = self.migration_cost();
+                if g >= 1 && self.s.ecus >= cost {
                     self.s.trophies += g;
                     self.s.migrations += 1;
                     self.s.ecus = 30.0;
@@ -1606,14 +1675,14 @@ impl Game {
                     self.s.traps = vec![0; 6];
                     self.s.traps[0] = 1;
                     self.s.baits = vec![0; 5];
-                    self.s.inv2 = vec![InvE::default(); 60];
+                    self.s.inv2 = vec![InvE::default(); CREATURES.len()];
                     self.s.museum = vec![None; 12];
                     self.s.museum_pool = 0.0;
                     self.s.pens = vec![None; 6];
                     self.s.contracts_done = vec![false; 3];
                     self.s.lab = vec![0; LABS.len()];
                     self.s.autosell = vec![false; 5];
-                    let mut biomes = vec![None; 6];
+                    let mut biomes = vec![None; BIOMES.len()];
                     biomes[0] = Some(BiomeState { slots: 2, pl: vec![None, None], hunt_at: 0.0 });
                     self.s.biomes = biomes;
                     // filet de sécurité : garantit les tailles de tous les vecteurs,
@@ -1640,7 +1709,7 @@ impl Game {
                     let mut hits = 0;
                     for i in 0..slots {
                         if self.s.biomes[b].as_ref().unwrap().pl[i].is_some() {
-                            let res = self.attempt(b, i, now, 0.5, false);
+                            let res = self.attempt(b, i, now, 0.2, false);
                             if res.is_some() {
                                 hits += 1;
                             }
@@ -1732,7 +1801,7 @@ impl Game {
                         if rank < 3 && rand::thread_rng().gen::<f64>() < self.pen_rankup() {
                             rank += 1;
                         }
-                        let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now) * 3.0;
+                        let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now) * 2.0;
                         let (is_new, _, sex) = self.add_specimen(pen.ci, shiny, rank);
                         self.s.pen_born += 1;
                         self.log(vec![
@@ -1754,7 +1823,7 @@ impl Game {
                     if self.s.legends_tried.len() > 24 {
                         self.s.legends_tried.remove(0);
                     }
-                    let mut p = 0.30 + (self.global_luck() * 0.15).min(0.30);
+                    let mut p = 0.25 + (self.global_luck() * 0.05).min(0.15);
                     let mut shiny_mult = 4.0;
                     if let Some(bt) = bait {
                         if self.s.baits[bt] > 0 {
@@ -1774,8 +1843,8 @@ impl Game {
                     if rand::thread_rng().gen::<f64>() < p {
                         let pool: Vec<usize> = biome_creatures(biome).filter(|&i| CREATURES[i].r >= 3).collect();
                         let ci = pool[rand::thread_rng().gen_range(0..pool.len())];
-                        let rank = self.roll_rank(self.global_luck() + 1.0).max(2);
-                        let shiny = rand::thread_rng().gen::<f64>() < (SHINY_BASE * shiny_mult).min(0.30);
+                        let rank = self.roll_rank(self.global_luck() + 0.5).max(2);
+                        let shiny = rand::thread_rng().gen::<f64>() < (SHINY_BASE * shiny_mult).min(0.05);
                         self.add_specimen(ci, shiny, rank);
                         self.s.legends_caught += 1;
                         self.log(vec![
@@ -1834,7 +1903,7 @@ impl Game {
     fn contracts_now(&self) -> (u64, Vec<Contract>) {
         let w = (now_ms() / 7_200_000.0) as u64;
         let mut rng = StdRng::seed_from_u64(splitmix(w ^ 0xC0117AC7));
-        let unlocked: Vec<usize> = (0..6).filter(|&b| self.s.biomes[b].is_some()).collect();
+        let unlocked: Vec<usize> = (0..BIOMES.len()).filter(|&b| self.s.biomes[b].is_some()).collect();
         let mut out = vec![];
         for _ in 0..3 {
             let b = unlocked[rng.gen_range(0..unlocked.len())];
@@ -1845,7 +1914,7 @@ impl Game {
                 1 => rng.gen_range(3..=5),
                 _ => rng.gen_range(2..=3),
             };
-            let reward = ((qty as f64 * self.creature_value(ci, false) * 2.5 + 50.0) * (1.0 + self.s.lab[LAB_COURTAGE] as f64 * 0.2)).floor();
+            let reward = ((qty as f64 * self.creature_value(ci, false) * 1.8 + 25.0) * (1.0 + self.s.lab[LAB_COURTAGE] as f64 * 0.15)).floor();
             out.push(Contract { ci, qty, reward });
         }
         (w, out)
@@ -1856,7 +1925,7 @@ impl Game {
         if splitmix(w ^ 0x1E9E17D) % 100 >= 30 {
             return None;
         }
-        let unlocked: Vec<usize> = (0..6).filter(|&b| self.s.biomes[b].is_some()).collect();
+        let unlocked: Vec<usize> = (0..BIOMES.len()).filter(|&b| self.s.biomes[b].is_some()).collect();
         let b = unlocked[(splitmix(w ^ 0xB10) % unlocked.len() as u64) as usize];
         if self.s.legends_tried.contains(&w) {
             return None;
@@ -1975,7 +2044,7 @@ impl Game {
         if !any {
             rows.push(Row::text("aucun appât.", C::Dimmer));
         }
-        for b in 0..6 {
+        for b in 0..BIOMES.len() {
             let list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
             if list.is_empty() {
                 continue;
@@ -2091,7 +2160,7 @@ impl Game {
                             (format!("├─ salle {} : ", slot + 1), C::Dimmer),
                             (format!("{} {}{} [{}]", c.g, c.n, if m.shiny { " ✦" } else { "" }, RANK_NAMES[m.rank]),
                              if m.shiny { C::Shiny } else { rarity_color(c.r) }),
-                            (format!("  {} écus/min", fmt2(self.creature_value_r(m.ci, m.shiny, m.rank) * 0.003)), C::GoldDark),
+                            (format!("  {} écus/min", fmt2(self.creature_value_r(m.ci, m.shiny, m.rank) * 0.001)), C::GoldDark),
                         ],
                         btns: vec![("retirer".into(), C::Red, Action::MuseumRemove(slot))],
                         act: None,
@@ -2106,7 +2175,7 @@ impl Game {
     fn rows_museum_pick(&self, slot: usize) -> (String, Vec<Row>) {
         let mut rows = vec![Row::text("le meilleur spécimen disponible de l'espèce sera exposé.", C::Dimmer), Row::text("", C::Dim)];
         let mut any = false;
-        for ci in 0..60 {
+        for ci in 0..CREATURES.len() {
             let iv = &self.s.inv2[ci];
             if iv.tn() == 0 && iv.ts() == 0 {
                 continue;
@@ -2190,7 +2259,7 @@ impl Game {
             Row::text("", C::Dim),
         ];
         let mut any = false;
-        for ci in 0..60 {
+        for ci in 0..CREATURES.len() {
             let iv = &self.s.inv2[ci];
             if iv.tn() == 0 {
                 continue;
@@ -2292,7 +2361,7 @@ impl Game {
             C::Dim,
         ));
         let mut cpm = 0.0;
-        for b in 0..6 {
+        for b in 0..BIOMES.len() {
             if let Some(bs) = &self.s.biomes[b] {
                 for pl in bs.pl.iter().flatten() {
                     let bait_ok = pl.bait.filter(|&bt| self.s.baits[bt] > 0);
@@ -2301,10 +2370,15 @@ impl Game {
             }
         }
         rows.push(Row::text(format!("rendement estimé : {} captures/min", fmt2(cpm)), C::Green));
+        let (pt, tc) = (self.placed_total(), self.trap_cap());
+        rows.push(Row::text(
+            format!("licence de piégeage : {}/{} pièges posés{}", pt, tc, if pt >= tc { " — plafond atteint" } else { "" }),
+            if pt >= tc { C::Gold } else { C::Dim },
+        ));
 
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("biomes — Entrée sur une ligne pour y aller"));
-        for b in 0..6 {
+        for b in 0..BIOMES.len() {
             match &self.s.biomes[b] {
                 None => rows.push(Row {
                     segs: vec![
@@ -2327,7 +2401,7 @@ impl Game {
                         ("├─ ".into(), C::Dimmer),
                         (pad(BIOMES[b].name, 10), if boosted { C::Ice } else { C::Text }),
                         (pad(&format!("{}/{} pièges", placed, bs.slots), 12), if placed == 0 { C::Red } else { C::Dim }),
-                        (pad(&format!("bestiaire {}/10{}", found, if found == 10 { " ✓" } else { "" }), 19), C::Blue),
+                        (pad(&format!("bestiaire {}/{}{}", found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" }), 19), C::Blue),
                     ];
                     match next {
                         Some(sec) => segs.push((format!("tentative dans {} s", sec), C::Green)),
@@ -2345,7 +2419,7 @@ impl Game {
         }
 
         // battues disponibles
-        let hunts: Vec<&str> = (0..6)
+        let hunts: Vec<&str> = (0..BIOMES.len())
             .filter(|&b| self.s.biomes[b].as_ref().map(|bs| bs.hunt_at <= now && bs.pl.iter().flatten().count() > 0).unwrap_or(false))
             .map(|b| BIOMES[b].name)
             .collect();
@@ -2387,7 +2461,7 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("réserve et bestiaire"));
         let (mut dupes, mut dval, mut total_inv, mut shiny_inv) = (0u64, 0.0, 0u64, 0u64);
-        for ci in 0..60 {
+        for ci in 0..CREATURES.len() {
             let iv = &self.s.inv2[ci];
             total_inv += iv.tn() + iv.ts();
             shiny_inv += iv.ts();
@@ -2410,12 +2484,12 @@ impl Game {
                 fmt(dupes as f64), fmt(dval)),
             if dval > 0.0 { C::Gold } else { C::Dim },
         ));
-        let found_total = (0..60).filter(|&i| self.s.dex2[i].n > 0).count();
-        let shiny_total = (0..60).filter(|&i| self.s.dex2[i].s > 0).count();
-        let s_total = (0..60).filter(|&i| self.s.dex2[i].best >= 4).count();
+        let found_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].n > 0).count();
+        let shiny_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].s > 0).count();
+        let s_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].best >= 4).count();
         rows.push(Row::text(
-            format!("bestiaire : {}/60 espèces · {}/60 shinies · {}/60 en rang S · {} biome(s) complet(s)",
-                found_total, shiny_total, s_total, self.completed_biomes()),
+            format!("bestiaire : {}/{nc} espèces · {}/{nc} shinies · {}/{nc} en rang S · {} biome(s) complet(s)",
+                found_total, shiny_total, s_total, self.completed_biomes(), nc = CREATURES.len()),
             C::Blue,
         ));
         ("tableau de bord".into(), rows)
@@ -2426,7 +2500,7 @@ impl Game {
         let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
         let mut rows = wrap_rows(bio.desc, self.panel_w, C::Dim);
         rows.push(Row::text(
-            format!("bestiaire {}/10{} · valeur des prises ×{}", found, if found == 10 { " ✓" } else { "" }, bio.mult),
+            format!("bestiaire {}/{}{} · valeur des prises ×{}", found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" }, bio.mult),
             C::Dimmer,
         ));
         // conditions actives sur ce biome
@@ -2498,7 +2572,7 @@ impl Game {
         let left = ((bs.hunt_at - now).max(0.0) / 1000.0).ceil() as u64;
         rows.push(Row {
             segs: vec![(
-                if ready { "battre les fourrés vous-même (chance +0,5) :".into() } else { format!("prochaine battue possible dans {} s", left) },
+                if ready { "battre les fourrés vous-même (chance +0,2) :".into() } else { format!("prochaine battue possible dans {} s", left) },
                 if ready { C::Text } else { C::Dimmer },
             )],
             btns: vec![(
@@ -2511,7 +2585,12 @@ impl Game {
         });
         (bio.name.to_string(), rows)
     }    fn rows_trap_pick(&self, b: usize, i: usize) -> (String, Vec<Row>) {
-        let mut rows = vec![];
+        let at_cap = self.placed_total() >= self.trap_cap();
+        let mut rows = vec![Row::text(
+            format!("licence de piégeage : {}/{} pièges posés{}", self.placed_total(), self.trap_cap(),
+                if at_cap { " — plafond atteint ! (améliorable au labo)" } else { "" }),
+            if at_cap { C::Red } else { C::Dim },
+        ), Row::text("", C::Dim)];
         let avail: Vec<usize> = (0..6).filter(|&t| self.s.traps[t] > self.placed_count(t)).collect();
         if avail.is_empty() {
             rows.push(Row::text("aucun piège en réserve.", C::Dim));
@@ -2524,7 +2603,7 @@ impl Game {
                     (format!("{} ", TRAPS[t].n), C::Text),
                     (format!("×{} · {}s · {}% · chance +{}", free, TRAPS[t].itv, (TRAPS[t].succ * 100.0) as u32, fmt_luck(TRAPS[t].luck)), C::Dimmer),
                 ],
-                btns: vec![("poser".into(), C::Green, Action::Place(b, i, t))],
+                btns: vec![("poser".into(), if at_cap { C::Dimmer } else { C::Green }, if at_cap { Action::Nothing } else { Action::Place(b, i, t) })],
                 act: None,
                 indent: 0,
             });
@@ -2568,7 +2647,7 @@ impl Game {
         let bio = &BIOMES[b];
         let ok = self.s.ecus >= bio.cost;
         let mut rows = wrap_rows(bio.desc, self.panel_w, C::Dim);
-        rows.push(Row::text(format!("valeur des prises ×{} · 10 espèces à découvrir", bio.mult), C::Dimmer));
+        rows.push(Row::text(format!("valeur des prises ×{} · {} espèces à découvrir", bio.mult, biome_creatures(b).count()), C::Dimmer));
         rows.push(Row::text("", C::Dim));
         rows.push(Row {
             segs: vec![
@@ -2652,7 +2731,7 @@ impl Game {
         }
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header(&format!("comptoir de vente — prix ×{}", fmt2(self.sell_mult()))));
-        let any = (0..60).any(|ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0);
+        let any = (0..CREATURES.len()).any(|ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0);
         if !any {
             rows.push(Row::text("réserve vide. les pièges y remédieront.", C::Dim));
         } else {
@@ -2668,7 +2747,7 @@ impl Game {
             ) {
                 rows.push(r);
             }
-            for b in 0..6 {
+            for b in 0..BIOMES.len() {
                 let mut list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
                 if list.is_empty() {
                     continue;
@@ -2777,7 +2856,7 @@ impl Game {
         }
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header(&format!("migration — {} effectuée{}", self.s.migrations, if self.s.migrations > 1 { "s" } else { "" })));
-        for r in wrap_rows("repartir de zéro vers des terres plus giboyeuses. le bestiaire et les succès sont conservés ; écus, pièges, labo et réserve sont perdus. chaque trophée offre définitivement +4% de chance et +4% aux prix de vente.", self.panel_w, C::Dim) {
+        for r in wrap_rows("repartir de zéro vers des terres plus giboyeuses, contre des frais de voyage qui doublent à chaque départ. le bestiaire et les succès sont conservés ; écus, pièges, labo et réserve sont perdus. chaque trophée offre définitivement +0,008 de chance et +1% aux prix de vente.", self.panel_w, C::Dim) {
             rows.push(r);
         }
         let g = self.trophy_gain();
@@ -2785,13 +2864,16 @@ impl Game {
             format!("écus gagnés cette expédition : {} · trophées actuels : {}", fmt(self.s.run_earned), self.s.trophies),
             C::Dimmer,
         ));
+        let mcost = self.migration_cost();
+        let can = g >= 1 && self.s.ecus >= mcost;
         rows.push(Row {
             segs: vec![
                 ("trophées à la migration : ".into(), C::Text),
                 (format!("+{}", g), if g > 0 { C::Gold } else { C::Dimmer }),
-                (if g < 1 { "  (25 000 écus gagnés = 1er trophée)".into() } else { String::new() }, C::Dimmer),
+                (if g < 1 { "  (1 M d'écus gagnés = 1er trophée)".into() } else { String::new() }, C::Dimmer),
+                (format!("  · frais de voyage : {} écus", fmt(mcost)), if self.s.ecus >= mcost { C::GoldDark } else { C::Red }),
             ],
-            btns: vec![("migrer".into(), if g > 0 { C::Red } else { C::Dimmer }, if g > 0 { Action::Open(PanelKind::MigrConfirm) } else { Action::Nothing })],
+            btns: vec![("migrer".into(), if can { C::Red } else { C::Dimmer }, if can { Action::Open(PanelKind::MigrConfirm) } else { Action::Nothing })],
             act: None,
             indent: 0,
         });
@@ -2811,7 +2893,7 @@ impl Game {
     fn rows_migr_confirm(&self) -> (String, Vec<Row>) {
         let g = self.trophy_gain();
         let mut rows = wrap_rows(
-            &format!("vos écus, pièges, appâts, améliorations et créatures en réserve disparaissent. le bestiaire et les succès restent. vous gagnez {} trophée{} permanents.", g, if g > 1 { "s" } else { "" }),
+            &format!("les frais de voyage ({} écus) sont réglés, puis vos écus, pièges, appâts, améliorations et créatures en réserve disparaissent. le bestiaire et les succès restent. vous gagnez {} trophée{} permanents.", fmt(self.migration_cost()), g, if g > 1 { "s" } else { "" }),
             self.panel_w,
             C::Dim,
         );
@@ -2829,20 +2911,20 @@ impl Game {
     }
 
     fn rows_dex(&self) -> (String, Vec<Row>) {
-        let total = (0..60).filter(|&i| self.s.dex2[i].n > 0).count();
-        let shiny_total = (0..60).filter(|&i| self.s.dex2[i].s > 0).count();
-        let s_total = (0..60).filter(|&i| self.s.dex2[i].best >= 4).count();
+        let total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].n > 0).count();
+        let shiny_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].s > 0).count();
+        let s_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].best >= 4).count();
         let mut rows = vec![
             Row::text(
-                format!("espèces {}/60 {}  shinies {}/60 {}  rang S {}/60", total, ascii_bar(total as f64 / 60.0, 14), shiny_total, ascii_bar(shiny_total as f64 / 60.0, 14), s_total),
+                format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, CREATURES.len(), ascii_bar(total as f64 / CREATURES.len() as f64, 12), shiny_total, CREATURES.len(), ascii_bar(shiny_total as f64 / CREATURES.len() as f64, 12), s_total, CREATURES.len()),
                 C::Text,
             ),
-            Row::text("biome complet : +10% chance · biome 100% shiny : +10% vente — pour toujours", C::Dimmer),
+            Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
         ];
-        for b in 0..6 {
+        for b in 0..BIOMES.len() {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
             rows.push(Row::text("", C::Dim));
-            rows.push(Row::header(&format!("{} — {}/10{}", BIOMES[b].name, found, if found == 10 { " ✓" } else { "" })));
+            rows.push(Row::header(&format!("{} — {}/{}{}", BIOMES[b].name, found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" })));
             for ci in biome_creatures(b) {
                 let c = &CREATURES[ci];
                 let d = &self.s.dex2[ci];
@@ -2984,7 +3066,7 @@ impl Game {
             "posez des pièges dans les biomes ; ils capturent seuls, à intervalle régulier.",
             "revendez les doublons pour financer de meilleurs pièges, des appâts, de nouveaux biomes et le labo.",
             "l'objectif de fond : compléter le bestiaire — 60 espèces, leurs shinies ✦, et un rang S partout.",
-            "compléter un biome donne +10% de chance pour toujours ; le compléter en shiny, +10% à la vente.",
+            "compléter un biome donne +0,04 de chance pour toujours ; le compléter en shiny, +5% à la vente.",
             "les pièges ne s'usent jamais : posés une fois, ils travaillent indéfiniment. l'horlogerie (labo) ne limite que la progression simulée hors-ligne (2 h de base).",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
@@ -3063,7 +3145,7 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("sur le terrain"));
         for t in [
-            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,5 chance (repos 5 min).",
+            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance (repos 5 min, réductible au labo).",
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
             "légende errante : une silhouette ✧ apparaît parfois sur la carte. approchez-la et tentez votre chance — une seule fois. créature épique ou légendaire, rang A minimum.",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
@@ -3089,7 +3171,7 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("la migration"));
         for t in [
-            "au labo, quand une expédition a bien rapporté : repartez de zéro contre des trophées permanents (+4% chance et +4% vente chacun).",
+            "au labo, quand une expédition a bien rapporté (et contre des frais de voyage qui doublent à chaque départ) : repartez de zéro avec des trophées permanents (+0,008 chance et +1% vente chacun).",
             "conservés : bestiaire, succès, trophées. perdus : écus, pièges, appâts, labo, réserve, musée, enclos.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
@@ -3307,7 +3389,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         }
     }
     // étiquettes de biomes
-    for b in 0..6 {
+    for b in 0..BIOMES.len() {
         let (lx, ly) = LABEL_POS[b];
         let sx = 1 + lx as i32 - cam_x + off_x;
         let sy = vy0 + ly as i32 - cam_y + off_y;
@@ -3383,11 +3465,11 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         draw_str(buf, area, tx, 0, "▌", theme.style(C::Green, false));
     }
     tx += 1;
-    let dex = (0..60).filter(|&i| game.s.dex2[i].n > 0).count();
+    let dex = (0..CREATURES.len()).filter(|&i| game.s.dex2[i].n > 0).count();
     let stats: Vec<(String, C)> = vec![
         (format!(" {} écus ", fmt(game.s.ecus)), C::Gold),
         (format!("· {} captures ", fmt(game.s.captures as f64)), C::Dim),
-        (format!("· bestiaire {}% ", (dex as f64 / 60.0 * 100.0).round() as u64), C::Blue),
+        (format!("· bestiaire {}% ", (dex as f64 / CREATURES.len() as f64 * 100.0).round() as u64), C::Blue),
         (if game.s.trophies > 0 { format!("· {} trophées ", game.s.trophies) } else { String::new() }, C::GoldDark),
     ];
     for (txt, c) in stats {
