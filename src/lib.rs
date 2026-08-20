@@ -3998,7 +3998,10 @@ mod webapp {
                         return;
                     }
                     if let Some((fg, bg)) = cur {
-                        let bg_css = if bg.is_empty() { String::new() } else { format!(";background:{}", bg) };
+                        // le fond d'un span ne couvre que la boîte de texte : on l'étend
+                        // verticalement pour remplir toute la hauteur de ligne (sinon des
+                        // bandes sombres apparaissent entre les lignes des panneaux)
+                        let bg_css = if bg.is_empty() { String::new() } else { format!(";background:{};padding:0.30em 0", bg) };
                         html.push_str(&format!("<span style=\"color:{}{}\">{}</span>", fg, bg_css, esc_html(run)));
                     }
                 };
