@@ -60,7 +60,7 @@ struct CreatureDef {
     n: &'static str,
     lore: &'static str,
 }
-const CREATURES: [CreatureDef; 90] = [
+const CREATURES: [CreatureDef; 98] = [
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
     CreatureDef { b: 0, r: 0, g: ".ø.",   n: "champillon",       lore: "un champignon qui marche. lentement, mais il marche." },
@@ -151,6 +151,14 @@ const CREATURES: [CreatureDef; 90] = [
     CreatureDef { b: 8, r: 3, g: ".^.",  n: "spectrarque",       lore: "l'ancien maître des lieux. très à cheval sur l'étiquette." },
     CreatureDef { b: 8, r: 3, g: "{t}",  n: "chronolithe",       lore: "le temps passe autour de lui, jamais à travers." },
     CreatureDef { b: 8, r: 4, g: "/#\\", n: "bâtisseur oublié",  lore: "il a construit les ruines. neuves, à l'époque." },
+    CreatureDef { b: 0, r: 0, g: "(:>",  n: "hérissou",          lore: "roule en boule au moindre bruit. se déroule pour les baies." },
+    CreatureDef { b: 0, r: 1, g: ".w.",  n: "papillotte",        lore: "un papillon qui se prend pour une feuille. les feuilles votent contre." },
+    CreatureDef { b: 0, r: 2, g: "(-)",  n: "taupinard",         lore: "creuse des tunnels qui débouchent toujours dans un piège. troublant." },
+    CreatureDef { b: 1, r: 1, g: "@~",   n: "tourbillard",       lore: "un petit tourbillon de tourbe. poli, mais collant." },
+    CreatureDef { b: 3, r: 0, g: "-*-",  n: "rosable",           lore: "une rose des sables qui bourgeonne. personne n'arrose, elle insiste." },
+    CreatureDef { b: 3, r: 2, g: "^!^",  n: "chacalin",          lore: "rit tout seul dans les dunes. on préfère ne pas savoir de quoi." },
+    CreatureDef { b: 4, r: 0, g: ".:.",  n: "neigelin",          lore: "un flocon trop gros pour fondre, trop léger pour tomber." },
+    CreatureDef { b: 5, r: 1, g: "_o_",  n: "fondrille",         lore: "vit encore plus bas que le fond. remonte pour les grandes occasions." },
 ];
 
 fn biome_creatures(b: usize) -> impl Iterator<Item = usize> {
@@ -3017,7 +3025,9 @@ impl Game {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
             rows.push(Row::text("", C::Dim));
             rows.push(Row::header(&format!("{} — {}/{}{}", BIOMES[b].name, found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" })));
-            for ci in biome_creatures(b) {
+            let mut species: Vec<usize> = biome_creatures(b).collect();
+            species.sort_by_key(|&ci| (CREATURES[ci].r, ci));
+            for ci in species {
                 let c = &CREATURES[ci];
                 let d = &self.s.dex2[ci];
                 if d.n == 0 {
