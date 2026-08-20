@@ -35,6 +35,10 @@
     overflow: hidden;
     user-select: none; -webkit-user-select: none; cursor: default;
   }
+  /* chaque ligne est un bloc de hauteur fixe ; les segments colorés remplissent
+     toute la cellule — plus de bandes entre les lignes, comme un vrai terminal */
+  #scr div { height: var(--lh, 17px); }
+  #scr span { display: inline-block; height: 100%; vertical-align: top; }
   #meas { position: absolute; visibility: hidden; top: -100px; letter-spacing: 0.5px; }
   #pad {
     display: none; position: fixed; bottom: 10px; right: 10px; z-index: 5;
@@ -63,7 +67,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820h'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260820i'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -84,6 +88,7 @@ function applySize() {
   ch = lh;
   scr.style.fontSize = fs + 'px';
   scr.style.lineHeight = lh + 'px';
+  scr.style.setProperty('--lh', lh + 'px');
   meas.style.fontSize = fs + 'px';
   localStorage.setItem('affut_fs', String(sizeIdx));
   document.getElementById('ver').textContent = 'v' + V + ' · ' + fs + 'px (+/− pour ajuster)';

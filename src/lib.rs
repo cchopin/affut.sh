@@ -250,7 +250,7 @@ const NOCTURNES: [usize; 7] = [7, 17, 24, 36, 47, 55, 84]; // lucioleau, feufoll
 const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
 const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
-const LEGEND_SPOTS: [(usize, usize); 9] = [(16, 9), (16, 33), (56, 4), (95, 20), (95, 5), (95, 38), (132, 7), (132, 31), (16, 55)];
+const LEGEND_SPOTS: [(usize, usize); 9] = [(16, 9), (16, 33), (56, 4), (95, 20), (95, 5), (95, 38), (56, 54), (95, 55), (16, 55)];
 /* durée de couvaison à l'enclos, par rareté (minutes) */
 const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
@@ -706,7 +706,7 @@ impl Theme {
 
 /* =================================================================== monde */
 
-const MAPW: usize = 150;
+const MAPW: usize = 114;
 const MAPH: usize = 64;
 
 #[derive(Clone, Copy)]
@@ -735,11 +735,11 @@ const ZONE_RECTS: [(usize, usize, usize, usize, usize); 9] = [
     (79, 15, 34, 13, 3),  // désert
     (79, 1, 34, 11, 4),   // glacier
     (79, 31, 34, 14, 5),  // abysses
-    (116, 1, 33, 13, 6),  // volcan
-    (116, 22, 33, 18, 7), // récif
+    (37, 46, 40, 17, 6),  // volcan (le sud fumant du village)
+    (79, 48, 34, 15, 7),  // récif (sous les abysses)
     (1, 47, 33, 16, 8),   // ruines
 ];
-const LABEL_POS: [(usize, usize); 9] = [(12, 3), (12, 25), (50, 2), (90, 16), (90, 2), (90, 32), (128, 2), (128, 23), (12, 48)];
+const LABEL_POS: [(usize, usize); 9] = [(12, 3), (12, 25), (50, 2), (90, 16), (90, 2), (90, 32), (50, 47), (90, 49), (12, 48)];
 
 impl WorldMap {
     fn put(&mut self, x: usize, y: usize, ch: char, c: C, solid: bool) {
@@ -821,8 +821,9 @@ impl WorldMap {
         path(&mut w, 76, 20, 95, 6);
         path(&mut w, 76, 24, 95, 21);
         path(&mut w, 76, 30, 95, 37);
-        path(&mut w, 110, 6, 122, 7);   // glacier -> volcan
-        path(&mut w, 110, 21, 122, 30); // désert -> récif
+        path(&mut w, 49, 42, 49, 48);   // village -> volcan
+        path(&mut w, 67, 42, 67, 48);
+        path(&mut w, 95, 45, 95, 50);   // abysses -> récif
         path(&mut w, 20, 44, 20, 50);   // marais -> ruines
         // grand corridor du village : traversée est-ouest garantie
         for x in 37..=76 {
@@ -836,8 +837,8 @@ impl WorldMap {
         w.scatter(1, 24, 33, 21, &['~', '~', 'o', '"'], C::Marsh, 0.14, false, &mut rng);
         w.scatter(79, 15, 34, 13, &['∙', '≈', '·'], C::GoldDark, 0.12, false, &mut rng);
         w.scatter(79, 31, 34, 14, &['▓', '▒', '●', '·'], C::Abyss, 0.13, true, &mut rng);
-        w.scatter(116, 1, 33, 13, &['^', '∴', '*'], C::Red, 0.12, true, &mut rng);
-        w.scatter(116, 22, 33, 18, &['~', '≈', 'o', ':'], C::Blue, 0.14, false, &mut rng);
+        w.scatter(37, 46, 40, 17, &['^', '∴', '*'], C::Red, 0.12, true, &mut rng);
+        w.scatter(79, 48, 34, 15, &['~', '≈', 'o', ':'], C::Blue, 0.14, false, &mut rng);
         w.scatter(1, 47, 33, 16, &['#', '[', ']'], C::Dim, 0.06, true, &mut rng);
         w.scatter(1, 47, 33, 16, &['.', ','], C::Dim, 0.08, false, &mut rng);
 
@@ -3991,6 +3992,7 @@ mod webapp {
             render(&mut self.game, &self.theme, &mut buf, area);
             let mut html = String::with_capacity(cols as usize * rows as usize * 4);
             for y in 0..rows {
+                html.push_str("<div>");
                 let mut run = String::new();
                 let mut cur: Option<(String, String)> = None;
                 let flush = |html: &mut String, cur: &Option<(String, String)>, run: &str| {
@@ -3998,10 +4000,7 @@ mod webapp {
                         return;
                     }
                     if let Some((fg, bg)) = cur {
-                        // le fond d'un span ne couvre que la boîte de texte : on l'étend
-                        // verticalement pour remplir toute la hauteur de ligne (sinon des
-                        // bandes sombres apparaissent entre les lignes des panneaux)
-                        let bg_css = if bg.is_empty() { String::new() } else { format!(";background:{};padding:0.30em 0", bg) };
+                        let bg_css = if bg.is_empty() { String::new() } else { format!(";background:{}", bg) };
                         html.push_str(&format!("<span style=\"color:{}{}\">{}</span>", fg, bg_css, esc_html(run)));
                     }
                 };
@@ -4018,7 +4017,7 @@ mod webapp {
                     run.push_str(cell.symbol());
                 }
                 flush(&mut html, &cur, &run);
-                html.push('\n');
+                html.push_str("</div>");
             }
             html
         }
