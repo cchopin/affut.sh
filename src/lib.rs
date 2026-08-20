@@ -3841,7 +3841,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         tx += txt.chars().count() as i32;
     }
     // raccourcis
-    let kb = " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire [o] boutique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · ctrl+c quitter ";
+    let kb = " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · ctrl+c quitter ";
     let kbt: String = kb.chars().take((cols - 4) as usize).collect();
     draw_str(buf, area, 2, rows_n - 1, &kbt, theme.style(C::Dimmer, false));
 

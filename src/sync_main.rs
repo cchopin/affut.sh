@@ -58,13 +58,17 @@ fn main() {
                 // quota : un NOUVEAU jeton n'est accepté que sous le plafond global
                 // (les jetons existants restent toujours modifiables)
                 if !std::path::Path::new(&path).exists() {
-                    let count = std::fs::read_dir(&data_dir).map(|d| d.count()).unwrap_or(0);
+                    let count = std::fs::read_dir(&data_dir)
+                        .map(|d| d.filter(|e| e.as_ref().map(|e| e.path().extension().map(|x| x == "json").unwrap_or(false)).unwrap_or(false)).count())
+                        .unwrap_or(0);
                     if count >= 500 {
                         respond(req, 507, "plus de place — contactez le gardien du comptoir");
                         continue;
                     }
                 }
                 let tmp = format!("{}.tmp", path);
+                // filet : l'ancienne version survit en .bak (récupérable à la main)
+                let _ = std::fs::copy(&path, format!("{}.bak", path));
                 if std::fs::write(&tmp, &body).is_ok() && std::fs::rename(&tmp, &path).is_ok() {
                     respond(req, 200, "ok");
                 } else {

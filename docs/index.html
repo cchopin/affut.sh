@@ -110,7 +110,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260820y'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260820z'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -133,7 +133,11 @@ try {
   if (r.ok) {
     const remote = await r.json();
     const local = JSON.parse(localStorage.getItem('affutsh_save2') || 'null');
-    if (!local || (remote.last_seen || 0) > (local.last_seen || 0)) {
+    // la progression gagne : `captures` ne diminue jamais au cours d'une partie.
+    // l'horloge ne sert qu'à départager des progressions égales.
+    const score = s => [(s && s.captures) || 0, (s && s.last_seen) || 0];
+    const [rc, rt] = score(remote), [lc, lt] = score(local);
+    if (!local || rc > lc || (rc === lc && rt > lt)) {
       localStorage.setItem('affutsh_save2', JSON.stringify(remote));
     }
     syncState = '✓';
