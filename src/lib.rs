@@ -3085,7 +3085,7 @@ impl Game {
                             segs: vec![
                                 (pad(&format!("{} {}", c.g, c.n), 24), rarity_color(c.r)),
                                 (pad(&format!("×{}", fmt(n as f64)), 6), C::Dim),
-                                (pad(&format!("[{}-{}]", RANK_NAMES[low], RANK_NAMES[best]), 6), if best >= 3 { C::Gold } else { C::Dim }),
+                                (pad(&(if low == best { format!("[{}]", RANK_NAMES[low]) } else { format!("[{}-{}]", RANK_NAMES[low], RANK_NAMES[best]) }), 6), if best >= 3 { C::Gold } else { C::Dim }),
                                 (pad(&format!("dès {}/u", fmt(self.creature_value_r(ci, false, low))), 11), C::GoldDark),
                             ],
                             btns: vec![
