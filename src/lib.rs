@@ -3525,7 +3525,7 @@ impl Game {
             "[v] tableau de bord · [i] inventaire · [b] bestiaire · [o] boutique · [c] contrats",
             "[l] labo · [m] musée · [e] enclos · [t] trophées · [j] journal · [?] cette aide",
             "panneaux : ↑↓/jk naviguer · ←→ changer de bouton · Entrée valider · PgUp/PgDn défiler",
-            "quitter : ctrl+c — la partie est sauvegardée à la sortie (et toutes les 10 s de toute façon).",
+            if cfg!(target_arch = "wasm32") { "fermez l'onglet quand vous voulez — la partie est sauvegardée toutes les 10 s. les touches + et - ajustent la densité d'affichage." } else { "quitter : ctrl+c — la partie est sauvegardée à la sortie (et toutes les 10 s de toute façon)." },
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dimmer));
         }
@@ -3841,7 +3841,11 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         tx += txt.chars().count() as i32;
     }
     // raccourcis
-    let kb = " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · ctrl+c quitter ";
+    let kb = if cfg!(target_arch = "wasm32") {
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · +/- densité "
+    } else {
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · ctrl+c quitter "
+    };
     let kbt: String = kb.chars().take((cols - 4) as usize).collect();
     draw_str(buf, area, 2, rows_n - 1, &kbt, theme.style(C::Dimmer, false));
 
