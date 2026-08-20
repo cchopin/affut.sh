@@ -3230,9 +3230,9 @@ impl Game {
         ));
         (c.n.to_string(), rows)
     }    fn rows_achs(&self) -> (String, Vec<Row>) {
-        let done = (0..18).filter(|&i| self.s.ach[i]).count();
+        let done = (0..ACHS.len()).filter(|&i| self.s.ach[i]).count();
         let mut rows = vec![Row::text(format!("{}/{} débloqués", done, ACHS.len()), C::Dim), Row::text("", C::Dim)];
-        for i in 0..18 {
+        for i in 0..ACHS.len() {
             let ok = self.s.ach[i];
             rows.push(Row {
                 segs: vec![
@@ -3771,10 +3771,12 @@ fn draw_panel(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     }
     draw_str(buf, area, px + 2, py, &format!(" {} ", title), theme.style(C::Gold, true));
     draw_str(buf, area, px + 2, py + ph - 1, " ↑↓ naviguer · Entrée valider · Échap fermer ", theme.style(C::Dimmer, true));
-    if rows.len() > inner {
-        let info = format!(" {}-{}/{} ", scroll + 1, (scroll + inner).min(rows.len()), rows.len());
-        draw_str(buf, area, px + pw - info.chars().count() as i32 - 2, py + ph - 1, &info, theme.style(C::Dimmer, true));
-    }
+    let info = if rows.len() > inner {
+        format!(" {}-{}/{} ", scroll + 1, (scroll + inner).min(rows.len()), rows.len())
+    } else {
+        " tout est affiché ".to_string()
+    };
+    draw_str(buf, area, px + pw - info.chars().count() as i32 - 2, py + ph - 1, &info, theme.style(C::Dimmer, true));
 
     for i in 0..inner {
         let ri = scroll + i;
