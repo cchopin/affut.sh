@@ -43,9 +43,9 @@ struct BiomeDef {
 }
 /* biomes 0..WILDB : ceux de la carte. le dernier, « curiosités », n'a ni
    terrain ni pièges — on n'y entre pas, ses espèces s'obtiennent au troc. */
-const WILDB: usize = 9;
-const CURIO_B: usize = 9;
-const BIOMES: [BiomeDef; 10] = [
+const WILDB: usize = 11;
+const CURIO_B: usize = 11;
+const BIOMES: [BiomeDef; 12] = [
     BiomeDef { name: "forêt",    cost: 0.0,       mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
     BiomeDef { name: "marais",   cost: 2500.0,    mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
     BiomeDef { name: "montagne", cost: 20000.0,   mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
@@ -55,6 +55,8 @@ const BIOMES: [BiomeDef; 10] = [
     BiomeDef { name: "volcan",   cost: 12000000.0, mult: 13.0, desc: "la montagne qui fume. huit espèces y vivent, aucune n'a froid." },
     BiomeDef { name: "récif",    cost: 35000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
     BiomeDef { name: "ruines",   cost: 100000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
+    BiomeDef { name: "rivière",  cost: 900.0,     mult: 1.3, desc: "elle descend de la montagne et traverse tout. neuf espèces la remontent, personne ne sait pourquoi." },
+    BiomeDef { name: "lac",      cost: 45000.0,   mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
     BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 1.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
 ];
 
@@ -65,7 +67,7 @@ struct CreatureDef {
     n: &'static str,
     lore: &'static str,
 }
-const CREATURES: [CreatureDef; 104] = [
+const CREATURES: [CreatureDef; 120] = [
     // ---- forêt (13)
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
@@ -173,13 +175,31 @@ const CREATURES: [CreatureDef; 104] = [
     CreatureDef { b: 8, r: 3, g: ".^.",   n: "spectrarque",      lore: "l'ancien maître des lieux. très à cheval sur l'étiquette." },
     CreatureDef { b: 8, r: 3, g: "{t}",   n: "chronolithe",      lore: "le temps passe autour de lui, jamais à travers." },
     CreatureDef { b: 8, r: 4, g: "/#\\",  n: "bâtisseur oublié", lore: "il a construit les ruines. neuves, à l'époque." },
+    /* rivière : neuf espèces, du courant vif aux berges */
+    CreatureDef { b: 9, r: 0, g: "~o~",  n: "vairounet",     lore: "remonte le courant par principe. n'a jamais dit lequel." },
+    CreatureDef { b: 9, r: 0, g: "-<><", n: "ablette grise", lore: "vit en banc. chaque membre est persuadé de mener la troupe." },
+    CreatureDef { b: 9, r: 0, g: ",o,",  n: "galetin",       lore: "se fait passer pour un caillou. très convaincant, jusqu'à ce qu'il nage." },
+    CreatureDef { b: 9, r: 1, g: "~>~",  n: "flèche d'eau",  lore: "traverse un gué avant qu'on ait fini de le regarder." },
+    CreatureDef { b: 9, r: 1, g: "(oo)", n: "loutron",       lore: "collectionne des objets brillants au fond. refuse de dire où." },
+    CreatureDef { b: 9, r: 1, g: "=^=",  n: "martin-pêche",  lore: "plonge mieux que vous ne piégez. il le sait." },
+    CreatureDef { b: 9, r: 2, g: "~§~",  n: "anguillon",     lore: "on croit l'avoir. on a un nœud." },
+    CreatureDef { b: 9, r: 2, g: "<=>",  n: "écrevisse d'or",lore: "recule pour avancer. tout un programme." },
+    CreatureDef { b: 9, r: 3, g: "~▲~",  n: "silure ancien", lore: "vit sous le pont depuis avant le pont." },
+    /* lac : sept espèces, là où le courant s'arrête */
+    CreatureDef { b: 10, r: 0, g: "o~o",  n: "bulleau",      lore: "monte à la surface pour éclater. recommence. inlassablement." },
+    CreatureDef { b: 10, r: 0, g: "~w~",  n: "nénufaron",    lore: "une feuille qui a appris à nager, et qui en fait trop." },
+    CreatureDef { b: 10, r: 1, g: "(°)",  n: "carpaillon",   lore: "vous regarde depuis le fond avec une patience de fonctionnaire." },
+    CreatureDef { b: 10, r: 2, g: "<~>",  n: "ondine grise", lore: "on ne la voit qu'au reflet. jamais dans l'eau." },
+    CreatureDef { b: 10, r: 2, g: "≈o≈",  n: "brumelac",     lore: "se confond avec la brume du matin. dort le reste du temps." },
+    CreatureDef { b: 10, r: 3, g: "~©~",  n: "nautile pâle", lore: "une spirale qui tourne dans le mauvais sens. personne n'ose corriger." },
+    CreatureDef { b: 10, r: 4, g: "<@>",  n: "gardien du lac", lore: "au fond, quelque chose de très vieux compte les jours. il en manque quatre." },
     /* curiosités : introuvables dans la nature, elles ne s'obtiennent qu'au troc */
-    CreatureDef { b: 9, r: 1, g: "<o>",  n: "troqueline",  lore: "n'appartient jamais deux fois à la même personne. c'est sa façon de voyager." },
-    CreatureDef { b: 9, r: 2, g: "[+]",  n: "colporel",    lore: "dort dans les sacoches. se réveille exactement au moment de l'échange." },
-    CreatureDef { b: 9, r: 2, g: "%~%",  n: "pacotille",   lore: "sans valeur, paraît-il. tout le monde en veut une." },
-    CreatureDef { b: 9, r: 3, g: "<*>",  n: "curiosa",     lore: "vient d'un biome que personne n'a cartographié. elle refuse d'en parler." },
-    CreatureDef { b: 9, r: 3, g: "(:)",  n: "porcelin",    lore: "une figurine qui respire. les collectionneurs se l'arrachent, elle s'en moque." },
-    CreatureDef { b: 9, r: 4, g: "=@=",  n: "chimérel",    lore: "trois marchands jurent l'avoir vendu le même jour. aucun ne ment." },
+    CreatureDef { b: 11, r: 1, g: "<o>",  n: "troqueline",  lore: "n'appartient jamais deux fois à la même personne. c'est sa façon de voyager." },
+    CreatureDef { b: 11, r: 2, g: "[+]",  n: "colporel",    lore: "dort dans les sacoches. se réveille exactement au moment de l'échange." },
+    CreatureDef { b: 11, r: 2, g: "%~%",  n: "pacotille",   lore: "sans valeur, paraît-il. tout le monde en veut une." },
+    CreatureDef { b: 11, r: 3, g: "<*>",  n: "curiosa",     lore: "vient d'un biome que personne n'a cartographié. elle refuse d'en parler." },
+    CreatureDef { b: 11, r: 3, g: "(:)",  n: "porcelin",    lore: "une figurine qui respire. les collectionneurs se l'arrachent, elle s'en moque." },
+    CreatureDef { b: 11, r: 4, g: "=@=",  n: "chimérel",    lore: "trois marchands jurent l'avoir vendu le même jour. aucun ne ment." },
 ];
 
 /* espèces qui comptent dans le bestiaire : les curiosités en sont exclues,
@@ -296,8 +316,17 @@ const METEOS: [&str; 6] = ["ciel clair", "pluie", "brume", "canicule", "tempête
 const NOCTURNES: [usize; 7] = [9, 21, 28, 41, 54, 62, 92]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.6";
-const NEWS: [(&str, &str, &[&str]); 7] = [
+const VERSION: &str = "1.7";
+const NEWS: [(&str, &str, &[&str]); 8] = [
+    (
+        "1.7",
+        "21 août 2026",
+        &[
+            "nouvelle carte : l'eau descend enfin dans le bon sens. la rivière naît de la montagne, remplit le lac, contourne le village et se jette dans la mer — le récif borde la côte, les abysses sont au large.",
+            "deux biomes de plus : la rivière (neuf espèces) et le lac (sept). le bestiaire passe à 114 espèces, votre pourcentage baisse d'autant — c'est du contenu en plus, pas une perte.",
+            "le village a été redessiné : rues pavées, place centrale, fontaine, bancs, lampadaires, et des ponts là où les routes franchissent la rivière.",
+        ],
+    ),
     (
         "1.6",
         "21 août 2026",
@@ -362,7 +391,7 @@ const NEWS: [(&str, &str, &[&str]); 7] = [
 const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
 const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
-const LEGEND_SPOTS: [(usize, usize); 9] = [(16, 9), (16, 33), (56, 4), (95, 20), (95, 5), (95, 38), (56, 54), (95, 55), (16, 55)];
+const LEGEND_SPOTS: [(usize, usize); 11] = [(16, 26), (16, 48), (52, 8), (95, 10), (16, 7), (95, 64), (52, 68), (95, 34), (16, 68), (32, 50), (52, 23)];
 /* durée de couvaison à l'enclos, par rareté (minutes) */
 const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
@@ -792,7 +821,7 @@ impl Theme {
 /* =================================================================== monde */
 
 const MAPW: usize = 114;
-const MAPH: usize = 64;
+const MAPH: usize = 80;
 
 #[derive(Clone, Copy)]
 struct Cell { ch: char, c: C, solid: bool }
@@ -800,6 +829,8 @@ struct Cell { ch: char, c: C, solid: bool }
 struct WorldMap {
     cells: Vec<Vec<Cell>>,
     doors: Vec<(usize, usize, Zone)>,
+    /* la rivière serpente : on retient ses cases plutôt qu'un rectangle */
+    river: Vec<(usize, usize)>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -814,18 +845,19 @@ enum Zone {
     Troc,
 }
 
-const ZONE_RECTS: [(usize, usize, usize, usize, usize); 9] = [
-    (1, 2, 33, 18, 0),    // forêt
-    (1, 24, 33, 21, 1),   // marais
-    (37, 1, 39, 9, 2),    // montagne
-    (79, 15, 34, 13, 3),  // désert
-    (79, 1, 34, 11, 4),   // glacier
-    (79, 31, 34, 14, 5),  // abysses
-    (37, 46, 40, 17, 6),  // volcan (le sud fumant du village)
-    (79, 48, 34, 15, 7),  // récif (sous les abysses)
-    (1, 47, 33, 16, 8),   // ruines
+const ZONE_RECTS: [(usize, usize, usize, usize, usize); 10] = [
+    (1, 16, 30, 22, 0),   // forêt — le versant boisé, sous le glacier
+    (1, 40, 30, 18, 1),   // marais — les basses terres où l'eau stagne
+    (34, 1, 38, 15, 2),   // montagne — la crête, au nord
+    (78, 1, 34, 17, 3),   // désert — l'arrière-pays sec du nord-est
+    (1, 1, 30, 13, 4),    // glacier — les hauteurs gelées
+    (80, 50, 32, 28, 5),  // abysses — le large, au-delà du récif
+    (34, 58, 38, 20, 6),  // volcan — le sud fumant
+    (80, 22, 32, 25, 7),  // récif — la côte, là où la rivière se jette
+    (1, 60, 30, 18, 8),   // ruines — l'ouest oublié
+    (40, 18, 26, 9, 10),  // lac — au pied de la montagne, source de la rivière
 ];
-const LABEL_POS: [(usize, usize); 9] = [(12, 3), (12, 25), (50, 2), (90, 16), (90, 2), (90, 32), (50, 47), (90, 49), (12, 48)];
+const LABEL_POS: [(usize, usize); 11] = [(11, 17), (11, 41), (45, 2), (89, 2), (10, 2), (91, 51), (45, 59), (91, 23), (10, 61), (38, 57), (47, 19)];
 
 impl WorldMap {
     fn put(&mut self, x: usize, y: usize, ch: char, c: C, solid: bool) {
@@ -878,83 +910,129 @@ impl WorldMap {
         let mut w = WorldMap {
             cells: vec![vec![Cell { ch: ' ', c: C::Dimmer, solid: false }; MAPW]; MAPH],
             doors: vec![],
+            river: vec![],
         };
         let mut rng = StdRng::seed_from_u64(1337);
 
-        // village : sol
-        for y in 12..=33 {
-            for x in 37..=76 {
-                if rng.gen::<f64>() < 0.5 {
-                    w.put(x, y, '░', C::Dimmer, false);
+        /* ── les terres ──────────────────────────────────────────────────
+           l'altitude est au nord (glacier, montagne), l'eau descend vers le
+           sud-est : lac au pied de la montagne, rivière, puis la mer — récif
+           le long de la côte, abysses au large. */
+        w.scatter(1, 1, 30, 13, &['*', '▲', '·'], C::Ice, 0.12, true, &mut rng);        // glacier
+        w.scatter(34, 1, 38, 15, &['^', '▲', '/', '∆'], C::Dim, 0.13, true, &mut rng);  // montagne
+        w.scatter(78, 1, 34, 17, &['∙', '≈', '·'], C::GoldDark, 0.12, false, &mut rng); // désert
+        w.scatter(1, 16, 30, 22, &['♣', '♣', '♠', '.'], C::Green, 0.16, true, &mut rng); // forêt
+        w.scatter(1, 40, 30, 18, &['~', '~', 'o', '"'], C::Marsh, 0.14, false, &mut rng); // marais
+        w.scatter(1, 60, 30, 18, &['#', '[', ']'], C::Dim, 0.06, true, &mut rng);        // ruines
+        w.scatter(1, 60, 30, 18, &['.', ','], C::Dim, 0.08, false, &mut rng);
+        w.scatter(34, 58, 38, 20, &['^', '∴', '*'], C::Red, 0.12, true, &mut rng);       // volcan
+        w.scatter(80, 22, 32, 25, &['~', '≈', 'o', ':'], C::Blue, 0.14, false, &mut rng); // récif
+        w.scatter(80, 50, 32, 28, &['▓', '▒', '●', '·'], C::Abyss, 0.13, true, &mut rng); // abysses
+
+        // le lac : une nappe pleine, au pied de la montagne
+        for y in 18..27 {
+            for x in 40..66 {
+                let bord = y == 18 || y == 26 || x == 40 || x == 65;
+                let g = if bord { '~' } else if rng.gen::<f64>() < 0.45 { '≈' } else { '~' };
+                w.put(x, y, g, C::Blue, false);
+            }
+        }
+
+        /* ── la rivière ──────────────────────────────────────────────────
+           née de la montagne, elle remplit le lac, en ressort, contourne le
+           village par l'ouest, longe le marais et se jette dans la mer. */
+        {
+            const SOURCE: [(i32, i32); 2] = [(48, 13), (48, 18)];
+            const COURS: [(i32, i32); 8] =
+                [(46, 27), (40, 32), (33, 38), (32, 46), (34, 54), (50, 56), (68, 54), (80, 48)];
+            let mut trace: Vec<(usize, usize)> = vec![];
+            let mut trace_seg = |pts: &[(i32, i32)], out: &mut Vec<(usize, usize)>| {
+                for pair in pts.windows(2) {
+                    let ((x1, y1), (x2, y2)) = (pair[0], pair[1]);
+                    let (mut x, mut y) = (x1, y1);
+                    while x != x2 || y != y2 {
+                        out.push((x as usize, y as usize));
+                        // avance en diagonale douce : le cours serpente
+                        if x != x2 && (y == y2 || (x - x2).abs() >= (y - y2).abs()) {
+                            x += (x2 - x).signum();
+                        } else {
+                            y += (y2 - y).signum();
+                        }
+                    }
+                    out.push((x2 as usize, y2 as usize));
+                }
+            };
+            trace_seg(&SOURCE, &mut trace);
+            trace_seg(&COURS, &mut trace);
+            for &(x, y) in &trace {
+                for dx in 0..2 {
+                    if x + dx < MAPW && y < MAPH {
+                        w.put(x + dx, y, '~', C::Blue, false);
+                    }
+                }
+            }
+            w.river = trace.iter().flat_map(|&(x, y)| [(x, y), (x + 1, y)]).collect();
+        }
+
+        /* ── le village ──────────────────────────────────────────────────
+           une trame de rues pavées plutôt qu'un semis au hasard : deux axes
+           est-ouest, trois nord-sud, une place au milieu. */
+        for y in 30..=52 {
+            for x in 34..=76 {
+                if w.cells[y][x].ch == ' ' && rng.gen::<f64>() < 0.28 {
+                    w.put(x, y, '·', C::Dimmer, false);
                 }
             }
         }
-        // chemins
-        let mut path = |w: &mut WorldMap, x1: usize, y1: usize, x2: usize, y2: usize| {
-            let (mut x, mut y) = (x1 as i32, y1 as i32);
-            while x != x2 as i32 {
-                w.put(x as usize, y as usize, '░', C::Dimmer, false);
-                x += (x2 as i32 - x).signum();
-            }
-            while y != y2 as i32 {
-                w.put(x as usize, y as usize, '░', C::Dimmer, false);
-                y += (y2 as i32 - y).signum();
+        let mut rue_h = |w: &mut WorldMap, y: usize| {
+            for x in 34..=76 {
+                w.put(x, y, '░', C::Dimmer, false);
             }
         };
-        path(&mut w, 37, 22, 20, 12);
-        path(&mut w, 37, 28, 20, 34);
-        path(&mut w, 56, 12, 56, 6);
-        path(&mut w, 76, 20, 95, 6);
-        path(&mut w, 76, 24, 95, 21);
-        path(&mut w, 76, 30, 95, 37);
-        path(&mut w, 49, 42, 49, 48);   // village -> volcan
-        path(&mut w, 67, 42, 67, 48);
-        path(&mut w, 95, 45, 95, 50);   // abysses -> récif
-        path(&mut w, 20, 44, 20, 50);   // marais -> ruines
-        // grand corridor du village : traversée est-ouest garantie
-        for x in 37..=76 {
-            w.put(x, 22, '░', C::Dimmer, false);
+        rue_h(&mut w, 38);
+        rue_h(&mut w, 45);
+        for &x in &[38, 55, 72] {
+            for y in 30..=52 {
+                w.put(x, y, '░', C::Dimmer, false);
+            }
         }
-
-        // biomes
-        w.scatter(1, 2, 33, 18, &['♣', '♣', '♠', '.'], C::Green, 0.16, true, &mut rng);
-        w.scatter(37, 1, 39, 9, &['^', '▲', '/', '∆'], C::Dim, 0.13, true, &mut rng);
-        w.scatter(79, 1, 34, 11, &['*', '▲', '·'], C::Ice, 0.12, true, &mut rng);
-        w.scatter(1, 24, 33, 21, &['~', '~', 'o', '"'], C::Marsh, 0.14, false, &mut rng);
-        w.scatter(79, 15, 34, 13, &['∙', '≈', '·'], C::GoldDark, 0.12, false, &mut rng);
-        w.scatter(79, 31, 34, 14, &['▓', '▒', '●', '·'], C::Abyss, 0.13, true, &mut rng);
-        w.scatter(37, 46, 40, 17, &['^', '∴', '*'], C::Red, 0.12, true, &mut rng);
-        w.scatter(79, 48, 34, 15, &['~', '≈', 'o', ':'], C::Blue, 0.14, false, &mut rng);
-        w.scatter(1, 47, 33, 16, &['#', '[', ']'], C::Dim, 0.06, true, &mut rng);
-        w.scatter(1, 47, 33, 16, &['.', ','], C::Dim, 0.08, false, &mut rng);
-
-        // mousse entre les pavés : décor discret. surtout pas de ♣ vert ici —
-        // isolé sur la place, il se lit comme un événement à aller voir.
-        w.scatter(37, 12, 40, 22, &[',', '"', '·'], C::Dimmer, 0.012, false, &mut rng);
-
-        // sol du quartier sud + chemins d'accès
-        for y in 34..=42 {
-            for x in 39..=76 {
-                if rng.gen::<f64>() < 0.4 {
-                    w.put(x, y, '░', C::Dimmer, false);
+        // la place : entre la première et la deuxième rangée, jamais sur un mur
+        for y in 37..=39 {
+            for x in 46..=64 {
+                w.put(x, y, '░', C::Dimmer, false);
+            }
+        }
+        /* ponts : partout où une route franchit la rivière, on pose un tablier
+           plutôt que de laisser la route se noyer dans l'eau */
+        {
+            let cases: Vec<(usize, usize)> = w.river.clone();
+            for (x, y) in cases {
+                if (y == 38 || y == 45) && x < 36 {
+                    w.put(x, y, '═', C::Dim, false);
                 }
             }
         }
-        path(&mut w, 49, 30, 49, 36);
-        path(&mut w, 67, 30, 67, 36);
 
-        // bâtiments
-        w.building(39, 14, 16, 6, "boutique", Zone::Boutique, 'o');
-        w.building(59, 14, 16, 6, "labo", Zone::Labo, 'l');
-        w.building(43, 25, 13, 5, "bestiaire", Zone::Bestiaire, 'b');
-        w.building(61, 25, 13, 5, "trophées", Zone::Succes, 't');
-        w.building(43, 37, 13, 5, "musée", Zone::Musee, 'm');
-        w.building(61, 37, 13, 5, "enclos", Zone::Enclos, 'e');
-        w.building(52, 31, 13, 5, "troc", Zone::Troc, 'x');
+        // bâtiments : trois rangées le long des deux axes
+        w.building(36, 31, 16, 6, "boutique", Zone::Boutique, 'o');
+        w.building(58, 31, 16, 6, "labo", Zone::Labo, 'l');
+        w.building(36, 40, 11, 5, "bestiaire", Zone::Bestiaire, 'b');
+        w.building(49, 40, 13, 5, "troc", Zone::Troc, 'x');
+        w.building(64, 40, 12, 5, "trophées", Zone::Succes, 't');
+        w.building(40, 47, 13, 5, "musée", Zone::Musee, 'm');
+        w.building(58, 47, 13, 5, "enclos", Zone::Enclos, 'e');
 
-        // fontaine (décalée sous le corridor)
-        w.text(55, 23, "╭─╮", C::Blue, true);
-        w.text(55, 24, "╰─╯", C::Blue, true);
+        // la fontaine, au milieu de la place : on la contourne, comme il se doit
+        w.text(52, 37, "╭───╮", C::Blue, true);
+        w.text(52, 38, "│ ≈ │", C::Blue, true);
+        w.text(52, 39, "╰───╯", C::Blue, true);
+        // le mobilier qui fait le village : bancs et lampadaires, sur la place
+        for &(bx, by) in &[(49, 37), (49, 39), (59, 37), (59, 39)] {
+            w.put(bx, by, '▬', C::Dim, true);
+        }
+        for &(lx, ly) in &[(46, 37), (46, 39), (63, 37), (63, 39)] {
+            w.put(lx, ly, '╽', C::GoldDark, true);
+        }
 
         w
     }
@@ -971,6 +1049,9 @@ impl WorldMap {
             if (dx as i32 - x as i32).abs() <= 1 && (dy as i32 - y as i32).abs() <= 1 {
                 return Some(z);
             }
+        }
+        if self.river.iter().any(|&(rx, ry)| rx == x && ry == y) {
+            return Some(Zone::Biome(9));
         }
         for &(zx, zy, zw, zh, b) in &ZONE_RECTS {
             if x >= zx && x < zx + zw && y >= zy && y < zy + zh {
@@ -1282,8 +1363,8 @@ impl Game {
         let game = Game {
             s,
             world: WorldMap::build(),
-            px: 50,
-            py: 22,
+            px: 60,
+            py: 38,
             panels: vec![],
             logs: VecDeque::new(),
             toasts: vec![],
@@ -2388,7 +2469,7 @@ impl Game {
     /* les offres de troc tiennent une journée ; en jour de foire, elles doublent */
     /* le marchand passe par fenêtres de 3 h : deux sur cinq, sauf jour de
        foire où il reste toute la journée. sa position est fixe sur la place. */
-    const MERCHANT_POS: (usize, usize) = (66, 21);
+    const MERCHANT_POS: (usize, usize) = (66, 38);
     fn merchant_now(&self) -> Option<u64> {
         let w = (now_ms() / 10_800_000.0) as u64;
         if fair_day() || splitmix(w ^ 0x1A2B_3C4D) % 100 < 40 {
@@ -3791,7 +3872,7 @@ impl Game {
         for t in [
             "posez des pièges dans les biomes ; ils capturent seuls, à intervalle régulier.",
             "revendez les doublons pour financer de meilleurs pièges, des appâts, de nouveaux biomes et le labo.",
-            "l'objectif de fond : compléter le bestiaire — 98 espèces, leurs shinies ✦, et un rang S partout.",
+            "l'objectif de fond : compléter le bestiaire — 114 espèces, leurs shinies ✦, et un rang S partout.",
             "compléter un biome donne +0,04 de chance pour toujours ; le compléter en shiny, +5% à la vente.",
             "les pièges ne s'usent jamais : posés une fois, ils travaillent indéfiniment. l'horlogerie (labo) ne limite que la progression simulée hors-ligne (2 h de base).",
         ] {
@@ -4369,8 +4450,8 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
             for (j, ch) in line.chars().enumerate() {
                 // les espaces sont dessinés eux aussi : le cercle doit effacer
                 // le pavage sous lui, sinon il se noie dans le décor
-                let wx = 52 + j as i32; // décalé : la fontaine occupe la gauche de la place
-                let wy = 20 + i as i32;
+                let wx = 40 + j as i32; // à gauche de la fontaine, sur la place
+                let wy = 36 + i as i32;
                 let sx = 1 + wx - cam_x + off_x;
                 let sy = vy0 + wy - cam_y + off_y;
                 if sy < vy0 || sy > vy1 {
@@ -5018,5 +5099,58 @@ mod webapp {
             }
             html
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+
+    /* filet de sécurité de la carte : depuis la place, on doit pouvoir
+       atteindre à pied une case de CHAQUE biome, rivière comprise. */
+    #[test]
+    fn tous_les_biomes_sont_accessibles_a_pied() {
+        let w = WorldMap::build();
+        let mut vu = vec![vec![false; MAPW]; MAPH];
+        let mut q = VecDeque::new();
+        q.push_back((60usize, 38usize));
+        vu[38][60] = true;
+        let mut atteint: Vec<Option<Zone>> = vec![];
+        while let Some((x, y)) = q.pop_front() {
+            atteint.push(w.zone_at(x, y));
+            for (dx, dy) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
+                let (nx, ny) = (x as i32 + dx, y as i32 + dy);
+                if nx < 0 || ny < 0 || nx >= MAPW as i32 || ny >= MAPH as i32 {
+                    continue;
+                }
+                let (nx, ny) = (nx as usize, ny as usize);
+                if vu[ny][nx] || w.cells[ny][nx].solid {
+                    continue;
+                }
+                vu[ny][nx] = true;
+                q.push_back((nx, ny));
+            }
+        }
+        for b in 0..WILDB {
+            assert!(
+                atteint.iter().any(|z| matches!(z, Some(Zone::Biome(bb)) if *bb == b)),
+                "biome {} ({}) inatteignable depuis la place",
+                b,
+                BIOMES[b].name
+            );
+        }
+        for z in [Zone::Boutique, Zone::Labo, Zone::Bestiaire, Zone::Succes, Zone::Musee, Zone::Enclos, Zone::Troc] {
+            assert!(atteint.iter().any(|a| *a == Some(z)), "lieu du village inatteignable");
+        }
+    }
+
+    /* la table des créatures et celle des biomes doivent rester d'accord */
+    #[test]
+    fn chaque_biome_a_ses_especes() {
+        for b in 0..WILDB {
+            assert!(biome_creatures(b).count() > 0, "biome {} sans espèce", BIOMES[b].name);
+        }
+        assert_eq!(wild_total() + 6, CREATURES.len(), "six curiosités hors bestiaire");
     }
 }

@@ -6,7 +6,7 @@
 **[▤ classement](https://cchopin.github.io/affut.sh/classement.html)** — choisissez un pseudo dans « ⇄ session partagée » pour y figurer.
 
 Jeu **idle de capture et de collection dans le terminal**, écrit en Rust avec
-[ratatui](https://ratatui.rs) + crossterm. Posez des pièges dans neuf biomes,
+[ratatui](https://ratatui.rs) + crossterm. Posez des pièges dans onze biomes,
 laissez le temps travailler — même le jeu fermé — et complétez le bestiaire.
 Interface inspirée de [late.sh](https://late.sh).
 
@@ -15,9 +15,11 @@ Interface inspirée de [late.sh](https://late.sh).
 ## le jeu
 
 - **Un monde ASCII où l'on se promène** : un village (boutique, labo, bestiaire,
-  trophées, musée, enclos) entouré de neuf biomes — forêt, marais, montagne,
-  désert, glacier, abysses, volcan, récif, ruines.
-- **98 espèces à découvrir**, chacune avec sa variante **shiny ✦** (1/128) et un
+  trophées, musée, enclos) entouré de onze biomes — forêt, marais, montagne,
+  désert, glacier, volcan, ruines, et toute une hydrographie : la rivière qui
+  naît de la montagne, le lac qu'elle remplit, le récif le long de la côte et
+  les abysses au large.
+- **114 espèces à découvrir**, chacune avec sa variante **shiny ✦** (1/128) et un
   **rang** par capture (C, B, A, S — valeur ×1 à ×6). Le bestiaire retient vos
   meilleurs spécimens et les **sexes observés** ♂♀.
 - **Idle véritable** : les pièges capturent à intervalle régulier, y compris
@@ -104,6 +106,6 @@ Host affut
 
 L'identité visuelle (palette, cadre, fenêtres, minuscules) est un hommage à
 [late.sh](https://late.sh) de mpiorowski — allez-y, c'est bien.
-Les 98 créatures, leurs mœurs discutables et leur lore sont originaux.
+Les 114 créatures, leurs mœurs discutables et leur lore sont originaux.
 
 > le dossier `web/` contient une ancienne variante navigateur (single-file), antérieure aux rangs/météo/élevage — le jeu terminal est la version de référence.

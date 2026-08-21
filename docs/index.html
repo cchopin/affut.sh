@@ -189,7 +189,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821p'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821r'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -541,12 +541,35 @@ document.addEventListener('keydown', e => {
     if (e.key === 's') { w.key('s', true); e.preventDefault(); }
     return;
   }
+  // la répétition est gérée par le jeu (boucle ci-dessous) et non par le
+  // clavier du système : sinon le déplacement part avec un demi-seconde de
+  // retard puis s'emballe, et la marche paraît saccadée
+  if (e.repeat && REPEATABLE.has(e.key)) { e.preventDefault(); return; }
   const used = w.key(e.key, false);
   if (used && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','PageUp','PageDown','Enter'].includes(e.key)) {
     e.preventDefault();
   }
   if (used) render();
+  if (REPEATABLE.has(e.key)) { held.set(e.key, performance.now()); }
 });
+
+// touches dont le maintien fait avancer : flèches et zqsd
+const REPEATABLE = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','z','q','s','d','Z','Q','S','D']);
+const held = new Map();
+const REPEAT_DELAI = 220;  // avant que le maintien ne prenne le relais
+const REPEAT_PAS = 55;     // cadence de marche, ~18 cases par seconde
+document.addEventListener('keyup', e => held.delete(e.key));
+window.addEventListener('blur', () => held.clear());
+setInterval(() => {
+  if (paused || held.size === 0 || dlg.classList.contains('open')) return;
+  const now = performance.now();
+  let bougé = false;
+  for (const [k, depuis] of held) {
+    if (now - depuis < REPEAT_DELAI) continue;
+    if (w.key(k, false)) bougé = true;
+  }
+  if (bougé) render();
+}, REPEAT_PAS);
 
 for (const b of document.querySelectorAll('#pad button')) {
   b.addEventListener('click', () => { w.key(b.dataset.k, false); render(); });
