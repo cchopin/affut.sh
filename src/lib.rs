@@ -64,17 +64,23 @@ const CURIO_B: usize = 11;
    durerait trois fois moins longtemps. la forêt, la rivière, le marais, la
    montagne et le lac gardent leurs prix d'origine — ce sont les seuls qu'un
    joueur avait déjà en vue, et le début de partie profite ainsi du gain sans
-   en payer le prix. */
+   en payer le prix.
+
+   la hausse monte jusqu'au récif puis REDESCEND aux ruines, au lieu de croître
+   jusqu'au bout : à faire porter tout l'effort par le dernier biome, on passait
+   80% de la partie après le volcan contre 64% à l'origine. avec cette courbe,
+   69% — la longueur totale est la même, mais elle n'est plus concentrée dans un
+   seul mur final. */
 const BIOMES: [BiomeDef; 12] = [
     BiomeDef { name: "forêt",    cost: 0.0,         mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
     BiomeDef { name: "marais",   cost: 2500.0,      mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
     BiomeDef { name: "montagne", cost: 20000.0,     mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
-    BiomeDef { name: "désert",   cost: 240000.0,    mult: 4.0, desc: "des dunes à perte de vue. tout ce qui y survit vaut cher." },
-    BiomeDef { name: "glacier",  cost: 1750000.0,   mult: 6.5, desc: "un silence bleu et parfait. les espèces y sont rares et magnifiques." },
-    BiomeDef { name: "abysses",  cost: 12500000.0,  mult: 10.0, desc: "là où la lumière renonce. le fond du bestiaire, littéralement." },
-    BiomeDef { name: "volcan",   cost: 48000000.0,  mult: 13.0, desc: "la montagne qui fume. huit espèces y vivent, aucune n'a froid." },
-    BiomeDef { name: "récif",    cost: 175000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
-    BiomeDef { name: "ruines",   cost: 650000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
+    BiomeDef { name: "désert",   cost: 400000.0,    mult: 4.0, desc: "des dunes à perte de vue. tout ce qui y survit vaut cher." },
+    BiomeDef { name: "glacier",  cost: 3000000.0,   mult: 6.5, desc: "un silence bleu et parfait. les espèces y sont rares et magnifiques." },
+    BiomeDef { name: "abysses",  cost: 25000000.0,  mult: 10.0, desc: "là où la lumière renonce. le fond du bestiaire, littéralement." },
+    BiomeDef { name: "volcan",   cost: 85000000.0,  mult: 13.0, desc: "la montagne qui fume. huit espèces y vivent, aucune n'a froid." },
+    BiomeDef { name: "récif",    cost: 260000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
+    BiomeDef { name: "ruines",   cost: 440000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
     BiomeDef { name: "rivière",  cost: 900.0,       mult: 1.3, desc: "elle descend de la montagne et traverse tout. neuf espèces la remontent, personne ne sait pourquoi." },
     BiomeDef { name: "lac",      cost: 45000.0,     mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
     BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 1.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
