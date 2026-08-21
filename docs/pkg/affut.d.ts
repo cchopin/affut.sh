@@ -8,6 +8,7 @@ export class Web {
     constructor();
     render(cols: number, rows: number): string;
     save(): void;
+    scroll(lines: number): boolean;
     set_board(json: string): void;
     tick(): void;
 }
@@ -21,6 +22,7 @@ export interface InitOutput {
     readonly web_new: () => number;
     readonly web_render: (a: number, b: number, c: number, d: number) => void;
     readonly web_save: (a: number) => void;
+    readonly web_scroll: (a: number, b: number) => number;
     readonly web_set_board: (a: number, b: number, c: number) => void;
     readonly web_tick: (a: number) => void;
     readonly __wbindgen_export: (a: number) => void;
