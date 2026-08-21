@@ -44,7 +44,10 @@ const RAR_W: [f64; 5] = [100.0, 28.0, 5.0, 0.7, 0.08];
 const RAR_VAL: [f64; 5] = [3.0, 9.0, 30.0, 150.0, 900.0];
 /* la chance agit linéairement (plafonnée), plus jamais exponentiellement */
 const RAR_LUCK_FACT: [f64; 5] = [0.0, 0.35, 0.6, 0.8, 1.0];
-const LUCK_CAP: f64 = 3.0;
+const LUCK_CAP: f64 = 6.0;
+/* le brocanteur reprend un piège à la moitié de son prix : de quoi se
+   débarrasser des vieux pièges en bois sans en faire une source d'écus */
+const TRAP_RESALE: f64 = 0.5;
 
 struct BiomeDef {
     name: &'static str,
@@ -57,17 +60,17 @@ struct BiomeDef {
 const WILDB: usize = 11;
 const CURIO_B: usize = 11;
 const BIOMES: [BiomeDef; 12] = [
-    BiomeDef { name: "forêt",    cost: 0.0,       mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
-    BiomeDef { name: "marais",   cost: 2500.0,    mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
-    BiomeDef { name: "montagne", cost: 20000.0,   mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
-    BiomeDef { name: "désert",   cost: 120000.0,  mult: 4.0, desc: "des dunes à perte de vue. tout ce qui y survit vaut cher." },
-    BiomeDef { name: "glacier",  cost: 700000.0,  mult: 6.5, desc: "un silence bleu et parfait. les espèces y sont rares et magnifiques." },
-    BiomeDef { name: "abysses",  cost: 4000000.0, mult: 10.0, desc: "là où la lumière renonce. le fond du bestiaire, littéralement." },
-    BiomeDef { name: "volcan",   cost: 12000000.0, mult: 13.0, desc: "la montagne qui fume. huit espèces y vivent, aucune n'a froid." },
-    BiomeDef { name: "récif",    cost: 35000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
-    BiomeDef { name: "ruines",   cost: 100000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
-    BiomeDef { name: "rivière",  cost: 900.0,     mult: 1.3, desc: "elle descend de la montagne et traverse tout. neuf espèces la remontent, personne ne sait pourquoi." },
-    BiomeDef { name: "lac",      cost: 45000.0,   mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
+    BiomeDef { name: "forêt",    cost: 0.0,         mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
+    BiomeDef { name: "marais",   cost: 2500.0,      mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
+    BiomeDef { name: "montagne", cost: 25000.0,     mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
+    BiomeDef { name: "désert",   cost: 240000.0,    mult: 4.0, desc: "des dunes à perte de vue. tout ce qui y survit vaut cher." },
+    BiomeDef { name: "glacier",  cost: 1750000.0,   mult: 6.5, desc: "un silence bleu et parfait. les espèces y sont rares et magnifiques." },
+    BiomeDef { name: "abysses",  cost: 12500000.0,  mult: 10.0, desc: "là où la lumière renonce. le fond du bestiaire, littéralement." },
+    BiomeDef { name: "volcan",   cost: 48000000.0,  mult: 13.0, desc: "la montagne qui fume. huit espèces y vivent, aucune n'a froid." },
+    BiomeDef { name: "récif",    cost: 175000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
+    BiomeDef { name: "ruines",   cost: 650000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
+    BiomeDef { name: "rivière",  cost: 900.0,       mult: 1.3, desc: "elle descend de la montagne et traverse tout. neuf espèces la remontent, personne ne sait pourquoi." },
+    BiomeDef { name: "lac",      cost: 70000.0,     mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
     BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 1.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
 ];
 
@@ -234,11 +237,11 @@ fn biome_creatures(b: usize) -> impl Iterator<Item = usize> {
 struct TrapDef { n: &'static str, cost: f64, itv: f64, luck: f64, succ: f64 }
 const TRAPS: [TrapDef; 6] = [
     TrapDef { n: "piège en bois",   cost: 40.0,      itv: 60.0, luck: 0.0,  succ: 0.45 },
-    TrapDef { n: "cage en fer",     cost: 800.0,     itv: 50.0, luck: 0.06, succ: 0.52 },
-    TrapDef { n: "piège à ressort", cost: 8000.0,    itv: 42.0, luck: 0.14, succ: 0.60 },
-    TrapDef { n: "piège chromé",    cost: 60000.0,   itv: 34.0, luck: 0.24, succ: 0.68 },
-    TrapDef { n: "piège à plasma",  cost: 400000.0,  itv: 27.0, luck: 0.36, succ: 0.76 },
-    TrapDef { n: "piège quantique", cost: 2500000.0, itv: 20.0, luck: 0.50, succ: 0.85 },
+    TrapDef { n: "cage en fer",     cost: 800.0,     itv: 42.0, luck: 0.35, succ: 0.58 },
+    TrapDef { n: "piège à ressort", cost: 8000.0,    itv: 30.0, luck: 0.90, succ: 0.70 },
+    TrapDef { n: "piège chromé",    cost: 60000.0,   itv: 21.0, luck: 1.80, succ: 0.80 },
+    TrapDef { n: "piège à plasma",  cost: 400000.0,  itv: 15.0, luck: 3.20, succ: 0.88 },
+    TrapDef { n: "piège quantique", cost: 2500000.0, itv: 10.0, luck: 5.50, succ: 0.95 },
 ];
 
 struct BaitDef { n: &'static str, cost: f64, desc: &'static str }
@@ -257,8 +260,8 @@ const BAIT_ESSENCE: usize = 4;
 
 struct LabDef { n: &'static str, max: u32, base: f64, mult: f64, desc: &'static str }
 const LABS: [LabDef; 13] = [
-    LabDef { n: "affûtage",        max: 10, base: 600.0,  mult: 2.4, desc: "des mâchoires mieux huilées : +4% de vitesse par niveau." },
-    LabDef { n: "flair",           max: 15, base: 900.0,  mult: 2.3, desc: "l'instinct du traqueur : +0,04 de chance par niveau." },
+    LabDef { n: "affûtage",        max: 10, base: 600.0,  mult: 2.4, desc: "des mâchoires mieux huilées : +6% de vitesse par niveau." },
+    LabDef { n: "flair",           max: 15, base: 900.0,  mult: 2.3, desc: "l'instinct du traqueur : +0,08 de chance par niveau." },
     LabDef { n: "négoce",          max: 15, base: 800.0,  mult: 2.3, desc: "l'art de la marge : +5% aux prix de vente par niveau." },
     LabDef { n: "horlogerie",      max: 11, base: 1200.0, mult: 2.1, desc: "progression hors-ligne simulée au retour : 2 h de base, +2 h par niveau. les pièges, eux, ne s'usent jamais." },
     LabDef { n: "chasse nocturne", max: 10, base: 3000.0, mult: 2.4, desc: "sortir aux bonnes heures : +10% de chance de shiny par niveau." },
@@ -1154,6 +1157,7 @@ enum Action {
     Close,
     CloseAll,
     BuyTrap(usize),
+    SellTrap(usize),
     BuyBait(usize, u64),
     BuyLab(usize),
     Unlock(usize),
@@ -1487,7 +1491,7 @@ impl Game {
         (0..WILDB).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].s > 0)).count()
     }
     fn global_luck(&self) -> f64 {
-        self.s.lab[LAB_FLAIR] as f64 * 0.04
+        self.s.lab[LAB_FLAIR] as f64 * 0.08
             + self.s.trophies as f64 * 0.008
             + self.completed_biomes() as f64 * 0.04
             + self.s.charms as f64 * 0.10
@@ -1502,7 +1506,7 @@ impl Game {
             * (1.0 + self.s.trophies as f64 * 0.01)
             * (1.0 + self.shiny_completed_biomes() as f64 * 0.05)
     }    fn speed_mult(&self) -> f64 {
-        1.0 + self.s.lab[LAB_AFFUTAGE] as f64 * 0.04
+        1.0 + self.s.lab[LAB_AFFUTAGE] as f64 * 0.06
     }    fn shiny_chance(&self, bait: Option<usize>, at: f64) -> f64 {
         let mut c = SHINY_BASE * (1.0 + self.s.lab[LAB_ECLAT] as f64 * 0.10) * weather_shiny_mult(weather_at(at));
         if bait == Some(BAIT_ESSENCE) {
@@ -2078,6 +2082,19 @@ impl Game {
                     self.log(vec![
                         (format!("acheté : {}", TRAPS[t].n), C::Text),
                         (format!(" (−{} écus)", fmt(TRAPS[t].cost)), C::Dimmer),
+                    ]);
+                }
+            }
+            Action::SellTrap(t) => {
+                let libres = self.s.traps[t] - self.placed_count(t);
+                let total: u32 = self.s.traps.iter().sum();
+                if libres > 0 && total > 1 {
+                    self.s.traps[t] -= 1;
+                    let v = (TRAPS[t].cost * TRAP_RESALE).floor();
+                    self.gain(v);
+                    self.log(vec![
+                        (format!("revendu : {}", TRAPS[t].n), C::Text),
+                        (format!(" (+{} écus)", fmt(v)), C::GoldDark),
                     ]);
                 }
             }
@@ -3611,7 +3628,15 @@ impl Game {
                     (pad(&format!("{}s · {}% · chance +{}", TRAPS[t].itv, (TRAPS[t].succ * 100.0) as u32, fmt_luck(TRAPS[t].luck)), 26), C::Dimmer),
                     (pad(&format!("×{}{}", owned, if owned > 0 { format!(" ({} libre{})", free, if free > 1 { "s" } else { "" }) } else { String::new() }), 14), C::Dim),
                 ],
-                btns: vec![(format!("{} écus", fmt(TRAPS[t].cost)), if ok { C::Gold } else { C::Dimmer }, Action::BuyTrap(t))],
+                btns: {
+                    let mut b = vec![(format!("{} écus", fmt(TRAPS[t].cost)), if ok { C::Gold } else { C::Dimmer }, Action::BuyTrap(t))];
+                    // revente possible tant qu'il reste un piège libre, et
+                    // jamais le dernier de la réserve
+                    if free > 0 && self.s.traps.iter().sum::<u32>() > 1 {
+                        b.push((format!("vendre {} écus", fmt((TRAPS[t].cost * TRAP_RESALE).floor())), C::Blue, Action::SellTrap(t)));
+                    }
+                    b
+                },
                 act: None,
                 indent: 0,
             });
@@ -3790,7 +3815,7 @@ impl Game {
         ));
         for r in wrap_rows(
             &format!("détail chance : flair +{} · trophées +{} · biomes complets +{} · élan (série j{}) +{}",
-                fmt2(self.s.lab[LAB_FLAIR] as f64 * 0.04),
+                fmt2(self.s.lab[LAB_FLAIR] as f64 * 0.08),
                 fmt2(self.s.trophies as f64 * 0.008),
                 fmt2(self.completed_biomes() as f64 * 0.04),
                 self.s.streak,
@@ -5428,10 +5453,9 @@ mod tests {
         assert_eq!(wild_total() + 6, CREATURES.len(), "six curiosités hors bestiaire");
     }
 
-    /* le bestiaire doit tenir dans un terminal de 80 colonnes (panel_w = 75) :
-       au-delà, reflow_rows replie la colonne « stock » sur la ligne suivante et
-       tout l'alignement saute. */
-    fn jeu_pour_bestiaire() -> Game {
+    /* une partie neuve, sans toucher au disque : un piège en bois, la forêt
+       ouverte, deux emplacements. */
+    fn jeu_neuf() -> Game {
         let mut s = State::default();
         s.normalize();
         Game {
@@ -5465,13 +5489,13 @@ mod tests {
     #[test]
     fn le_bestiaire_tient_en_80_colonnes() {
         // espèces inconnues : la ligne « ??? » et son marqueur nocturne
-        let g = jeu_pour_bestiaire();
+        let g = jeu_neuf();
         let (_, rows) = g.rows_dex();
         let (w, l) = largeur_max(&rows);
         assert!(w <= 75, "ligne « inconnu » trop large : {} colonnes pour 75 : {:?}", w, l);
 
         // espèces capturées, avec des compteurs à trois chiffres et des shinies
-        let mut g = jeu_pour_bestiaire();
+        let mut g = jeu_neuf();
         for ci in 0..CREATURES.len() {
             g.s.dex2[ci] = DexE { n: 999, s: 99, best: 4, bests: 4, mf: 3 };
             g.s.inv2[ci].m[0] = 99;
@@ -5486,7 +5510,7 @@ mod tests {
        jamais des bornes du panneau */
     #[test]
     fn la_molette_fait_defiler_le_panneau() {
-        let mut g = jeu_pour_bestiaire();
+        let mut g = jeu_neuf();
         assert!(!panel_scroll(&mut g, 3), "sans panneau ouvert, rien à défiler");
 
         g.panels.push(Panel::new(PanelKind::Help));
@@ -5540,12 +5564,12 @@ mod tests {
     #[test]
     fn aucun_glyphe_a_double_chasse_dans_le_bestiaire() {
         // espèces inconnues : la ligne « ??? » et son marqueur nocturne
-        let g = jeu_pour_bestiaire();
+        let g = jeu_neuf();
         let (_, rows) = g.rows_dex();
         sans_glyphe_large(&rows, "espèce inconnue");
 
         // espèces capturées, avec shinies : l'autre branche du bestiaire
-        let mut g = jeu_pour_bestiaire();
+        let mut g = jeu_neuf();
         for ci in 0..CREATURES.len() {
             g.s.dex2[ci] = DexE { n: 999, s: 99, best: 4, bests: 4, mf: 3 };
             g.s.inv2[ci].m[0] = 99;
@@ -5553,5 +5577,74 @@ mod tests {
         }
         let (_, rows) = g.rows_dex();
         sans_glyphe_large(&rows, "espèce capturée");
+    }
+
+    /* revente des pièges : deux garde-fous. un piège posé n'est pas en
+       réserve, et se retrouver sans aucun piège avec zéro écu bloquerait la
+       partie — un piège en bois neuf coûte plus que ce qu'en donne la reprise. */
+    #[test]
+    fn on_ne_revend_ni_le_dernier_piege_ni_un_piege_pose() {
+        let reprise = (TRAPS[0].cost * TRAP_RESALE).floor();
+
+        // partie neuve : un seul piège en réserve, la vente doit être refusée
+        let mut g = jeu_neuf();
+        assert_eq!(g.s.traps.iter().sum::<u32>(), 1);
+        let ecus = g.s.ecus;
+        g.apply(Action::SellTrap(0));
+        assert_eq!(g.s.traps[0], 1, "le dernier piège doit rester");
+        assert_eq!(g.s.ecus, ecus, "et ne rien rapporter");
+
+        // deux pièges en réserve : la vente passe
+        let mut g = jeu_neuf();
+        g.s.traps[0] = 2;
+        let ecus = g.s.ecus;
+        g.apply(Action::SellTrap(0));
+        assert_eq!(g.s.traps[0], 1);
+        assert_eq!(g.s.ecus, ecus + reprise);
+
+        // deux pièges dont un posé : il reste bien un piège libre, ça passe
+        let mut g = jeu_neuf();
+        g.s.traps[0] = 2;
+        g.s.biomes[0].as_mut().unwrap().pl[0] = Some(Placement { trap: 0, bait: None, next_at: 0.0 });
+        let ecus = g.s.ecus;
+        g.apply(Action::SellTrap(0));
+        assert_eq!(g.s.traps[0], 1);
+        assert_eq!(g.s.ecus, ecus + reprise);
+
+        // un seul piège, posé : plus rien de libre, la vente est refusée
+        let mut g = jeu_neuf();
+        g.s.traps[0] = 1;
+        g.s.biomes[0].as_mut().unwrap().pl[0] = Some(Placement { trap: 0, bait: None, next_at: 0.0 });
+        let ecus = g.s.ecus;
+        g.apply(Action::SellTrap(0));
+        assert_eq!(g.s.traps[0], 1, "un piège posé n'est pas en réserve");
+        assert_eq!(g.s.ecus, ecus);
+    }
+
+    /* intention d'équilibrage : un palier de piège doit se sentir. la table
+       a longtemps donné +40% pour un prix multiplié par 6 à 20, si bien que
+       l'amélioration ne changeait rien de perceptible. */
+    #[test]
+    fn chaque_palier_de_piege_double_le_revenu() {
+        // revenu par seconde d'un piège, à chance et biome égaux : la réussite
+        // et la cadence, pondérées par la valeur moyenne d'une prise
+        let revenu = |t: usize| {
+            let d = &TRAPS[t];
+            let lk = d.luck.min(LUCK_CAP);
+            let w: Vec<f64> = (0..5).map(|r| RAR_W[r] * (1.0 + lk * RAR_LUCK_FACT[r])).collect();
+            let tot: f64 = w.iter().sum();
+            let val: f64 = (0..5).map(|r| w[r] / tot * RAR_VAL[r]).sum();
+            d.succ * val / d.itv
+        };
+        for t in 1..TRAPS.len() {
+            let x = revenu(t) / revenu(t - 1);
+            assert!(
+                x >= 1.7,
+                "« {} » ne rapporte que ×{:.2} de plus que « {} » : le palier ne se sent pas",
+                TRAPS[t].n,
+                x,
+                TRAPS[t - 1].n
+            );
+        }
     }
 }
