@@ -356,8 +356,24 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.7";
-const NEWS: [(&str, &str, &[&str]); 8] = [
+const VERSION: &str = "1.8";
+const NEWS: [(&str, &str, &[&str]); 9] = [
+    (
+        "1.8",
+        "21 août 2026",
+        &[
+            "un palier de piège se sent enfin : chaque modèle rapporte environ le double du précédent, au lieu d'un petit +40% pour un prix multiplié par six à vingt. les prix, eux, n'ont pas bougé.",
+            "au labo, affûtage passe à +6% de vitesse et flair à +0,08 de chance par niveau : le second rapportait +1,2% de revenu pour 900 écus, personne ne pouvait le prendre au sérieux.",
+            "du désert aux ruines, les prix suivent ce nouveau revenu, sinon la partie durerait trois fois moins longtemps. la forêt, la rivière, le marais, la montagne et le lac ne bougent pas : le début de partie profite du gain sans en payer le prix.",
+            "un emplacement de piège coûte désormais le prix du piège qu'on y met, et non plus celui du biome. le quatrième emplacement des ruines valait deux fois le biome lui-même : on ne l'achetait jamais.",
+            "la boutique reprend vos pièges à la moitié de leur prix — de quoi solder les vieux pièges en bois. jamais un piège posé, jamais le dernier.",
+            "la battue passe en haut du panneau d'un biome, et « vendre tous les doublons » en tête de la boutique : deux gestes qu'on répète à chaque passage, ils n'ont plus à attendre sous le reste.",
+            "les panneaux défilent à la molette et au trackpad.",
+            "dans les menus, q va enfin à gauche : zqsd n'y marchait que dans trois directions sur quatre. Échap ferme le panneau.",
+            "le bestiaire ne se décale plus : deux caractères y occupaient deux cases au lieu d'une, la lune des espèces nocturnes ◦ et l'étoile des shinies ⋆. les colonnes tiennent maintenant dans une fenêtre étroite, et la lune reste visible sur les espèces déjà capturées.",
+            "le bâtiment « trophées » s'appelle « succès », ce qu'il contient. les trophées, eux, restent ce que rapporte une migration.",
+        ],
+    ),
     (
         "1.7",
         "21 août 2026",
