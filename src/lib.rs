@@ -267,6 +267,60 @@ const SAISONS: [&str; 4] = ["printemps", "été", "automne", "hiver"];
 const METEOS: [&str; 6] = ["ciel clair", "pluie", "brume", "canicule", "tempête", "nuit étoilée"];
 /* espèces qui ne sortent que la nuit (21 h – 7 h) */
 const NOCTURNES: [usize; 7] = [9, 21, 28, 41, 54, 62, 92]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
+/* journal des versions — la plus récente en tête. VERSION sert de repère
+   « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
+const VERSION: &str = "1.5";
+const NEWS: [(&str, &str, &[&str]); 6] = [
+    (
+        "1.5",
+        "21 août 2026",
+        &[
+            "palmarès : choisissez un pseudo et comparez-vous aux autres piégeurs — touche p, ou la page classement.",
+            "un succès de plus, à la 666ᵉ prise. quelque chose s'ouvre sur la place du village.",
+            "la place ne porte plus de trèfle vert : il laissait croire à un événement.",
+            "affichage : le cadre tient désormais dans toutes les fenêtres, et les repères ne se posent plus sur la dernière ligne.",
+            "une icône pour l'onglet, et une police unifiée partout.",
+        ],
+    ),
+    (
+        "1.4",
+        "20 août 2026",
+        &[
+            "session partagée entre vos ordinateurs : un lien, la même partie, synchronisée toute seule.",
+            "un seul appareil joue à la fois — les autres se mettent en pause plutôt que de diverger.",
+        ],
+    ),
+    (
+        "1.3",
+        "20 août 2026",
+        &[
+            "le jeu tourne aussi dans le navigateur, avec la même progression hors-ligne.",
+            "taille du texte réglable avec + et −.",
+        ],
+    ),
+    (
+        "1.2",
+        "19 août 2026",
+        &[
+            "sexes ♂♀ et élevage à l'enclos : un couple donne une naissance, parfois d'un rang supérieur.",
+            "traces au sol à suivre, conseil de session, et série de connexion avec un élan qui grandit.",
+        ],
+    ),
+    (
+        "1.1",
+        "19 août 2026",
+        &[
+            "grande refonte de l'équilibrage : la progression se compte désormais en jours, pas en heures.",
+            "98 espèces réparties sur neuf biomes, licence de piégeage, migration payante.",
+        ],
+    ),
+    (
+        "1.0",
+        "18 août 2026",
+        &["ouverture du comptoir."],
+    ),
+];
+
 const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
 const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
@@ -381,6 +435,9 @@ struct State {
     streak: u32,
     #[serde(default)]
     traces_done: Vec<u64>,
+    /* dernière version dont les nouveautés ont été lues */
+    #[serde(default)]
+    news_seen: String,
     lab: Vec<u32>,
     autosell: Vec<bool>,
     ach: Vec<bool>,
@@ -421,6 +478,7 @@ impl Default for State {
             last_day: 0,
             streak: 0,
             traces_done: vec![],
+            news_seen: String::new(),
             lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
             ach: vec![false; ACHS.len()],
@@ -935,6 +993,7 @@ enum PanelKind {
     Help,
     Journal,
     Board,
+    News,
     Offline(OfflineSummary),
     ResetConfirm,
 }
@@ -2321,6 +2380,7 @@ impl Game {
             PanelKind::Help => self.rows_help(),
             PanelKind::Journal => self.rows_journal(),
             PanelKind::Board => self.rows_board(),
+            PanelKind::News => self.rows_news(),
             PanelKind::Offline(sum) => self.rows_offline(sum),
             PanelKind::ResetConfirm => self.rows_reset(),
         }
@@ -3636,6 +3696,22 @@ impl Game {
         ("journal".into(), rows)
     }
 
+    fn rows_news(&self) -> (String, Vec<Row>) {
+        let mut rows = Vec::new();
+        for (i, (v, date, lignes)) in NEWS.iter().enumerate() {
+            if i > 0 {
+                rows.push(Row::text("", C::Dim));
+            }
+            rows.push(Row::header(&format!("version {} — {}", v, date)));
+            for l in lignes.iter() {
+                for r in bullet_rows("· ", l, self.panel_w, C::Text) {
+                    rows.push(r);
+                }
+            }
+        }
+        ("quoi de neuf".into(), rows)
+    }
+
     fn rows_board(&self) -> (String, Vec<Row>) {
         let title = "palmarès du comptoir".to_string();
         if cfg!(not(target_arch = "wasm32")) {
@@ -4024,10 +4100,12 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         tx += txt.chars().count() as i32;
     }
     // raccourcis
+    // pastille tant que les nouveautés de cette version n'ont pas été ouvertes
+    let neuf = if game.s.news_seen != VERSION { "[n]ouveautés ● " } else { "[n]ouveautés " };
     let kb = if cfg!(target_arch = "wasm32") {
-        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [p]almarès [?] aide · +/- taille "
+        format!(" zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [p]almarès {}[?] aide · +/- taille ", neuf)
     } else {
-        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · ctrl+c quitter "
+        format!(" zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal {}[?] aide · ctrl+c quitter ", neuf)
     };
     let kbt: String = kb.chars().take((cols - 4) as usize).collect();
     draw_str(buf, area, 2, rows_n - 1, &kbt, theme.style(C::Dimmer, false));
@@ -4264,6 +4342,11 @@ fn world_key(game: &mut Game, code: GKey) {
         }
         GKey::Char('p') => {
             game.panels.push(Panel::new(PanelKind::Board));
+            return;
+        }
+        GKey::Char('n') => {
+            game.s.news_seen = VERSION.to_string();
+            game.panels.push(Panel::new(PanelKind::News));
             return;
         }
         GKey::Char('?') | GKey::Char('/') => {
