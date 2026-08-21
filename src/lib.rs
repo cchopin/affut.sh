@@ -29,6 +29,17 @@ pub enum GKey {
 /* ================================================================ données */
 
 const RAR_LABEL: [&str; 5] = ["commun", "peu commun", "rare", "épique", "légendaire"];
+/* colonnes du bestiaire, calées sur le contenu réel (glyphe ≤ 5, nom ≤ 22,
+   libellé de rareté ≤ 10) pour que la ligne entière tienne dans un terminal
+   de 80 : au-delà, reflow_rows replie « stock » et l'alignement saute. c'est
+   ce qui impose « ×132 » plutôt que « · pris ×132 », sept colonnes de moins ;
+   la ligne de légende en tête du panneau dit ce que chaque colonne contient. */
+const DEX_W_GLYPH: usize = 6;
+const DEX_W_NAME: usize = 23;
+const DEX_W_MOON: usize = 2;
+const DEX_W_RAR: usize = 20;
+const DEX_W_RANK: usize = 4;
+const DEX_W_SEX: usize = 3;
 const RAR_W: [f64; 5] = [100.0, 28.0, 5.0, 0.7, 0.08];
 const RAR_VAL: [f64; 5] = [3.0, 9.0, 30.0, 150.0, 900.0];
 /* la chance agit linéairement (plafonnée), plus jamais exponentiellement */
@@ -3813,10 +3824,11 @@ impl Game {
         let s_total = wild_species().filter(|&i| self.s.dex2[i].best >= 4).count();
         let mut rows = vec![
             Row::text(
-                format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, wild_total(), ascii_bar(total as f64 / wild_total() as f64, 12), shiny_total, wild_total(), ascii_bar(shiny_total as f64 / wild_total() as f64, 12), s_total, wild_total()),
+                format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, wild_total(), ascii_bar(total as f64 / wild_total() as f64, 10), shiny_total, wild_total(), ascii_bar(shiny_total as f64 / wild_total() as f64, 10), s_total, wild_total()),
                 C::Text,
             ),
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
+            Row::text("colonnes : rareté · ×captures · ✦shinies · [rang] · sexes vus · réserve", C::Dimmer),
         ];
         for b in 0..BIOMES.len() {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
@@ -3831,10 +3843,11 @@ impl Game {
                     rows.push(Row {
                         segs: vec![
                             ("├─ ".into(), C::Dimmer),
-                            (pad("???", 7), C::Dimmer),
-                            (pad("— inconnu —", 23), C::Dimmer),
-                            (pad(RAR_LABEL[c.r], 13), C::Dimmer),
-                            (if NOCTURNES.contains(&ci) { "◗ nocturne".into() } else { String::new() }, C::Abyss),
+                            (pad("???", DEX_W_GLYPH), C::Dimmer),
+                            (pad("— inconnu —", DEX_W_NAME), C::Dimmer),
+                            (pad(if NOCTURNES.contains(&ci) { "◗" } else { "" }, DEX_W_MOON), C::Abyss),
+                            (pad(RAR_LABEL[c.r], DEX_W_RAR), C::Dimmer),
+                            (if NOCTURNES.contains(&ci) { "nocturne".into() } else { String::new() }, C::Abyss),
                         ],
                         btns: vec![],
                         act: None,
@@ -3846,12 +3859,12 @@ impl Game {
                     rows.push(Row {
                         segs: vec![
                             ("├─ ".into(), C::Dimmer),
-                            (pad(c.g, 7), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
-                            (pad(c.n, 21), rarity_color(c.r)),
-                            (pad(if NOCTURNES.contains(&ci) { "◗" } else { "" }, 2), C::Abyss),
-                            (pad(&format!("{} · pris ×{}{}", RAR_LABEL[c.r], fmt(d.n as f64), if d.s > 0 { format!(" ✦{}", d.s) } else { String::new() }), 26), C::Dim),
-                            (pad(&format!("[{}]", best), 5), if d.best >= 4 { C::Gold } else { C::Dim }),
-                            (pad(&format!("{}{}", if d.mf & 1 != 0 { "♂" } else { "·" }, if d.mf & 2 != 0 { "♀" } else { "·" }), 4),
+                            (pad(c.g, DEX_W_GLYPH), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
+                            (pad(c.n, DEX_W_NAME), rarity_color(c.r)),
+                            (pad(if NOCTURNES.contains(&ci) { "◗" } else { "" }, DEX_W_MOON), C::Abyss),
+                            (pad(&format!("{} ×{}{}", RAR_LABEL[c.r], fmt(d.n as f64), if d.s > 0 { format!(" ✦{}", d.s) } else { String::new() }), DEX_W_RAR), C::Dim),
+                            (pad(&format!("[{}]", best), DEX_W_RANK), if d.best >= 4 { C::Gold } else { C::Dim }),
+                            (pad(&format!("{}{}", if d.mf & 1 != 0 { "♂" } else { "·" }, if d.mf & 2 != 0 { "♀" } else { "·" }), DEX_W_SEX),
                              if d.mf == 3 { C::Green } else { C::Dim }),
                             (format!("stock {}{}", iv.tn(), if iv.ts() > 0 { format!("+{}✦", iv.ts()) } else { String::new() }),
                              if iv.tn() + iv.ts() > 0 { C::GoldDark } else { C::Dimmer }),
@@ -5341,5 +5354,58 @@ mod tests {
         }
         assert_eq!(wild_total() + 6, CREATURES.len(), "six curiosités hors bestiaire");
     }
-}
 
+    /* le bestiaire doit tenir dans un terminal de 80 colonnes (panel_w = 75) :
+       au-delà, reflow_rows replie la colonne « stock » sur la ligne suivante et
+       tout l'alignement saute. */
+    fn jeu_pour_bestiaire() -> Game {
+        let mut s = State::default();
+        s.normalize();
+        Game {
+            s,
+            world: WorldMap::build(),
+            px: 60,
+            py: 38,
+            panels: vec![],
+            logs: VecDeque::new(),
+            toasts: vec![],
+            quit: false,
+            panel_w: 75,
+            legend_seen: 0,
+            board: Vec::new(),
+            board_me: String::new(),
+            board_state: 0,
+            pentacle_until: 0.0,
+        }
+    }
+
+    fn largeur_max(rows: &[Row]) -> (usize, String) {
+        rows.iter()
+            .map(|r| {
+                let t: String = r.segs.iter().map(|(t, _)| t.as_str()).collect();
+                (r.indent as usize + t.chars().count(), t)
+            })
+            .max_by_key(|(w, _)| *w)
+            .unwrap_or((0, String::new()))
+    }
+
+    #[test]
+    fn le_bestiaire_tient_en_80_colonnes() {
+        // espèces inconnues : la ligne « ??? » et son marqueur nocturne
+        let g = jeu_pour_bestiaire();
+        let (_, rows) = g.rows_dex();
+        let (w, l) = largeur_max(&rows);
+        assert!(w <= 75, "ligne « inconnu » trop large : {} colonnes pour 75 : {:?}", w, l);
+
+        // espèces capturées, avec des compteurs à trois chiffres et des shinies
+        let mut g = jeu_pour_bestiaire();
+        for ci in 0..CREATURES.len() {
+            g.s.dex2[ci] = DexE { n: 999, s: 99, best: 4, bests: 4, mf: 3 };
+            g.s.inv2[ci].m[0] = 99;
+            g.s.inv2[ci].sf[0] = 9;
+        }
+        let (_, rows) = g.rows_dex();
+        let (w, l) = largeur_max(&rows);
+        assert!(w <= 75, "ligne d'espèce capturée trop large : {} colonnes pour 75 : {:?}", w, l);
+    }
+}
