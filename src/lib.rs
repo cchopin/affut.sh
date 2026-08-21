@@ -448,6 +448,8 @@ impl InvE {
     fn tf(&self) -> u64 { self.f.iter().sum() }
     fn nr(&self, r: usize) -> u64 { self.m[r] + self.f[r] }
     fn sr(&self, r: usize) -> u64 { self.sm[r] + self.sf[r] }
+    fn tsm(&self) -> u64 { self.sm.iter().sum() }
+    fn tsf(&self) -> u64 { self.sf.iter().sum() }
 }
 /* registre du bestiaire : totaux à vie + meilleur rang vu (0 = jamais, sinon rang+1) */
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -1368,6 +1370,18 @@ fn bullet_rows(prefix: &str, s: &str, w: usize, c: C) -> Vec<Row> {
         .map(|(i, l)| Row::text(format!("{}{}", if i == 0 { prefix.to_string() } else { " ".repeat(pl) }, l), c))
         .collect()
 }
+/* rogne la dernière colonne d'une ligne pour qu'elle tienne dans le panneau */
+fn fit(segs: &[(String, C)], tail: &str, w: usize) -> String {
+    let used: usize = segs.iter().map(|(t, _)| t.chars().count()).sum();
+    let dispo = w.saturating_sub(used);
+    if tail.chars().count() <= dispo {
+        return tail.trim_end().to_string();
+    }
+    let mut t: String = tail.chars().take(dispo.saturating_sub(1)).collect();
+    t = t.trim_end().to_string();
+    t.push('…');
+    t
+}
 fn pad(s: &str, w: usize) -> String {
     let n = s.chars().count();
     if n >= w { s.to_string() } else { format!("{}{}", s, " ".repeat(w - n)) }
@@ -1418,6 +1432,8 @@ struct Game {
     board_state: u8, // 0 = pas encore reçu, 1 = à jour, 2 = injoignable
     /* clin d'œil : le cercle qui s'ouvre sur la place à la 666e prise */
     pentacle_until: f64,
+    /* filtre « shinies seulement » du bestiaire et de l'inventaire (touche f) */
+    shiny_only: bool,
 }
 
 impl Game {
@@ -1445,6 +1461,7 @@ impl Game {
             board_me: String::new(),
             board_state: 0,
             pentacle_until: 0.0,
+            shiny_only: false,
         };
         (game, fresh)
     }
@@ -2844,8 +2861,57 @@ impl Game {
         if !any {
             rows.push(Row::text("aucun appât.", C::Dimmer));
         }
+        /* vitrine des shinies : plus besoin de fouiller biome par biome */
+        let shinies: Vec<usize> = (0..CREATURES.len()).filter(|&ci| self.s.inv2[ci].ts() > 0).collect();
+        let shiny_n: u64 = shinies.iter().map(|&ci| self.s.inv2[ci].ts()).sum();
+        rows.push(Row::text("", C::Dim));
+        rows.push(Row::header(&format!("shinies ✦ — {} spécimen{}", shiny_n, if shiny_n > 1 { "s" } else { "" })));
+        if shinies.is_empty() {
+            rows.push(Row::text("aucun shiny en réserve.", C::Dimmer));
+        }
+        for &ci in &shinies {
+            let c = &CREATURES[ci];
+            let iv = &self.s.inv2[ci];
+            let mut per_rank = String::new();
+            for r in (0..4).rev() {
+                if iv.sr(r) > 0 {
+                    per_rank += &format!("{}:{}{} ", RANK_NAMES[r],
+                        if iv.sm[r] > 0 { format!("♂{}", iv.sm[r]) } else { String::new() },
+                        if iv.sf[r] > 0 { format!("♀{}", iv.sf[r]) } else { String::new() });
+                }
+            }
+            let segs = vec![
+                ("✦ ".into(), C::Shiny),
+                (pad(&format!("{} {}", c.g, c.n), 26), C::Shiny),
+                (pad(&format!("×{}", fmt(iv.ts() as f64)), 6), C::Shiny),
+                (pad(&format!("♂{} ♀{}", fmt(iv.tsm() as f64), fmt(iv.tsf() as f64)), 11), C::Blue),
+            ];
+            let queue = fit(&segs, &per_rank, self.panel_w);
+            rows.push(Row {
+                segs: segs.into_iter().chain(std::iter::once((queue, C::GoldDark))).collect(),
+                btns: vec![],
+                act: Some(Action::Open(PanelKind::Creature(ci))),
+                indent: 0,
+            });
+        }
+        rows.push(Row::text("", C::Dim));
+        rows.push(Row {
+            segs: vec![
+                ("× normales  ".into(), C::Dim),
+                ("✦ shinies".into(), C::Shiny),
+                (format!("   ·   [f] shinies seulement : {}", if self.shiny_only { "oui" } else { "non" }), C::Dimmer),
+            ],
+            btns: vec![],
+            act: None,
+            indent: 0,
+        });
         for b in 0..BIOMES.len() {
-            let list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
+            let list: Vec<usize> = biome_creatures(b)
+                .filter(|&ci| {
+                    let iv = &self.s.inv2[ci];
+                    if self.shiny_only { iv.ts() > 0 } else { iv.tn() + iv.ts() > 0 }
+                })
+                .collect();
             if list.is_empty() {
                 continue;
             }
@@ -2857,22 +2923,21 @@ impl Game {
                 let mut per_rank = String::new();
                 for r in (0..4).rev() {
                     if iv.nr(r) > 0 {
-                        per_rank += &format!("{}:{} ", RANK_NAMES[r], iv.nr(r));
+                        per_rank += &format!("{}:{} ", RANK_NAMES[r], fmt(iv.nr(r) as f64));
                     }
                 }
-                for r in (0..4).rev() {
-                    if iv.sr(r) > 0 {
-                        per_rank += &format!("✦{}:{} ", RANK_NAMES[r], iv.sr(r));
-                    }
-                }
+                let segs = vec![
+                    ("├".into(), C::Dimmer),
+                    (if iv.ts() > 0 { "✦ ".to_string() } else { "─ ".to_string() },
+                     if iv.ts() > 0 { C::Shiny } else { C::Dimmer }),
+                    (pad(&format!("{} {}", c.g, c.n), 26), rarity_color(c.r)),
+                    (pad(&format!("×{}", fmt(iv.tn() as f64)), 7), C::Dim),
+                    (pad(&(if iv.ts() > 0 { format!("✦{}", fmt(iv.ts() as f64)) } else { String::new() }), 5), C::Shiny),
+                    (pad(&format!("♂{} ♀{}", fmt(iv.tm() as f64), fmt(iv.tf() as f64)), 11), C::Blue),
+                ];
+                let queue = fit(&segs, &per_rank, self.panel_w);
                 rows.push(Row {
-                    segs: vec![
-                        ("├─ ".into(), C::Dimmer),
-                        (pad(&format!("{} {}", c.g, c.n), 26), rarity_color(c.r)),
-                        (pad(&format!("×{}", iv.tn() + iv.ts()), 5), C::Dim),
-                        (pad(&format!("♂{} ♀{}", iv.tm(), iv.tf()), 9), C::Blue),
-                        (per_rank, C::GoldDark),
-                    ],
+                    segs: segs.into_iter().chain(std::iter::once((queue, C::GoldDark))).collect(),
                     btns: vec![],
                     act: Some(Action::Open(PanelKind::Creature(ci))),
                     indent: 0,
@@ -3803,17 +3868,56 @@ impl Game {
         let s_total = wild_species().filter(|&i| self.s.dex2[i].best >= 4).count();
         let mut rows = vec![
             Row::text(
-                format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, wild_total(), ascii_bar(total as f64 / wild_total() as f64, 12), shiny_total, wild_total(), ascii_bar(shiny_total as f64 / wild_total() as f64, 12), s_total, wild_total()),
+                format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, wild_total(), ascii_bar(total as f64 / wild_total() as f64, 10), shiny_total, wild_total(), ascii_bar(shiny_total as f64 / wild_total() as f64, 10), s_total, wild_total()),
                 C::Text,
             ),
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
+            Row {
+                segs: vec![
+                    ("✦".into(), C::Shiny),
+                    (" shiny en réserve   ".into(), C::Dim),
+                    ("✧".into(), C::GoldDark),
+                    (" shiny déjà capturé, plus en réserve   ".into(), C::Dim),
+                    ("─".into(), C::Dimmer),
+                    (" aucun shiny".into(), C::Dim),
+                ],
+                btns: vec![],
+                act: None,
+                indent: 0,
+            },
+            Row::text(format!("[f] shinies seulement : {}", if self.shiny_only { "oui" } else { "non" }), C::Dimmer),
+            Row {
+                segs: vec![
+                    (format!("{}{}{}", pad("", 3), pad("espèce", 29), pad("rareté", 11)), C::Dimmer),
+                    (pad("prises", 8), C::Dimmer),
+                    (pad("✦", 6), C::Shiny),
+                    (format!("{}{}{}", pad("rang", 4), pad("", 4), "réserve"), C::Dimmer),
+                ],
+                btns: vec![],
+                act: None,
+                indent: 0,
+            },
         ];
         for b in 0..BIOMES.len() {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
-            rows.push(Row::text("", C::Dim));
-            rows.push(Row::header(&format!("{} — {}/{}{}", BIOMES[b].name, found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" })));
-            let mut species: Vec<usize> = biome_creatures(b).collect();
+            let shiny_found = biome_creatures(b).filter(|&i| self.s.dex2[i].s > 0).count();
+            let mut species: Vec<usize> = biome_creatures(b).filter(|&ci| !self.shiny_only || self.s.dex2[ci].s > 0).collect();
+            if species.is_empty() {
+                continue;
+            }
             species.sort_by_key(|&ci| (CREATURES[ci].r, ci));
+            rows.push(Row::text("", C::Dim));
+            let total_b = biome_creatures(b).count();
+            rows.push(Row {
+                segs: vec![
+                    (format!("── {} — {}/{}{} ", BIOMES[b].name, found, total_b, if found == total_b { " ✓" } else { "" }), C::Blue),
+                    (format!("✦ {}/{}{} ", shiny_found, total_b, if shiny_found == total_b { " ✓" } else { "" }), C::Shiny),
+                    ("─".repeat(20), C::Dimmer),
+                ],
+                btns: vec![],
+                act: None,
+                indent: 0,
+            });
             for ci in species {
                 let c = &CREATURES[ci];
                 let d = &self.s.dex2[ci];
@@ -3821,9 +3925,9 @@ impl Game {
                     rows.push(Row {
                         segs: vec![
                             ("├─ ".into(), C::Dimmer),
-                            (pad("???", 7), C::Dimmer),
+                            (pad("???", 6), C::Dimmer),
                             (pad("— inconnu —", 23), C::Dimmer),
-                            (pad(RAR_LABEL[c.r], 13), C::Dimmer),
+                            (pad(RAR_LABEL[c.r], 11), C::Dimmer),
                             (if NOCTURNES.contains(&ci) { "◗ nocturne".into() } else { String::new() }, C::Abyss),
                         ],
                         btns: vec![],
@@ -3833,17 +3937,28 @@ impl Game {
                 } else {
                     let iv = &self.s.inv2[ci];
                     let best = if d.best > 0 { RANK_NAMES[(d.best - 1) as usize] } else { "-" };
+                    /* ✦ = j'en ai un sous la main · ✧ = déjà croisé, plus en réserve · · = jamais */
+                    let (mark, mark_c) = if iv.ts() > 0 {
+                        ("✦ ", C::Shiny)
+                    } else if d.s > 0 {
+                        ("✧ ", C::GoldDark)
+                    } else {
+                        ("─ ", C::Dimmer)
+                    };
                     rows.push(Row {
                         segs: vec![
-                            ("├─ ".into(), C::Dimmer),
-                            (pad(c.g, 7), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
+                            ("├".into(), C::Dimmer),
+                            (mark.into(), mark_c),
+                            (pad(c.g, 6), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
                             (pad(c.n, 23), rarity_color(c.r)),
-                            (pad(&format!("{} · pris ×{}{}", RAR_LABEL[c.r], fmt(d.n as f64), if d.s > 0 { format!(" ✦{}", d.s) } else { String::new() }), 26), C::Dim),
-                            (pad(&format!("[{}]", best), 5), if d.best >= 4 { C::Gold } else { C::Dim }),
+                            (pad(RAR_LABEL[c.r], 11), C::Dim),
+                            (pad(&fmt(d.n as f64), 8), C::Dim),
+                            (pad(&(if d.s > 0 { fmt(d.s as f64) } else { "—".into() }), 6), if d.s > 0 { C::Shiny } else { C::Dimmer }),
+                            (pad(&format!("[{}]", best), 4), if d.best >= 4 { C::Gold } else { C::Dim }),
                             (pad(&format!("{}{}", if d.mf & 1 != 0 { "♂" } else { "·" }, if d.mf & 2 != 0 { "♀" } else { "·" }), 4),
                              if d.mf == 3 { C::Green } else { C::Dim }),
-                            (format!("stock {}{}", iv.tn(), if iv.ts() > 0 { format!("+{}✦", iv.ts()) } else { String::new() }),
-                             if iv.tn() + iv.ts() > 0 { C::GoldDark } else { C::Dimmer }),
+                            (fmt(iv.tn() as f64), if iv.tn() > 0 { C::GoldDark } else { C::Dimmer }),
+                            (if iv.ts() > 0 { format!(" +{}✦", fmt(iv.ts() as f64)) } else { String::new() }, C::Shiny),
                         ],
                         btns: vec![],
                         act: Some(Action::Open(PanelKind::Creature(ci))),
@@ -3851,6 +3966,10 @@ impl Game {
                     });
                 }
             }
+        }
+        if self.shiny_only && !wild_species().any(|ci| self.s.dex2[ci].s > 0) {
+            rows.push(Row::text("", C::Dim));
+            rows.push(Row::text("aucun shiny au bestiaire — [f] pour revoir toutes les espèces.", C::Dimmer));
         }
         ("bestiaire".into(), rows)
     }    fn rows_creature(&self, ci: usize) -> (String, Vec<Row>) {
@@ -3872,10 +3991,16 @@ impl Game {
             rows.push(r);
         }
         rows.push(Row::text("", C::Dim));
-        rows.push(Row::text(
-            format!("capturés (total) : {}{}", fmt(d.n as f64), if d.s > 0 { format!(" · shinies : {} ✦", fmt(d.s as f64)) } else { String::new() }),
-            C::Text,
-        ));
+        rows.push(Row {
+            segs: vec![
+                (format!("capturés (total) : {}", fmt(d.n as f64)), C::Text),
+                (if d.s > 0 { format!("   ✦ shinies : {}", fmt(d.s as f64)) } else { "   ✦ shinies : aucun".into() },
+                 if d.s > 0 { C::Shiny } else { C::Dimmer }),
+            ],
+            btns: vec![],
+            act: None,
+            indent: 0,
+        });
         rows.push(Row::text(
             format!("meilleur rang : {}{}",
                 if d.best > 0 { RANK_NAMES[(d.best - 1) as usize] } else { "aucun" },
@@ -3892,16 +4017,30 @@ impl Game {
                 per_rank += &format!("{}:♂{}♀{} ", RANK_NAMES[r], iv.m[r], iv.f[r]);
             }
         }
-        for r in (0..4).rev() {
-            if iv.sr(r) > 0 {
-                per_rank += &format!("✦{}:{} ", RANK_NAMES[r], iv.sr(r));
-            }
-        }
         rows.push(Row::text(
-            format!("en réserve : {}{}{}", iv.tn(), if iv.ts() > 0 { format!(" + {} ✦", iv.ts()) } else { String::new() },
+            format!("en réserve : {}{}", iv.tn(),
                 if per_rank.is_empty() { String::new() } else { format!("  ({})", per_rank.trim_end()) }),
             C::Dim,
         ));
+        let mut per_rank_s = String::new();
+        for r in (0..4).rev() {
+            if iv.sr(r) > 0 {
+                per_rank_s += &format!("{}:{}{} ", RANK_NAMES[r],
+                    if iv.sm[r] > 0 { format!("♂{}", iv.sm[r]) } else { String::new() },
+                    if iv.sf[r] > 0 { format!("♀{}", iv.sf[r]) } else { String::new() });
+            }
+        }
+        rows.push(Row {
+            segs: vec![
+                ("✦ shinies en réserve : ".into(), if iv.ts() > 0 { C::Shiny } else { C::Dimmer }),
+                (format!("{}{}", iv.ts(),
+                    if per_rank_s.is_empty() { String::new() } else { format!("  ({})", per_rank_s.trim_end()) }),
+                 if iv.ts() > 0 { C::Shiny } else { C::Dimmer }),
+            ],
+            btns: vec![],
+            act: None,
+            indent: 0,
+        });
         rows.push(Row::text(
             format!("valeur (rang C) : {} écus · rang S : {} · shiny S : {}",
                 fmt(self.creature_value(ci, false)), fmt(self.creature_value_r(ci, false, 3)), fmt(self.creature_value_r(ci, true, 3))),
@@ -4086,6 +4225,7 @@ impl Game {
             "[v] tableau de bord · [i] inventaire · [b] bestiaire · [o] boutique · [c] contrats",
             "[l] labo · [m] musée · [e] enclos · [t] trophées · [j] journal · [?] cette aide",
             "panneaux : ↑↓/jk naviguer · ←→ changer de bouton · Entrée valider · PgUp/PgDn défiler",
+            "bestiaire et inventaire : [f] n'afficher que les shinies (✦ en réserve · ✧ déjà capturé)",
             if cfg!(target_arch = "wasm32") { "fermez l'onglet quand vous voulez — la partie est sauvegardée toutes les 10 s. les touches + et - ajustent la taille du texte." } else { "quitter : ctrl+c — la partie est sauvegardée à la sortie (et toutes les 10 s de toute façon)." },
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dimmer));
@@ -4872,6 +5012,14 @@ fn panel_key(game: &mut Game, code: GKey) {
                 game.panels.last_mut().unwrap().sel = sel - 1;
             }
         }
+        GKey::Char('f') => {
+            if matches!(game.panels.last().map(|p| &p.kind), Some(PanelKind::Dex) | Some(PanelKind::Inventory)) {
+                game.shiny_only = !game.shiny_only;
+                let p = game.panels.last_mut().unwrap();
+                p.scroll = 0;
+                p.sel = 0;
+            }
+        }
         GKey::Enter | GKey::Char(' ') => {
             if let Some(&(r, b)) = sels.get(sel) {
                 let action = if b < 0 {
@@ -5330,5 +5478,171 @@ mod tests {
         }
         assert_eq!(wild_total() + 6, CREATURES.len(), "six curiosités hors bestiaire");
     }
-}
 
+    /* ---- lisibilité des shinies : bestiaire, inventaire, fiche ---- */
+
+    fn partie_de_test() -> Game {
+        let mut st = State::default();
+        st.normalize();
+        let mut g = Game {
+            s: st,
+            world: WorldMap::build(),
+            px: 60,
+            py: 38,
+            panels: vec![],
+            logs: VecDeque::new(),
+            toasts: vec![],
+            quit: false,
+            panel_w: 75,
+            legend_seen: 0,
+            board: Vec::new(),
+            board_me: String::new(),
+            board_state: 0,
+            pentacle_until: 0.0,
+            shiny_only: false,
+        };
+        // trois espèces : une avec shiny en réserve, une shiny déjà relâché,
+        // une sans shiny — plus une inconnue laissée telle quelle
+        let sp: Vec<usize> = wild_species().take(3).collect();
+        for (k, &ci) in sp.iter().enumerate() {
+            g.s.dex2[ci].n = 12 + k as u64;
+            g.s.dex2[ci].best = 4;
+            g.s.dex2[ci].mf = 3;
+            g.s.inv2[ci].m[0] = 7;
+            g.s.inv2[ci].f[1] = 5;
+        }
+        // 0 : shiny en réserve · 1 : shiny capturé jadis, plus rien en stock
+        g.s.dex2[sp[0]].s = 3;
+        g.s.dex2[sp[0]].bests = 4;
+        g.s.inv2[sp[0]].sm[3] = 1;
+        g.s.inv2[sp[0]].sf[2] = 2;
+        g.s.dex2[sp[1]].s = 1;
+        g
+    }
+
+    fn ligne(r: &Row) -> String {
+        let mut t: String = r.segs.iter().map(|(s, _)| s.as_str()).collect();
+        for (l, _, _) in &r.btns {
+            t += &format!(" [{}]", l);
+        }
+        t
+    }
+
+    /* le nom le plus long du bestiaire, un stock à quatre chiffres et des
+       shinies partout : la partie qui met le gabarit à l'épreuve */
+    fn partie_bien_remplie() -> Game {
+        let mut g = partie_de_test();
+        for ci in wild_species() {
+            g.s.dex2[ci].n = 987_654;
+            g.s.dex2[ci].s = 1_234;
+            g.s.dex2[ci].best = 4;
+            g.s.dex2[ci].bests = 4;
+            g.s.dex2[ci].mf = 3;
+            for r in 0..4 {
+                g.s.inv2[ci].m[r] = 999;
+                g.s.inv2[ci].f[r] = 999;
+                g.s.inv2[ci].sm[r] = 6;
+                g.s.inv2[ci].sf[r] = 6;
+            }
+        }
+        g
+    }
+
+    /* les lignes d'espèce ne doivent pas être repliées : le gabarit du
+       panneau (75 colonnes) est serré, un marqueur de trop et tout casse */
+    #[test]
+    fn les_lignes_du_bestiaire_et_de_l_inventaire_tiennent_dans_le_panneau() {
+        for mut g in [partie_de_test(), partie_bien_remplie()] {
+            for filtre in [false, true] {
+                g.shiny_only = filtre;
+                for kind in [PanelKind::Dex, PanelKind::Inventory] {
+                    let (titre, rows) = g.build_rows_raw(&kind);
+                    for r in &rows {
+                        let l = ligne(r);
+                        if !l.starts_with('├') && !l.starts_with("✦ ") {
+                            continue;
+                        }
+                        assert!(
+                            l.chars().count() <= g.panel_w,
+                            "{} : ligne de {} colonnes (max {}) : {}",
+                            titre,
+                            l.chars().count(),
+                            g.panel_w,
+                            l
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /* un shiny doit se repérer d'un coup d'œil : étoile pleine s'il est en
+       réserve, étoile creuse s'il n'a été que croisé */
+    #[test]
+    fn les_shinies_sont_marques_dans_le_bestiaire() {
+        let g = partie_de_test();
+        let sp: Vec<usize> = wild_species().take(3).collect();
+        let (_, rows) = g.build_rows_raw(&PanelKind::Dex);
+        let trouve = |ci: usize| -> String {
+            rows.iter().map(ligne).find(|l| l.contains(CREATURES[ci].n)).expect("espèce absente du bestiaire")
+        };
+        assert!(trouve(sp[0]).starts_with("├✦"), "shiny en réserve : {}", trouve(sp[0]));
+        assert!(trouve(sp[1]).starts_with("├✧"), "shiny relâché : {}", trouve(sp[1]));
+        assert!(trouve(sp[2]).starts_with("├─"), "sans shiny : {}", trouve(sp[2]));
+        assert!(trouve(sp[0]).contains("+3✦"), "stock shiny absent : {}", trouve(sp[0]));
+    }
+
+    /* l'inventaire ouvre sur une vitrine des shinies, et la touche f met le
+       reste de côté */
+    #[test]
+    fn l_inventaire_regroupe_les_shinies_et_se_filtre() {
+        let mut g = partie_de_test();
+        let sp: Vec<usize> = wild_species().take(3).collect();
+        let (_, rows) = g.build_rows_raw(&PanelKind::Inventory);
+        let txt: Vec<String> = rows.iter().map(ligne).collect();
+        let i_vitrine = txt.iter().position(|l| l.contains("shinies ✦")).expect("pas de section shinies");
+        assert!(
+            txt[i_vitrine + 1].contains(CREATURES[sp[0]].n),
+            "la vitrine ne liste pas l'espèce shiny : {}",
+            txt[i_vitrine + 1]
+        );
+        g.shiny_only = true;
+        let (_, rows) = g.build_rows_raw(&PanelKind::Inventory);
+        let txt: Vec<String> = rows.iter().map(ligne).collect();
+        let listee = |ci: usize| txt.iter().filter(|l| l.contains(CREATURES[ci].n)).count();
+        assert!(listee(sp[0]) >= 2, "l'espèce shiny disparaît du filtre");
+        assert_eq!(listee(sp[2]), 0, "le filtre laisse passer une espèce sans shiny");
+    }
+
+    /* le tracé complet ne doit pas paniquer : panneau ouvert, écran étroit
+       comme large, filtre actif ou non */
+    #[test]
+    fn les_panneaux_se_dessinent_sans_paniquer() {
+        let theme = Theme { truecolor: true };
+        for (cols, lignes) in [(80u16, 24u16), (120, 40), (200, 60)] {
+            for kind in [PanelKind::Dex, PanelKind::Inventory] {
+                for filtre in [false, true] {
+                    let mut g = partie_bien_remplie();
+                    g.shiny_only = filtre;
+                    g.panels.push(Panel::new(kind.clone()));
+                    let area = Rect::new(0, 0, cols, lignes);
+                    let mut buf = Buffer::empty(area);
+                    render(&mut g, &theme, &mut buf, area);
+                }
+            }
+        }
+    }
+
+    /* aperçu à l'œil nu : cargo test -- --nocapture apercu_ */
+    #[test]
+    fn apercu_des_panneaux() {
+        let g = partie_de_test();
+        for kind in [PanelKind::Dex, PanelKind::Inventory, PanelKind::Creature(wild_species().next().unwrap())] {
+            let (titre, rows) = g.build_rows(&kind);
+            eprintln!("\n╭─ {} {}", titre, "─".repeat(70 - titre.chars().count()));
+            for r in rows.iter().take(28) {
+                eprintln!("│ {}", ligne(r));
+            }
+        }
+    }
+}
