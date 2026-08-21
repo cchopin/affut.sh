@@ -327,6 +327,7 @@ const NEWS: [(&str, &str, &[&str]); 8] = [
             "le village a été redessiné : rues pavées, place centrale, fontaine, bancs, lampadaires, et des ponts là où les routes franchissent la rivière.",
             "on ne marche plus sur l'eau : la rivière et le lac ne se franchissent qu'aux ponts, et l'on y pose ses pièges depuis la berge.",
             "la fontaine ne bouche plus le passage : la rangée des portes est dégagée, on va de la boutique au labo en ligne droite.",
+            "on circule beaucoup mieux dans les biomes : le décor est resté dense, mais l'essentiel ne barre plus la route.",
         ],
     ),
     (
@@ -920,16 +921,24 @@ impl WorldMap {
            l'altitude est au nord (glacier, montagne), l'eau descend vers le
            sud-est : lac au pied de la montagne, rivière, puis la mer — récif
            le long de la côte, abysses au large. */
-        w.scatter(1, 1, 30, 13, &['*', '▲', '·'], C::Ice, 0.12, true, &mut rng);        // glacier
-        w.scatter(34, 1, 38, 15, &['^', '▲', '/', '∆'], C::Dim, 0.13, true, &mut rng);  // montagne
+        /* chaque biome se peuple en deux passes : une poignée d'éléments qui
+           barrent vraiment la route, puis un décor abondant mais traversable.
+           on garde l'ambiance sans transformer la marche en labyrinthe. */
+        w.scatter(1, 1, 30, 13, &['▲'], C::Ice, 0.03, true, &mut rng);              // glacier
+        w.scatter(1, 1, 30, 13, &['*', '·', '*'], C::Ice, 0.11, false, &mut rng);
+        w.scatter(34, 1, 38, 15, &['▲', '∆'], C::Dim, 0.04, true, &mut rng);        // montagne
+        w.scatter(34, 1, 38, 15, &['^', '/', '·', '^'], C::Dim, 0.11, false, &mut rng);
         w.scatter(78, 1, 34, 17, &['∙', '≈', '·'], C::GoldDark, 0.12, false, &mut rng); // désert
-        w.scatter(1, 16, 30, 22, &['♣', '♣', '♠', '.'], C::Green, 0.16, true, &mut rng); // forêt
+        w.scatter(1, 16, 30, 22, &['♣', '♠'], C::Green, 0.05, true, &mut rng);      // forêt
+        w.scatter(1, 16, 30, 22, &['♣', '.', '♠', '.'], C::Green, 0.13, false, &mut rng);
         w.scatter(1, 40, 30, 18, &['~', '~', 'o', '"'], C::Marsh, 0.14, false, &mut rng); // marais
-        w.scatter(1, 60, 30, 18, &['#', '[', ']'], C::Dim, 0.06, true, &mut rng);        // ruines
-        w.scatter(1, 60, 30, 18, &['.', ','], C::Dim, 0.08, false, &mut rng);
-        w.scatter(34, 58, 38, 20, &['^', '∴', '*'], C::Red, 0.12, true, &mut rng);       // volcan
+        w.scatter(1, 60, 30, 18, &['#'], C::Dim, 0.03, true, &mut rng);             // ruines
+        w.scatter(1, 60, 30, 18, &['[', ']', '.', ','], C::Dim, 0.10, false, &mut rng);
+        w.scatter(34, 58, 38, 20, &['^'], C::Red, 0.03, true, &mut rng);            // volcan
+        w.scatter(34, 58, 38, 20, &['∴', '*', '·', '∴'], C::Red, 0.11, false, &mut rng);
         w.scatter(80, 22, 32, 25, &['~', '≈', 'o', ':'], C::Blue, 0.14, false, &mut rng); // récif
-        w.scatter(80, 50, 32, 28, &['▓', '▒', '●', '·'], C::Abyss, 0.13, true, &mut rng); // abysses
+        w.scatter(80, 50, 32, 28, &['▓'], C::Abyss, 0.03, true, &mut rng);          // abysses
+        w.scatter(80, 50, 32, 28, &['▒', '●', '·', '▒'], C::Abyss, 0.12, false, &mut rng);
 
         // le lac : une nappe pleine, au pied de la montagne
         for y in 18..27 {
@@ -1004,6 +1013,36 @@ impl WorldMap {
                 w.put(x, y, '░', C::Dimmer, false);
             }
         }
+        /* routes : elles relient le village à chaque biome et rouvrent le
+           passage partout où elles rencontrent un obstacle */
+        let mut path = |w: &mut WorldMap, x1: usize, y1: usize, x2: usize, y2: usize| {
+            let (mut x, mut y) = (x1 as i32, y1 as i32);
+            while x != x2 as i32 {
+                if w.cells[y as usize][x as usize].ch == ' ' || w.cells[y as usize][x as usize].solid {
+                    w.put(x as usize, y as usize, '░', C::Dimmer, false);
+                }
+                x += (x2 as i32 - x).signum();
+            }
+            while y != y2 as i32 {
+                if w.cells[y as usize][x as usize].ch == ' ' || w.cells[y as usize][x as usize].solid {
+                    w.put(x as usize, y as usize, '░', C::Dimmer, false);
+                }
+                y += (y2 as i32 - y).signum();
+            }
+        };
+        path(&mut w, 34, 37, 18, 30);   // village -> forêt (par la rue principale)
+        path(&mut w, 34, 45, 18, 48);   // village -> marais
+        path(&mut w, 16, 16, 16, 10);   // forêt -> glacier
+        path(&mut w, 16, 58, 16, 64);   // marais -> ruines
+        path(&mut w, 52, 30, 52, 27);   // village -> rive sud du lac
+        path(&mut w, 39, 30, 39, 17);   // longe la rive ouest du lac
+        path(&mut w, 39, 16, 52, 12);   // -> montagne
+        path(&mut w, 76, 34, 92, 14);   // village -> désert
+        path(&mut w, 76, 37, 92, 32);   // village -> récif
+        path(&mut w, 92, 47, 92, 54);   // récif -> abysses
+        path(&mut w, 46, 52, 46, 62);   // village -> volcan
+        path(&mut w, 64, 52, 64, 62);
+
         /* ponts : les routes sont tracées après la rivière et rouvrent le
            passage là où elles la franchissent — on y pose un tablier */
         {
@@ -5118,36 +5157,41 @@ mod tests {
     #[test]
     fn tous_les_biomes_sont_accessibles_a_pied() {
         let w = WorldMap::build();
-        let mut vu = vec![vec![false; MAPW]; MAPH];
+        let mut vu = vec![vec![usize::MAX; MAPW]; MAPH];
         let mut q = VecDeque::new();
-        q.push_back((60usize, 38usize));
-        vu[38][60] = true;
-        let mut atteint: Vec<Option<Zone>> = vec![];
+        q.push_back((60usize, 37usize));
+        vu[37][60] = 0;
+        let mut atteint: Vec<(Option<Zone>, usize)> = vec![];
         while let Some((x, y)) = q.pop_front() {
-            atteint.push(w.zone_at(x, y));
+            atteint.push((w.zone_at(x, y), vu[y][x]));
             for (dx, dy) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
                 let (nx, ny) = (x as i32 + dx, y as i32 + dy);
                 if nx < 0 || ny < 0 || nx >= MAPW as i32 || ny >= MAPH as i32 {
                     continue;
                 }
                 let (nx, ny) = (nx as usize, ny as usize);
-                if vu[ny][nx] || w.cells[ny][nx].solid {
+                if vu[ny][nx] != usize::MAX || w.cells[ny][nx].solid {
                     continue;
                 }
-                vu[ny][nx] = true;
+                vu[ny][nx] = vu[y][x] + 1;
                 q.push_back((nx, ny));
             }
         }
         for b in 0..WILDB {
-            assert!(
-                atteint.iter().any(|z| matches!(z, Some(Zone::Biome(bb)) if *bb == b)),
-                "biome {} ({}) inatteignable depuis la place",
-                b,
-                BIOMES[b].name
-            );
+            let d = atteint
+                .iter()
+                .filter(|(z, _)| matches!(z, Some(Zone::Biome(bb)) if *bb == b))
+                .map(|(_, d)| *d)
+                .min();
+            let Some(d) = d else {
+                panic!("biome {} ({}) inatteignable depuis la place", b, BIOMES[b].name);
+            };
+            // sans route directe, on finit par y arriver mais en faisant le tour :
+            // ce plafond fait échouer la construction si un chemin a disparu
+            assert!(d <= 90, "biome {} atteint en {} pas : une route manque", BIOMES[b].name, d);
         }
         for z in [Zone::Boutique, Zone::Labo, Zone::Bestiaire, Zone::Succes, Zone::Musee, Zone::Enclos, Zone::Troc] {
-            assert!(atteint.iter().any(|a| *a == Some(z)), "lieu du village inatteignable");
+            assert!(atteint.iter().any(|(a, _)| *a == Some(z)), "lieu du village inatteignable");
         }
     }
 
@@ -5183,6 +5227,33 @@ mod tests {
         assert!(pas <= 24, "trajet boutique -> labo trop long : {} pas", pas);
     }
 
+    /* la marche doit rester agréable : peu d'obstacles réels dans les biomes */
+    #[test]
+    fn les_biomes_restent_praticables() {
+        let w = WorldMap::build();
+        for &(zx, zy, zw, zh, b) in ZONE_RECTS.iter() {
+            if b == 10 {
+                continue; // le lac est de l'eau : bloquant par nature
+            }
+            let (mut total, mut durs) = (0, 0);
+            for y in zy..(zy + zh).min(MAPH) {
+                for x in zx..(zx + zw).min(MAPW) {
+                    total += 1;
+                    if w.cells[y][x].solid {
+                        durs += 1;
+                    }
+                }
+            }
+            let part = durs as f64 / total as f64;
+            assert!(
+                part < 0.08,
+                "{} : {:.1} % de cases bloquantes, la marche y devient pénible",
+                BIOMES[b].name,
+                part * 100.0
+            );
+        }
+    }
+
     /* la table des créatures et celle des biomes doivent rester d'accord */
     #[test]
     fn chaque_biome_a_ses_especes() {
@@ -5192,3 +5263,4 @@ mod tests {
         assert_eq!(wild_total() + 6, CREATURES.len(), "six curiosités hors bestiaire");
     }
 }
+
