@@ -3404,6 +3404,28 @@ impl Game {
             rows.push(Row::text(format!("conditions : {}", fx.join(" · ")), C::Ice));
         }
         rows.push(Row::text("", C::Dim));
+        /* la battue passe avant les emplacements : on la déclenche à chaque
+           passage, alors qu'on ne repose un piège que de loin en loin.
+           elle déclenche immédiatement chaque piège posé avec +0,2 chance */
+        let placed = bs.pl.iter().flatten().count();
+        let ready = bs.hunt_at <= now;
+        let left = ((bs.hunt_at - now).max(0.0) / 1000.0).ceil() as u64;
+        rows.push(Row {
+            segs: vec![(
+                if !ready { format!("prochaine battue possible dans {} s", left) }
+                else if placed > 0 { "battre les fourrés vous-même (chance +0,2) :".into() }
+                else { "battre les fourrés à mains nues (une seule tentative) :".into() },
+                if ready { C::Text } else { C::Dimmer },
+            )],
+            btns: vec![(
+                "battue !".into(),
+                if ready { C::Gold } else { C::Dimmer },
+                if ready { Action::Hunt(b) } else { Action::Nothing },
+            )],
+            act: None,
+            indent: 0,
+        });
+        rows.push(Row::text("", C::Dim));
         for (i, pl) in bs.pl.iter().enumerate() {
             match pl {
                 None => rows.push(Row {
@@ -3450,26 +3472,6 @@ impl Game {
                 indent: 0,
             });
         }
-        // battue : déclenche immédiatement chaque piège posé avec +0,5 chance
-        rows.push(Row::text("", C::Dim));
-        let placed = bs.pl.iter().flatten().count();
-        let ready = bs.hunt_at <= now;
-        let left = ((bs.hunt_at - now).max(0.0) / 1000.0).ceil() as u64;
-        rows.push(Row {
-            segs: vec![(
-                if !ready { format!("prochaine battue possible dans {} s", left) }
-                else if placed > 0 { "battre les fourrés vous-même (chance +0,2) :".into() }
-                else { "battre les fourrés à mains nues (une seule tentative) :".into() },
-                if ready { C::Text } else { C::Dimmer },
-            )],
-            btns: vec![(
-                "battue !".into(),
-                if ready { C::Gold } else { C::Dimmer },
-                if ready { Action::Hunt(b) } else { Action::Nothing },
-            )],
-            act: None,
-            indent: 0,
-        });
         (bio.name.to_string(), rows)
     }    fn rows_trap_pick(&self, b: usize, i: usize) -> (String, Vec<Row>) {
         let at_cap = self.placed_total() >= self.trap_cap();
@@ -3557,7 +3559,20 @@ impl Game {
         // le comptoir affiche aussi les commandes en cours (raccourci : [c] partout)
         let (w, contracts) = self.contracts_now();
         let left_ms = ((w + 1) as f64 * 7_200_000.0) - now_ms();
-        let mut rows = vec![Row::header(&format!("commandes du comptoir — renouvelées dans {} min", (left_ms / 60_000.0).ceil() as u64))];
+        let mut rows = vec![];
+        /* la vente des doublons passe avant tout le reste : on y revient à
+           chaque retour au village, alors que les commandes et les achats se
+           consultent de loin en loin */
+        if (0..CREATURES.len()).any(|ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0) {
+            rows.push(Row {
+                segs: vec![("réserve à écouler :".into(), C::Dim)],
+                btns: vec![("vendre tous les doublons".into(), C::Green, Action::SellDupes)],
+                act: None,
+                indent: 0,
+            });
+            rows.push(Row::text("", C::Dim));
+        }
+        rows.push(Row::header(&format!("commandes du comptoir — renouvelées dans {} min", (left_ms / 60_000.0).ceil() as u64)));
         for (i, c) in contracts.iter().enumerate() {
             let done = self.s.contracts_done.get(i).copied().unwrap_or(false);
             let cr = &CREATURES[c.ci];
@@ -3626,14 +3641,8 @@ impl Game {
         if !any {
             rows.push(Row::text("réserve vide. les pièges y remédieront.", C::Dim));
         } else {
-            rows.push(Row {
-                segs: vec![],
-                btns: vec![("vendre tous les doublons".into(), C::Green, Action::SellDupes)],
-                act: None,
-                indent: 0,
-            });
             for r in wrap_rows(
-                "garde le meilleur couple ♂♀ de chaque espèce, met de côté ce qu'exigent les commandes du comptoir et les demandes du troc, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
+                "« vendre tous les doublons » garde le meilleur couple ♂♀ de chaque espèce, met de côté ce qu'exigent les commandes du comptoir et les demandes du troc, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
                 self.panel_w, C::Dimmer,
             ) {
                 rows.push(r);
