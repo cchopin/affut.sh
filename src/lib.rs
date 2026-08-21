@@ -3206,7 +3206,13 @@ impl Game {
             .map(|b| BIOMES[b].name)
             .collect();
         if !boosted_empty.is_empty() && self.placed_total() > 0 {
-            todo.push(Row::text(format!("· conditions favorables sans piège : {} — déplacer ?", boosted_empty.join(", ")), C::Ice));
+            todo.push(Row::text(
+                format!(
+                    "· le temps avantage {} en ce moment, mais vous n'y avez aucun piège posé — pensez à en déplacer un",
+                    boosted_empty.join(", ")
+                ),
+                C::Ice,
+            ));
         }
         if !todo.is_empty() {
             rows.push(Row::header("à faire maintenant"));
