@@ -2484,10 +2484,14 @@ impl Game {
                         let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now);
                         let rank = self.roll_rank(luck);
                         let (is_new, new_shiny, sex) = self.add_specimen(ci, shiny, rank);
+                        // annoncé AVANT la prise : on lit d'abord la piste, puis ce qu'elle a donné
+                        self.log(vec![(
+                            format!("vous suivez les traces en {} : elles mènent droit au gîte, et vous surprenez son occupant.", BIOMES[biome].name),
+                            C::Green,
+                        )]);
                         self.report_catch(biome, Some((ci, shiny, is_new, new_shiny, 0.0, rank + sex as usize * 10)));
-                        self.log(vec![(format!("les traces menaient droit au gîte ({}).", BIOMES[biome].name), C::Green)]);
                     } else if roll < 0.85 {
-                        self.log(vec![("les traces se perdent dans les fourrés. la prochaine fois.".into(), C::Dim)]);
+                        self.log(vec![("vous suivez les traces : elles se perdent dans les fourrés. rien cette fois.".into(), C::Dim)]);
                     } else {
                         let gift = 1 + (rand::thread_rng().gen_range(0..2)) as u64;
                         let bt = [BAIT_VIANDE, BAIT_BAIES][rand::thread_rng().gen_range(0..2)];
@@ -4055,7 +4059,7 @@ impl Game {
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
             "légende errante : une silhouette ✧ apparaît parfois sur la carte. approchez-la et tentez votre chance — une seule fois. créature épique ou légendaire, rang A minimum.",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
-            "des traces fraîches ∵ apparaissent sur la carte : suivez-les (Entrée) — capture ciblée, cache d'appâts, ou rien du tout.",
+            "des traces fraîches ∵ apparaissent sur la carte : approchez-vous et faites Entrée pour les suivre. tout se joue immédiatement — trois fois sur cinq une prise offerte du biome, une fois sur sept une cache d'appâts, sinon la piste se perd. une trace ne se suit qu'une fois.",
             "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
