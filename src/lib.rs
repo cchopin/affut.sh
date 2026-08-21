@@ -3837,7 +3837,8 @@ impl Game {
                         segs: vec![
                             ("├─ ".into(), C::Dimmer),
                             (pad(c.g, 7), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
-                            (pad(c.n, 23), rarity_color(c.r)),
+                            (pad(c.n, 21), rarity_color(c.r)),
+                            (pad(if NOCTURNES.contains(&ci) { "◗" } else { "" }, 2), C::Abyss),
                             (pad(&format!("{} · pris ×{}{}", RAR_LABEL[c.r], fmt(d.n as f64), if d.s > 0 { format!(" ✦{}", d.s) } else { String::new() }), 26), C::Dim),
                             (pad(&format!("[{}]", best), 5), if d.best >= 4 { C::Gold } else { C::Dim }),
                             (pad(&format!("{}{}", if d.mf & 1 != 0 { "♂" } else { "·" }, if d.mf & 2 != 0 { "♀" } else { "·" }), 4),
