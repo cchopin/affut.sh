@@ -343,6 +343,8 @@ const NEWS: [(&str, &str, &[&str]); 8] = [
             "la fontaine ne bouche plus le passage : la rangée des portes est dégagée, on va de la boutique au labo en ligne droite.",
             "on circule beaucoup mieux dans les biomes : le décor est resté dense, mais l'essentiel ne barre plus la route.",
             "le lac a pris une forme de lac : une nappe arrondie, plus un rectangle.",
+            "l'auto-vente met aussi de côté les spécimens réclamés par le troc, comme elle le fait déjà pour les commandes du comptoir.",
+            "le comptoir de troc s'ouvre avec r (t[r]oc) plutôt qu'avec x.",
             "vingt espèces nocturnes ◗ au lieu de sept, et pas le même nombre selon les lieux : trois dans les abysses et les ruines, une seule sur les crêtes ou dans le volcan.",
         ],
     ),
@@ -350,7 +352,7 @@ const NEWS: [(&str, &str, &[&str]); 8] = [
         "1.6",
         "21 août 2026",
         &[
-            "comptoir de troc (touche x) : des collectionneurs échangent leurs curiosités contre vos doublons. six espèces qu'aucun piège n'attrape.",
+            "comptoir de troc (touche r) : des collectionneurs échangent leurs curiosités contre vos doublons. six espèces qu'aucun piège n'attrape.",
             "marchand ambulant : il passe plusieurs fois par jour sur la place, avec une malle qui change — breloques de chance, licences, œufs de curiosité.",
             "jour de foire, un jour sur quatre : le marchand reste, le troc double ses demandes, la chance monte et les prix baissent.",
             "les curiosités ne comptent pas dans le pourcentage du bestiaire : votre progression ne recule pas.",
@@ -1079,7 +1081,7 @@ impl WorldMap {
         w.building(36, 31, 16, 6, "boutique", Zone::Boutique, 'o');
         w.building(58, 31, 16, 6, "labo", Zone::Labo, 'l');
         w.building(36, 40, 11, 5, "bestiaire", Zone::Bestiaire, 'b');
-        w.building(49, 40, 13, 5, "troc", Zone::Troc, 'x');
+        w.building(49, 40, 13, 5, "troc", Zone::Troc, 'r');
         w.building(64, 40, 12, 5, "trophées", Zone::Succes, 't');
         w.building(40, 47, 13, 5, "musée", Zone::Musee, 'm');
         w.building(58, 47, 13, 5, "enclos", Zone::Enclos, 'e');
@@ -2505,6 +2507,9 @@ impl Game {
         iv.tn().saturating_sub(reserved)
     }
     /* quantité encore due aux commandes ouvertes pour cette espèce */
+    /* ce qu'il faut garder de côté : les commandes du comptoir ET les
+       demandes du troc encore ouvertes — sinon l'auto-vente écoule sous vos
+       pieds les spécimens qu'un collectionneur attend */
     fn contract_need(&self, ci: usize) -> u64 {
         let (_, cs) = self.contracts_now();
         let mut n = 0;
@@ -2513,7 +2518,16 @@ impl Game {
                 n += c.qty;
             }
         }
-        n
+        n + self.trade_need(ci)
+    }
+    fn trade_need(&self, ci: usize) -> u64 {
+        self.s
+            .trades
+            .iter()
+            .enumerate()
+            .filter(|(i, &(want, _, _))| want == ci && !self.s.trades_done.get(*i).copied().unwrap_or(false))
+            .map(|(_, &(_, qty, _))| qty)
+            .sum()
     }
     /* vend le surplus au-delà du meilleur couple ♂♀ ET des commandes en cours */
     fn sell_surplus(&mut self, ci: usize) -> (u64, f64) {
@@ -3598,7 +3612,7 @@ impl Game {
                 indent: 0,
             });
             for r in wrap_rows(
-                "garde le meilleur couple ♂♀ de chaque espèce, met de côté ce qu'exigent les commandes du comptoir, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
+                "garde le meilleur couple ♂♀ de chaque espèce, met de côté ce qu'exigent les commandes du comptoir et les demandes du troc, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
                 self.panel_w, C::Dimmer,
             ) {
                 rows.push(r);
@@ -3652,7 +3666,7 @@ impl Game {
         }
         if self.s.lab[LAB_AUTOVENTE] >= 1 {
             rows.push(Row::text("", C::Dim));
-            rows.push(Row::header("auto-vente — garde le couple ♂♀ et le stock des commandes en cours"));
+            rows.push(Row::header("auto-vente — garde le couple ♂♀, les commandes du comptoir et les demandes du troc"));
             rows.push(Row {
                 segs: vec![],
                 btns: (0..5)
@@ -3950,7 +3964,7 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("le village : troc, marchand, foire"));
         for t in [
-            "comptoir de troc (touche x) : des collectionneurs échangent des curiosités — six espèces qu'aucun piège n'attrape — contre vos doublons. leurs demandes changent chaque jour.",
+            "comptoir de troc (touche r) : des collectionneurs échangent des curiosités — six espèces qu'aucun piège n'attrape — contre vos doublons. leurs demandes changent chaque jour.",
             "les curiosités ne se revendent pas et ne comptent pas dans le pourcentage du bestiaire : ce sont des pièces de collection.",
             "marchand ambulant : il s'installe sur la place plusieurs fois par jour et repart vite. sa malle change à chaque passage — breloques de chance, licences de piégeage, lots d'appâts, œufs de curiosité.",
             "jour de foire (un jour sur quatre) : le marchand reste toute la journée, le troc double ses demandes, sa malle est à −25 % et la chance monte de 0,15.",
@@ -3986,7 +4000,7 @@ impl Game {
             });
         }
         rows.extend(bullet_rows("· ", "chaque spécimen est ♂ ou ♀ (50/50). le bestiaire trace les sexes observés, et l'enclos exige un couple — le vrai défi : obtenir un beau ♂ ET une belle ♀.", w, C::Dim));
-        rows.extend(bullet_rows("· ", "la vente « sauf couple » et l'auto-vente protègent le meilleur ♂ et la meilleure ♀ ; l'auto-vente et la vente groupée réservent aussi le stock des commandes en cours.", w, C::Dim));
+        rows.extend(bullet_rows("· ", "la vente « sauf couple » et l'auto-vente protègent le meilleur ♂ et la meilleure ♀ ; l'auto-vente et la vente groupée réservent aussi ce qu'attendent les commandes du comptoir et les demandes du troc.", w, C::Dim));
         rows.extend(bullet_rows("· ", "le bestiaire retient le meilleur rang obtenu par espèce, à vie.", w, C::Dim));
         rows.extend(bullet_rows("· ", "la vente écoule toujours les rangs les plus bas d'abord : vos beaux spécimens restent.", w, C::Dim));
         rows.push(Row {
@@ -4679,11 +4693,11 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     let web = cfg!(target_arch = "wasm32");
     let fin = if web { "+/- taille" } else { "ctrl+c quitter" };
     let large = format!(
-        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [x] troc{} [p]almarès [n]ouveautés{} [?] aide · {} ",
-        "", pastille, fin
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal t[r]oc [p]almarès [n]ouveautés{} [?] aide · {} ",
+        pastille, fin
     );
     let moyen = format!(
-        " zqsd · Entrée · [v]ue [i]nv [b]est b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]roph [j]ourn [x]troc [p]alm [n]euf{} [?] aide ",
+        " zqsd · Entrée · [v]ue [i]nv [b]est b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]roph [j]ourn t[r]oc [p]alm [n]euf{} [?] aide ",
         pastille
     );
     let court = format!(" zqsd · Entrée · [?] aide · [n]ouveautés{} ", pastille);
@@ -4929,7 +4943,7 @@ fn world_key(game: &mut Game, code: GKey) {
             game.panels.push(Panel::new(PanelKind::Board));
             return;
         }
-        GKey::Char('x') => {
+        GKey::Char('r') => {
             game.panels.push(Panel::new(PanelKind::Trade));
             return;
         }

@@ -64,7 +64,7 @@ minimum, truecolor recommandé (repli automatique en 256 couleurs).
 **Touches** : flèches ou `zqsd` pour se déplacer, `Entrée` pour interagir,
 `?` ouvre le manuel complet en jeu. Raccourcis : `v` tableau de bord,
 `i` inventaire, `b` bestiaire, `o` boutique, `c` contrats, `l` labo,
-`m` musée, `e` enclos, `x` troc, `t` trophées, `j` journal, `p` palmarès, `n` nouveautés. `ctrl+c` quitte (et sauvegarde).
+`m` musée, `e` enclos, `r` troc, `t` trophées, `j` journal, `p` palmarès, `n` nouveautés. `ctrl+c` quitte (et sauvegarde).
 
 ## héberger et inviter des amis
 
