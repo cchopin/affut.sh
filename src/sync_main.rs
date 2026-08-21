@@ -21,12 +21,43 @@ fn main() {
         let t = t.split('?').next().unwrap_or(t);
         if valid_token(t) { Some(t.to_string()) } else { None }
     }
-    /* pseudo : lettres/chiffres unicode, espace, tiret, souligné — 2 à 16 signes */
+    /* pseudo : alphabet latin uniquement (chiffres, accents, - _ espace).
+       le cyrillique et le grec sont refusés : leurs homoglyphes (е, о, а…)
+       permettraient d'afficher un pseudo visuellement identique à un autre. */
+    fn latin_ok(c: char) -> bool {
+        c.is_ascii_alphanumeric()
+            || ('\u{00C0}'..='\u{024F}').contains(&c) && c != '\u{00D7}' && c != '\u{00F7}'
+            || c == '-'
+            || c == '_'
+            || c == ' '
+    }
     fn clean_pseudo(raw: &str) -> Option<String> {
-        let p: String = raw.trim().chars().take(16).collect();
-        let ok = p.chars().count() >= 2
-            && p.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ');
+        /* espaces internes compressés : « te  ly » ne peut pas doubler « te ly » */
+        let p: String = raw.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(16).collect();
+        let ok = p.chars().count() >= 2 && p.chars().all(latin_ok) && p.chars().any(|c| c.is_alphanumeric());
         if ok { Some(p) } else { None }
+    }
+    /* clé de comparaison : deux pseudos qui se lisent pareil se valent.
+       casse ignorée, accents dépouillés, séparateurs retirés. */
+    fn norm_key(p: &str) -> String {
+        p.to_lowercase()
+            .chars()
+            .filter_map(|c| match c {
+                'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => Some("a".to_string()),
+                'ç' => Some("c".to_string()),
+                'è' | 'é' | 'ê' | 'ë' => Some("e".to_string()),
+                'ì' | 'í' | 'î' | 'ï' => Some("i".to_string()),
+                'ñ' => Some("n".to_string()),
+                'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' => Some("o".to_string()),
+                'ù' | 'ú' | 'û' | 'ü' => Some("u".to_string()),
+                'ý' | 'ÿ' => Some("y".to_string()),
+                'æ' => Some("ae".to_string()),
+                'œ' => Some("oe".to_string()),
+                'ß' => Some("ss".to_string()),
+                ' ' | '-' | '_' => None,
+                c => Some(c.to_string()),
+            })
+            .collect()
     }
     fn now_ms() -> f64 {
         std::time::SystemTime::now()
@@ -121,7 +152,7 @@ fn main() {
                 continue;
             }
             let Some(pseudo) = clean_pseudo(&raw_pseudo) else {
-                respond(req, 400, "pseudo invalide (2 à 16 lettres, chiffres, - _ ou espace)");
+                respond(req, 400, "pseudo invalide : 2 à 16 signes, alphabet latin, chiffres, - _ ou espace");
                 continue;
             };
             /* un pseudo appartient au premier jeton qui l'a pris */
@@ -130,7 +161,7 @@ fn main() {
                 t != &token
                     && e.get("pseudo")
                         .and_then(|p| p.as_str())
-                        .map(|p| p.to_lowercase() == pseudo.to_lowercase())
+                        .map(|p| norm_key(p) == norm_key(&pseudo))
                         .unwrap_or(false)
             });
             if taken {

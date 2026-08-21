@@ -60,6 +60,11 @@
     font-size: 11px; color: #7e8a9b; opacity: .75; cursor: pointer;
   }
   #syncbtn:hover { color: #c2cdda; }
+  #lbbtn {
+    position: fixed; bottom: 4px; right: 11rem; z-index: 5;
+    font-size: 11px; color: #7e8a9b; opacity: .75; text-decoration: none;
+  }
+  #lbbtn:hover { color: #ffc45c; }
   #lbask {
     display: none; position: fixed; z-index: 15; bottom: 26px; right: 10px;
     width: min(23rem, 92vw); background: #171c24; border: 1px solid #4a5462;
@@ -141,6 +146,7 @@
     <button id="takeover">jouer ici</button>
   </div>
 </div>
+<a id="lbbtn" href="./classement.html" target="_blank" title="classement des piégeurs">▤ classement</a>
 <div id="syncbtn" title="exporter / importer la sauvegarde">⇄ sauvegarde</div>
 <div id="lbask">
   <div class="t">rejoindre le classement ?</div>
@@ -178,7 +184,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821g'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821h'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
