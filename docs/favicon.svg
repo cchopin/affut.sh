@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- affut.sh : l'étoile des shinies (✦) sur le fond nuit du terminal -->
+  <rect width="32" height="32" rx="7" fill="#101318"/>
+  <rect x="1" y="1" width="30" height="30" rx="6" fill="none" stroke="#2b3240" stroke-width="1"/>
+  <path d="M16 3 C 17.4 12.4, 19.6 14.6, 29 16 C 19.6 17.4, 17.4 19.6, 16 29 C 14.6 19.6, 12.4 17.4, 3 16 C 12.4 14.6, 14.6 12.4, 16 3 Z"
+        fill="#ffc45c"/>
+</svg>
