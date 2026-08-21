@@ -75,6 +75,12 @@
     background: #101318; color: #c2cdda; border: 1px solid #4a5462;
     font: inherit; padding: .4rem;
   }
+  #syncdlg input {
+    font: inherit; background: #101318; color: #c2cdda;
+    border: 1px solid #4a5462; padding: .2rem .4rem; width: 11rem;
+  }
+  #syncdlg .ok { color: #98c379; }
+  #syncdlg .ko { color: #e06c75; }
   #syncdlg .btns { margin-top: .6rem; display: flex; gap: .6rem; }
   #syncdlg button {
     font: inherit; background: transparent; color: #7e8a9b;
@@ -121,6 +127,11 @@
      automatiquement (la version la plus récente gagne — évitez de jouer
      sur deux PC en même temps).</p>
   <p><code id="synclink"></code> <button id="syncLinkCopy">copier le lien</button></p>
+  <p style="margin-top:.9rem">pseudo au <a href="./classement.html" target="_blank" style="color:#7ac9ff">classement</a>
+     (videz le champ pour ne plus y figurer) :<br>
+     <input id="pseudo" maxlength="16" spellcheck="false" placeholder="votre pseudo">
+     <button id="pseudoSave">enregistrer</button>
+     <span id="pseudoMsg"></span></p>
   <p style="margin-top:.8rem">ou manuellement : copiez ce texte sur l'autre PC, ou collez une sauvegarde
      à importer (compatible avec le <code>~/.affutsh2.json</code> du terminal).</p>
   <textarea id="synctxt" spellcheck="false"></textarea>
@@ -135,7 +146,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821e'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821f'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -289,12 +300,82 @@ window.addEventListener('beforeunload', () => {
 window.addEventListener('beforeunload', () => w.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) w.save(); });
 
+// ── classement : le pseudo est local, les stats sont calculées depuis la
+// sauvegarde et poussées toutes les 5 min. rien n'est envoyé sans pseudo.
+const LB = 'https://vps.tely.info:8444/lb/';
+let pseudo = localStorage.getItem('affut_pseudo') || '';
+
+function lbStats() {
+  let s;
+  try { s = JSON.parse(localStorage.getItem('affutsh_save2') || '{}'); } catch (e) { return null; }
+  const dex = Array.isArray(s.dex2) ? s.dex2 : [];
+  const especes = dex.filter(d => (d && d.n) > 0).length;
+  const rangs = dex.reduce((a, d) => a + (d && d.n > 0 ? (d.best || 0) : 0), 0);
+  const ecus = Math.floor(s.total_earned || 0);
+  const st = {
+    captures: Math.floor(s.captures || 0),
+    especes, rangs,
+    shinies: Math.floor(s.shinies || 0),
+    ecus,
+    trophees: Math.floor(s.trophies || 0),
+    migrations: Math.floor(s.migrations || 0),
+  };
+  st.score = Math.floor(especes * 100 + st.shinies * 300 + rangs * 40 + st.trophees * 1000 + ecus / 1000);
+  return st;
+}
+
+async function lbPush(name) {
+  const body = JSON.stringify(Object.assign({ pseudo: name }, lbStats() || {}));
+  const r = await fetch(LB + token, {
+    method: 'PUT', body, headers: { 'content-type': 'application/json' },
+  });
+  return r;
+}
+
+// un autre PC de la même partie retrouve le pseudo déjà choisi
+(async () => {
+  if (pseudo) return;
+  try {
+    const r = await fetch(LB + token, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j && j.pseudo) { pseudo = j.pseudo; localStorage.setItem('affut_pseudo', pseudo); }
+  } catch (e) {}
+})();
+
+setInterval(() => { if (pseudo && !paused) lbPush(pseudo).catch(() => {}); }, 300000);
+
+const pseudoIn = document.getElementById('pseudo');
+const pseudoMsg = document.getElementById('pseudoMsg');
+document.getElementById('pseudoSave').addEventListener('click', async () => {
+  const name = pseudoIn.value.trim();
+  pseudoMsg.textContent = '…';
+  pseudoMsg.className = '';
+  try {
+    const r = await lbPush(name);
+    if (r.ok) {
+      pseudo = name;
+      localStorage.setItem('affut_pseudo', name);
+      pseudoMsg.textContent = name ? '✓ inscrit au classement' : '✓ retiré du classement';
+      pseudoMsg.className = 'ok';
+    } else {
+      pseudoMsg.textContent = await r.text();
+      pseudoMsg.className = 'ko';
+    }
+  } catch (e) {
+    pseudoMsg.textContent = 'serveur injoignable';
+    pseudoMsg.className = 'ko';
+  }
+});
+
 const dlg = document.getElementById('syncdlg');
 const txt = document.getElementById('synctxt');
 document.getElementById('syncbtn').addEventListener('click', () => {
   w.save();
   txt.value = localStorage.getItem('affutsh_save2') || '';
   document.getElementById('synclink').textContent = location.origin + location.pathname + '#s=' + token;
+  pseudoIn.value = pseudo;
+  pseudoMsg.textContent = '';
   dlg.classList.add('open');
 });
 document.getElementById('syncLinkCopy').addEventListener('click', async () => {

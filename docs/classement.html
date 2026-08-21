@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>affut.sh — classement</title>
+<style>
+  @font-face {
+    font-family: "Iosevka Affut";
+    src: url("./fonts/iosevka-affut-300.woff2") format("woff2");
+    font-weight: 300; font-style: normal; font-display: swap;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #101318; color: #c2cdda;
+    font-family: "Iosevka Affut", "Menlo", ui-monospace, monospace;
+    font-weight: 300; font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem 1rem; display: flex; justify-content: center;
+  }
+  main { width: 100%; max-width: 62rem; }
+  h1 { font-size: 14px; font-weight: 300; color: #ffc45c; margin-bottom: .2rem; }
+  .sub { color: #7e8a9b; margin-bottom: 1.2rem; }
+  a { color: #7ac9ff; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .frame { border: 1px solid #4a5462; background: #171c24; padding: .8rem 1rem; }
+  .wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; white-space: nowrap; }
+  th, td { padding: .28rem .6rem; text-align: right; }
+  th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th {
+    color: #7e8a9b; font-weight: 300; cursor: pointer;
+    border-bottom: 1px solid #4a5462; user-select: none;
+  }
+  th:hover { color: #ffc45c; }
+  th.on { color: #ffc45c; }
+  tbody tr:nth-child(even) { background: #1a1f28; }
+  .pos { color: #7e8a9b; }
+  tr.top1 .pos, tr.top1 .who { color: #ffc45c; }
+  tr.top2 .pos, tr.top2 .who { color: #c2cdda; }
+  tr.top3 .pos, tr.top3 .who { color: #d6a04b; }
+  .who { color: #c2cdda; }
+  .score { color: #ffc45c; }
+  .dim { color: #7e8a9b; }
+  .shiny { color: #ffd479; }
+  footer { color: #7e8a9b; margin-top: 1rem; line-height: 1.6; }
+  .err { color: #e06c75; }
+</style>
+</head>
+<body>
+<main>
+  <h1>affut.sh — classement du comptoir</h1>
+  <div class="sub">
+    <a href="./">← retour au jeu</a> ·
+    <span id="count">chargement…</span> ·
+    <span class="dim">cliquez une colonne pour trier</span>
+  </div>
+  <div class="frame wrap">
+    <table>
+      <thead>
+        <tr id="head">
+          <th data-k="pos" class="dim">#</th>
+          <th data-k="pseudo">piégeur</th>
+          <th data-k="score" class="on">score</th>
+          <th data-k="especes">espèces</th>
+          <th data-k="captures">captures</th>
+          <th data-k="shinies">shinies ✦</th>
+          <th data-k="rangs">cote</th>
+          <th data-k="ecus">écus gagnés</th>
+          <th data-k="trophees">trophées</th>
+          <th data-k="at">vu</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <footer>
+    <span class="dim">score = espèces×100 + shinies×300 + cote×40 + trophées×1000 + écus gagnés÷1000.
+    la « cote » additionne le meilleur rang obtenu (C=1 … S=4) sur chaque espèce découverte.</span><br>
+    <span class="dim">pour apparaître ici : ouvrez le jeu, cliquez « ⇄ session partagée » et choisissez un pseudo.
+    les scores sont déclarés par le navigateur de chaque joueur — c'est un tableau d'honneur entre amis, pas un juge.</span>
+  </footer>
+</main>
+<script type="module">
+const API = 'https://vps.tely.info:8444/lb';
+const TOTAL_ESPECES = 98;
+let data = [], key = 'score', desc = true;
+
+const fmt = n => {
+  n = Math.floor(Number(n) || 0);
+  if (n >= 1e9) return (n / 1e9).toFixed(1).replace('.0', '') + ' G';
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace('.0', '') + ' M';
+  if (n >= 1e4) return (n / 1e3).toFixed(0) + ' k';
+  return String(n);
+};
+const ago = ms => {
+  const s = (Date.now() - Number(ms || 0)) / 1000;
+  if (!isFinite(s) || s < 0) return '—';
+  if (s < 90) return "à l'instant";
+  if (s < 5400) return Math.round(s / 60) + ' min';
+  if (s < 172800) return Math.round(s / 3600) + ' h';
+  return Math.round(s / 86400) + ' j';
+};
+/* rendu strictement textuel : un pseudo ne peut pas devenir du balisage */
+const cell = (tr, text, cls) => {
+  const td = document.createElement('td');
+  td.textContent = text;
+  if (cls) td.className = cls;
+  tr.appendChild(td);
+  return td;
+};
+
+function render() {
+  const rows = document.getElementById('rows');
+  rows.textContent = '';
+  const sorted = [...data].sort((a, b) => {
+    const av = key === 'pseudo' ? String(a.pseudo || '') : Number(a[key]) || 0;
+    const bv = key === 'pseudo' ? String(b.pseudo || '') : Number(b[key]) || 0;
+    const c = key === 'pseudo' ? av.localeCompare(bv) : av - bv;
+    return desc ? -c : c;
+  });
+  sorted.forEach((e, i) => {
+    const tr = document.createElement('tr');
+    if (key === 'score' && desc && i < 3) tr.className = 'top' + (i + 1);
+    cell(tr, String(i + 1), 'pos');
+    cell(tr, String(e.pseudo || '?'), 'who');
+    cell(tr, fmt(e.score), 'score');
+    cell(tr, Math.floor(e.especes || 0) + '/' + TOTAL_ESPECES);
+    cell(tr, fmt(e.captures));
+    cell(tr, fmt(e.shinies), 'shiny');
+    cell(tr, fmt(e.rangs));
+    cell(tr, fmt(e.ecus));
+    cell(tr, fmt(e.trophees));
+    cell(tr, ago(e.at), 'dim');
+    rows.appendChild(tr);
+  });
+  document.getElementById('count').textContent =
+    data.length + (data.length > 1 ? ' piégeurs inscrits' : ' piégeur inscrit');
+  for (const th of document.querySelectorAll('#head th')) {
+    th.classList.toggle('on', th.dataset.k === key);
+  }
+}
+
+document.getElementById('head').addEventListener('click', ev => {
+  const th = ev.target.closest('th');
+  if (!th || th.dataset.k === 'pos') return;
+  if (key === th.dataset.k) desc = !desc;
+  else { key = th.dataset.k; desc = true; }
+  render();
+});
+
+async function load() {
+  try {
+    const r = await fetch(API, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    data = Array.isArray(j) ? j : [];
+    render();
+  } catch (e) {
+    document.getElementById('count').textContent = 'classement injoignable';
+    document.getElementById('count').className = 'err';
+  }
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

@@ -1,22 +1,52 @@
-//! affut-sync — mini service de synchronisation des sauvegardes navigateur.
-//! GET/PUT /s/<jeton> ; un fichier par jeton ; CORS ouvert (le jeton est le secret).
+//! affut-sync — synchronisation des sauvegardes navigateur + classement.
+//!
+//! sauvegardes : GET/PUT /s/<jeton> — un fichier par jeton, le jeton EST le secret.
+//! classement  : PUT /lb/<jeton> (pseudo + stats), GET /lb (tableau public).
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use std::io::Read;
     let data_dir = std::env::var("AFFUT_SYNC_DIR").unwrap_or_else(|_| "/data".into());
+    let lb_dir = format!("{}/lb", data_dir);
     std::fs::create_dir_all(&data_dir).ok();
+    std::fs::create_dir_all(&lb_dir).ok();
     let server = tiny_http::Server::http("0.0.0.0:2323").expect("bind 2323");
     eprintln!("affut-sync sur :2323, stockage {}", data_dir);
 
-    fn token_of(url: &str) -> Option<String> {
-        let t = url.strip_prefix("/s/")?;
+    fn valid_token(t: &str) -> bool {
+        t.len() >= 16 && t.len() <= 64 && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    }
+    fn token_after(url: &str, prefix: &str) -> Option<String> {
+        let t = url.strip_prefix(prefix)?;
         let t = t.split('?').next().unwrap_or(t);
-        if t.len() >= 16 && t.len() <= 64 && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-            Some(t.to_string())
-        } else {
-            None
-        }
+        if valid_token(t) { Some(t.to_string()) } else { None }
+    }
+    /* pseudo : lettres/chiffres unicode, espace, tiret, souligné — 2 à 16 signes */
+    fn clean_pseudo(raw: &str) -> Option<String> {
+        let p: String = raw.trim().chars().take(16).collect();
+        let ok = p.chars().count() >= 2
+            && p.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ');
+        if ok { Some(p) } else { None }
+    }
+    fn now_ms() -> f64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0)
+    }
+    /* entrées du classement : (jeton, valeur json) */
+    fn read_board(lb_dir: &str) -> Vec<(String, serde_json::Value)> {
+        let Ok(dir) = std::fs::read_dir(lb_dir) else { return Vec::new() };
+        dir.filter_map(|e| {
+            let p = e.ok()?.path();
+            if p.extension().map(|x| x != "json").unwrap_or(true) {
+                return None;
+            }
+            let tok = p.file_stem()?.to_str()?.to_string();
+            let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&p).ok()?).ok()?;
+            Some((tok, v))
+        })
+        .collect()
     }
 
     for mut req in server.incoming_requests() {
@@ -25,11 +55,20 @@ fn main() {
             tiny_http::Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, PUT, OPTIONS"[..]).unwrap(),
             tiny_http::Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"content-type"[..]).unwrap(),
         ];
+        let json_h = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json; charset=utf-8"[..]).unwrap();
         let respond = |req: tiny_http::Request, code: u32, body: &str| {
             let mut r = tiny_http::Response::from_string(body).with_status_code(code);
             for h in cors.iter() {
                 r.add_header(h.clone());
             }
+            let _ = req.respond(r);
+        };
+        let respond_json = |req: tiny_http::Request, code: u32, body: &str| {
+            let mut r = tiny_http::Response::from_string(body).with_status_code(code);
+            for h in cors.iter() {
+                r.add_header(h.clone());
+            }
+            r.add_header(json_h.clone());
             let _ = req.respond(r);
         };
         let method = req.method().clone();
@@ -38,7 +77,92 @@ fn main() {
             respond(req, 204, "");
             continue;
         }
-        let Some(token) = token_of(&url) else {
+
+        /* ── classement public ─────────────────────────────────────────── */
+        if url == "/lb" || url.starts_with("/lb?") {
+            if method != tiny_http::Method::Get {
+                respond(req, 405, "");
+                continue;
+            }
+            let rows: Vec<serde_json::Value> = read_board(&lb_dir).into_iter().map(|(_, v)| v).collect();
+            let body = serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into());
+            respond_json(req, 200, &body);
+            continue;
+        }
+        if let Some(token) = token_after(&url, "/lb/") {
+            /* GET : le porteur du jeton relit SON entrée (pour retrouver son
+               pseudo sur un autre PC) — rien d'autre n'est exposé */
+            if method == tiny_http::Method::Get {
+                match std::fs::read_to_string(format!("{}/{}.json", lb_dir, token)) {
+                    Ok(s) => respond_json(req, 200, &s),
+                    Err(_) => respond(req, 404, ""),
+                }
+                continue;
+            }
+            if method != tiny_http::Method::Put {
+                respond(req, 405, "");
+                continue;
+            }
+            let mut body = String::new();
+            if req.as_reader().take(4_000).read_to_string(&mut body).is_err() {
+                respond(req, 400, "lecture impossible");
+                continue;
+            }
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) else {
+                respond(req, 400, "json invalide");
+                continue;
+            };
+            let path = format!("{}/{}.json", lb_dir, token);
+            let raw_pseudo = v.get("pseudo").and_then(|p| p.as_str()).unwrap_or("").to_string();
+            /* pseudo vide = retrait du classement */
+            if raw_pseudo.trim().is_empty() {
+                let _ = std::fs::remove_file(&path);
+                respond(req, 200, "retiré");
+                continue;
+            }
+            let Some(pseudo) = clean_pseudo(&raw_pseudo) else {
+                respond(req, 400, "pseudo invalide (2 à 16 lettres, chiffres, - _ ou espace)");
+                continue;
+            };
+            /* un pseudo appartient au premier jeton qui l'a pris */
+            let board = read_board(&lb_dir);
+            let taken = board.iter().any(|(t, e)| {
+                t != &token
+                    && e.get("pseudo")
+                        .and_then(|p| p.as_str())
+                        .map(|p| p.to_lowercase() == pseudo.to_lowercase())
+                        .unwrap_or(false)
+            });
+            if taken {
+                respond(req, 409, "pseudo déjà pris");
+                continue;
+            }
+            if !std::path::Path::new(&path).exists() && board.len() >= 500 {
+                respond(req, 507, "classement plein");
+                continue;
+            }
+            /* liste blanche : on ne stocke QUE des nombres finis et bornés,
+               jamais le json brut du client (pas de champ surprise dans /lb) */
+            let mut entry = serde_json::Map::new();
+            entry.insert("pseudo".into(), serde_json::Value::String(pseudo));
+            entry.insert("at".into(), serde_json::json!(now_ms()));
+            for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "score", "migrations"] {
+                let n = v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
+                let n = if n.is_finite() { n.clamp(0.0, 1e15).floor() } else { 0.0 };
+                entry.insert(k.into(), serde_json::json!(n));
+            }
+            let out = serde_json::to_string(&serde_json::Value::Object(entry)).unwrap_or_default();
+            let tmp = format!("{}.tmp", path);
+            if std::fs::write(&tmp, &out).is_ok() && std::fs::rename(&tmp, &path).is_ok() {
+                respond(req, 200, "ok");
+            } else {
+                respond(req, 500, "écriture impossible");
+            }
+            continue;
+        }
+
+        /* ── sauvegardes ───────────────────────────────────────────────── */
+        let Some(token) = token_after(&url, "/s/") else {
             respond(req, 404, "affut-sync");
             continue;
         };
