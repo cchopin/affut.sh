@@ -41,7 +41,11 @@ struct BiomeDef {
     mult: f64,
     desc: &'static str,
 }
-const BIOMES: [BiomeDef; 9] = [
+/* biomes 0..WILDB : ceux de la carte. le dernier, « curiosités », n'a ni
+   terrain ni pièges — on n'y entre pas, ses espèces s'obtiennent au troc. */
+const WILDB: usize = 9;
+const CURIO_B: usize = 9;
+const BIOMES: [BiomeDef; 10] = [
     BiomeDef { name: "forêt",    cost: 0.0,       mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
     BiomeDef { name: "marais",   cost: 2500.0,    mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
     BiomeDef { name: "montagne", cost: 20000.0,   mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
@@ -51,6 +55,7 @@ const BIOMES: [BiomeDef; 9] = [
     BiomeDef { name: "volcan",   cost: 12000000.0, mult: 13.0, desc: "la montagne qui fume. huit espèces y vivent, aucune n'a froid." },
     BiomeDef { name: "récif",    cost: 35000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
     BiomeDef { name: "ruines",   cost: 100000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
+    BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 1.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
 ];
 
 struct CreatureDef {
@@ -60,7 +65,7 @@ struct CreatureDef {
     n: &'static str,
     lore: &'static str,
 }
-const CREATURES: [CreatureDef; 98] = [
+const CREATURES: [CreatureDef; 104] = [
     // ---- forêt (13)
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
@@ -168,7 +173,28 @@ const CREATURES: [CreatureDef; 98] = [
     CreatureDef { b: 8, r: 3, g: ".^.",   n: "spectrarque",      lore: "l'ancien maître des lieux. très à cheval sur l'étiquette." },
     CreatureDef { b: 8, r: 3, g: "{t}",   n: "chronolithe",      lore: "le temps passe autour de lui, jamais à travers." },
     CreatureDef { b: 8, r: 4, g: "/#\\",  n: "bâtisseur oublié", lore: "il a construit les ruines. neuves, à l'époque." },
+    /* curiosités : introuvables dans la nature, elles ne s'obtiennent qu'au troc */
+    CreatureDef { b: 9, r: 1, g: "<o>",  n: "troqueline",  lore: "n'appartient jamais deux fois à la même personne. c'est sa façon de voyager." },
+    CreatureDef { b: 9, r: 2, g: "[+]",  n: "colporel",    lore: "dort dans les sacoches. se réveille exactement au moment de l'échange." },
+    CreatureDef { b: 9, r: 2, g: "%~%",  n: "pacotille",   lore: "sans valeur, paraît-il. tout le monde en veut une." },
+    CreatureDef { b: 9, r: 3, g: "<*>",  n: "curiosa",     lore: "vient d'un biome que personne n'a cartographié. elle refuse d'en parler." },
+    CreatureDef { b: 9, r: 3, g: "(:)",  n: "porcelin",    lore: "une figurine qui respire. les collectionneurs se l'arrachent, elle s'en moque." },
+    CreatureDef { b: 9, r: 4, g: "=@=",  n: "chimérel",    lore: "trois marchands jurent l'avoir vendu le même jour. aucun ne ment." },
 ];
+
+/* espèces qui comptent dans le bestiaire : les curiosités en sont exclues,
+   pour que le pourcentage et « bestiaire complet » gardent leur sens. */
+/* jour de foire : une journée sur quatre, le village s'anime */
+fn fair_day() -> bool {
+    ((now_ms() / 86_400_000.0) as u64) % 4 == 0
+}
+
+fn wild_species() -> impl Iterator<Item = usize> {
+    (0..CREATURES.len()).filter(|&i| CREATURES[i].b < WILDB)
+}
+fn wild_total() -> usize {
+    CREATURES.iter().filter(|c| c.b < WILDB).count()
+}
 
 fn biome_creatures(b: usize) -> impl Iterator<Item = usize> {
     (0..CREATURES.len()).filter(move |&i| CREATURES[i].b == b)
@@ -227,6 +253,7 @@ const LAB_LIGNEES: usize = 9;
 const LAB_TRAQUEUR: usize = 10;
 const LAB_COURTAGE: usize = 11;
 const LAB_LICENCE: usize = 12;
+const MERCH_ITEMS: usize = 5;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
 const ACH_666: usize = 27;
@@ -269,8 +296,19 @@ const METEOS: [&str; 6] = ["ciel clair", "pluie", "brume", "canicule", "tempête
 const NOCTURNES: [usize; 7] = [9, 21, 28, 41, 54, 62, 92]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.5";
-const NEWS: [(&str, &str, &[&str]); 6] = [
+const VERSION: &str = "1.6";
+const NEWS: [(&str, &str, &[&str]); 7] = [
+    (
+        "1.6",
+        "21 août 2026",
+        &[
+            "comptoir de troc (touche x) : des collectionneurs échangent leurs curiosités contre vos doublons. six espèces qu'aucun piège n'attrape.",
+            "marchand ambulant : il passe plusieurs fois par jour sur la place, avec une malle qui change — breloques de chance, licences, œufs de curiosité.",
+            "jour de foire, un jour sur quatre : le marchand reste, le troc double ses demandes, la chance monte et les prix baissent.",
+            "les curiosités ne comptent pas dans le pourcentage du bestiaire : votre progression ne recule pas.",
+            "la barre du bas s'adapte enfin aux petits écrans.",
+        ],
+    ),
     (
         "1.5",
         "21 août 2026",
@@ -411,6 +449,23 @@ struct State {
     contracts_done: Vec<bool>,
     #[serde(default)]
     contracts: Vec<(usize, u64, f64)>,
+    /* troc : (espèce demandée, quantité, curiosité offerte), figé par fenêtre */
+    #[serde(default)]
+    trades_window: u64,
+    #[serde(default)]
+    trades: Vec<(usize, u64, usize)>,
+    #[serde(default)]
+    trades_done: Vec<bool>,
+    #[serde(default)]
+    trades_made: u64,
+    /* marchand ambulant : achats déjà faits (clé fenêtre×8+rang), breloques et
+       licences acquises auprès de lui */
+    #[serde(default)]
+    merchant_done: Vec<u64>,
+    #[serde(default)]
+    charms: u32,
+    #[serde(default)]
+    licences: u32,
     #[serde(default)]
     museum: Vec<Option<MusE>>,
     #[serde(default)]
@@ -466,6 +521,13 @@ impl Default for State {
             contracts_window: 0,
             contracts_done: vec![false; 3],
             contracts: vec![],
+            trades_window: 0,
+            trades: vec![],
+            trades_done: vec![],
+            trades_made: 0,
+            merchant_done: vec![],
+            charms: 0,
+            licences: 0,
             museum: vec![None; 12],
             museum_at: 0.0,
             museum_pool: 0.0,
@@ -749,6 +811,7 @@ enum Zone {
     Succes,
     Musee,
     Enclos,
+    Troc,
 }
 
 const ZONE_RECTS: [(usize, usize, usize, usize, usize); 9] = [
@@ -887,6 +950,7 @@ impl WorldMap {
         w.building(61, 25, 13, 5, "trophées", Zone::Succes, 't');
         w.building(43, 37, 13, 5, "musée", Zone::Musee, 'm');
         w.building(61, 37, 13, 5, "enclos", Zone::Enclos, 'e');
+        w.building(52, 31, 13, 5, "troc", Zone::Troc, 'x');
 
         // fontaine (décalée sous le corridor)
         w.text(55, 23, "╭─╮", C::Blue, true);
@@ -947,6 +1011,8 @@ enum Action {
     MuseumCollect,
     PenStart(usize, usize),
     PenCollect(usize),
+    Trade(usize),
+    MerchBuy(usize),
     LegendTry(usize, u64, Option<usize>),
     TraceFollow(u64, usize),
     Nothing,
@@ -994,6 +1060,8 @@ enum PanelKind {
     Journal,
     Board,
     News,
+    Trade,
+    Merchant,
     Offline(OfflineSummary),
     ResetConfirm,
 }
@@ -1251,13 +1319,18 @@ impl Game {
     /* ------------------------------------------------------------- bonus */
 
     fn completed_biomes(&self) -> usize {
-        (0..BIOMES.len()).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].n > 0)).count()
+        (0..WILDB).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].n > 0)).count()
     }
     fn shiny_completed_biomes(&self) -> usize {
-        (0..BIOMES.len()).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].s > 0)).count()
+        (0..WILDB).filter(|&b| biome_creatures(b).all(|i| self.s.dex2[i].s > 0)).count()
     }
     fn global_luck(&self) -> f64 {
-        self.s.lab[LAB_FLAIR] as f64 * 0.04 + self.s.trophies as f64 * 0.008 + self.completed_biomes() as f64 * 0.04 + self.streak_bonus()
+        self.s.lab[LAB_FLAIR] as f64 * 0.04
+            + self.s.trophies as f64 * 0.008
+            + self.completed_biomes() as f64 * 0.04
+            + self.s.charms as f64 * 0.10
+            + if fair_day() { 0.15 } else { 0.0 }
+            + self.streak_bonus()
     }
     /* l'élan : bonus de chance qui grandit avec les jours de chasse consécutifs */
     fn streak_bonus(&self) -> f64 {
@@ -1432,7 +1505,7 @@ impl Game {
         100_000.0 * 2f64.powi(self.s.migrations.min(12) as i32)
     }
     fn trap_cap(&self) -> u32 {
-        2 + self.s.lab[LAB_LICENCE]
+        2 + self.s.lab[LAB_LICENCE] + self.s.licences
     }
     fn placed_total(&self) -> u32 {
         (0..6).map(|t| self.placed_count(t)).sum()
@@ -1601,6 +1674,19 @@ impl Game {
             self.s.contracts_done = vec![false; 3];
             self.log(vec![("de nouveaux contrats sont affichés à la boutique.".into(), C::Blue)]);
         }
+        // troc : les collectionneurs changent d'envie chaque jour
+        let tw = (now / 86_400_000.0) as u64;
+        if self.s.trades_window != tw || (self.s.trades.is_empty() && !self.s.dex2.iter().all(|d| d.n == 0)) {
+            self.s.trades_window = tw;
+            self.s.trades = self.gen_trades(tw);
+            self.s.trades_done = vec![false; self.s.trades.len()];
+            if !self.s.trades.is_empty() {
+                self.log(vec![(
+                    format!("le comptoir de troc affiche {} demande(s) du jour.", self.s.trades.len()),
+                    C::Blue,
+                )]);
+            }
+        }
         // rituel du jour : série de connexions consécutives -> élan + petit cadeau
         let day = (now / 86_400_000.0) as u32;
         if self.s.last_day != day {
@@ -1613,6 +1699,12 @@ impl Game {
                 (format!("élan +{} aujourd'hui · {} baies offertes", fmt2(self.streak_bonus()), gift), C::Green),
             ]);
             self.toast(format!("série : jour {} — élan +{}", self.s.streak, fmt2(self.streak_bonus())));
+            if fair_day() {
+                self.log(vec![(
+                    "jour de foire : le marchand reste toute la journée, le troc double ses demandes, la chance sourit.".into(),
+                    C::Gold,
+                )]);
+            }
             self.check_achievements();
         }
         // légende errante : annoncer son apparition (une fois par fenêtre)
@@ -1759,10 +1851,10 @@ impl Game {
             3 => s.captures >= 10000,
             4 => s.shinies >= 1,
             5 => s.shinies >= 25,
-            6 => (0..CREATURES.len()).any(|c| CREATURES[c].r == 4 && s.dex2[c].n > 0),
-            7 => (0..CREATURES.len()).filter(|&c| s.dex2[c].n > 0).count() >= 10,
-            8 => (0..CREATURES.len()).filter(|&c| s.dex2[c].n > 0).count() >= 30,
-            9 => (0..CREATURES.len()).all(|c| s.dex2[c].n > 0),
+            6 => wild_species().any(|c| CREATURES[c].r == 4 && s.dex2[c].n > 0),
+            7 => wild_species().filter(|&c| s.dex2[c].n > 0).count() >= 10,
+            8 => wild_species().filter(|&c| s.dex2[c].n > 0).count() >= 30,
+            9 => wild_species().all(|c| s.dex2[c].n > 0),
             10 => s.biomes[1].is_some(),
             11 => s.biomes[5].is_some(),
             12 => s.total_earned >= 10000.0,
@@ -1771,8 +1863,8 @@ impl Game {
             15 => s.migrations >= 1,
             16 => s.migrations >= 5,
             17 => biome_creatures(0).all(|c| s.dex2[c].n > 0),
-            18 => (0..CREATURES.len()).any(|c| s.dex2[c].best >= 4),
-            19 => (0..CREATURES.len()).filter(|&c| s.dex2[c].best >= 4).count() >= 10,
+            18 => wild_species().any(|c| s.dex2[c].best >= 4),
+            19 => wild_species().filter(|&c| s.dex2[c].best >= 4).count() >= 10,
             20 => s.hunts_done >= 1,
             21 => s.contracts_delivered >= 5,
             22 => s.legends_caught >= 1,
@@ -2063,6 +2155,86 @@ impl Game {
                     self.log(vec![("recette du musée : ".into(), C::Blue), (format!("+{} écus", fmt(v)), C::GoldDark)]);
                 }
             }
+            Action::MerchBuy(item) => {
+                let Some(w) = self.merchant_now() else { return };
+                let key = w * 8 + item as u64;
+                let prix = self.merchant_price(item);
+                if self.s.merchant_done.contains(&key) || self.s.ecus < prix {
+                    return;
+                }
+                self.s.ecus -= prix;
+                self.s.merchant_done.push(key);
+                match item {
+                    0 => {
+                        let curios: Vec<usize> = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == CURIO_B).collect();
+                        let ci = curios[rand::thread_rng().gen_range(0..curios.len())];
+                        let rank = self.roll_rank(self.global_luck());
+                        let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now_ms());
+                        let (is_new, _, _) = self.add_specimen(ci, shiny, rank);
+                        self.log(vec![
+                            ("l'œuf éclot : ".into(), C::Dim),
+                            (
+                                format!("{}{}", CREATURES[ci].n, if shiny { " ✦" } else { "" }),
+                                if shiny { C::Shiny } else { rarity_color(CREATURES[ci].r) },
+                            ),
+                            (if is_new { " — nouvelle curiosité !".into() } else { String::new() }, C::Green),
+                        ]);
+                    }
+                    1 => {
+                        self.s.charms += 1;
+                        self.log(vec![("une breloque de plus : chance +0,10.".into(), C::Green)]);
+                    }
+                    2 => {
+                        let b = self.best_bait();
+                        self.s.baits[b] += 10;
+                        self.log(vec![(format!("dix {} rejoignent votre besace.", BAITS[b].n), C::Green)]);
+                    }
+                    3 => {
+                        self.s.licences += 1;
+                        self.log(vec![(
+                            format!("licence obtenue : {} emplacements de piège au total.", self.trap_cap()),
+                            C::Green,
+                        )]);
+                    }
+                    _ => {
+                        let t = self.next_trap();
+                        self.s.traps[t] += 1;
+                        self.log(vec![(format!("un {} d'occasion entre en réserve.", TRAPS[t].n), C::Green)]);
+                    }
+                }
+                self.toast("le marchand vous salue");
+                self.check_achievements();
+            }
+            Action::Trade(i) => {
+                let Some(&(want, qty, give)) = self.s.trades.get(i) else { return };
+                if self.s.trades_done.get(i).copied().unwrap_or(true) || self.s.inv2[want].tn() < qty {
+                    return;
+                }
+                self.take_lowest(want, false, qty); // les plus bas rangs partent en premier
+                let rank = self.roll_rank(self.global_luck());
+                let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now_ms());
+                let (is_new, _, sex) = self.add_specimen(give, shiny, rank);
+                if let Some(d) = self.s.trades_done.get_mut(i) {
+                    *d = true;
+                }
+                self.s.trades_made += 1;
+                self.log(vec![
+                    (format!("troc : {} ×{} contre ", CREATURES[want].n, qty), C::Dim),
+                    (
+                        format!(
+                            "{}{} {}[{}]",
+                            CREATURES[give].n,
+                            if shiny { " ✦" } else { "" },
+                            if sex == 0 { "♂" } else { "♀" },
+                            RANK_NAMES[rank]
+                        ),
+                        if shiny { C::Shiny } else { rarity_color(CREATURES[give].r) },
+                    ),
+                    (if is_new { " — nouvelle curiosité !".into() } else { String::new() }, C::Green),
+                ]);
+                self.toast(format!("troc : {}", CREATURES[give].n));
+                self.check_achievements();
+            }
             Action::PenStart(slot, ci) => {
                 let iv = &self.s.inv2[ci];
                 if slot < self.pen_slots() && self.s.pens[slot].is_none() && iv.tm() >= 1 && iv.tf() >= 1 {
@@ -2213,6 +2385,82 @@ impl Game {
        sauvegarde : trois espèces DISTINCTES, choisies parmi celles que le joueur
        a déjà découvertes (repli sur les communs des biomes débloqués en tout
        début de partie) — jamais une espèce inconnue ni d'un biome verrouillé */
+    /* les offres de troc tiennent une journée ; en jour de foire, elles doublent */
+    /* le marchand passe par fenêtres de 3 h : deux sur cinq, sauf jour de
+       foire où il reste toute la journée. sa position est fixe sur la place. */
+    const MERCHANT_POS: (usize, usize) = (66, 21);
+    fn merchant_now(&self) -> Option<u64> {
+        let w = (now_ms() / 10_800_000.0) as u64;
+        if fair_day() || splitmix(w ^ 0x1A2B_3C4D) % 100 < 40 {
+            Some(w)
+        } else {
+            None
+        }
+    }
+    /* trois articles tirés dans la malle, figés pour la durée du passage */
+    fn merchant_stock(&self, w: u64) -> Vec<usize> {
+        let mut rng = StdRng::seed_from_u64(splitmix(w ^ 0x5EED_1234));
+        let mut all: Vec<usize> = (0..MERCH_ITEMS).collect();
+        let mut out = vec![];
+        for _ in 0..3.min(all.len()) {
+            out.push(all.remove(rng.gen_range(0..all.len())));
+        }
+        out.sort();
+        out
+    }
+    fn merchant_price(&self, item: usize) -> f64 {
+        let fair = if fair_day() { 0.75 } else { 1.0 };
+        let p = match item {
+            0 => 180_000.0,                                        // œuf de curiosité
+            1 => 60_000.0 * (1.0 + self.s.charms as f64),          // breloque
+            2 => BAITS[self.best_bait()].cost * 10.0 * 0.6,        // lot d'appâts
+            3 => 400_000.0 * (1.0 + self.s.licences as f64 * 1.5), // licence
+            _ => 25_000.0,                                         // carnet de terrain
+        };
+        p * fair
+    }
+    fn best_bait(&self) -> usize {
+        (0..BAITS.len()).rev().find(|&b| self.s.ecus >= BAITS[b].cost * 10.0).unwrap_or(0)
+    }
+
+    fn gen_trades(&self, w: u64) -> Vec<(usize, u64, usize)> {
+        let mut rng = StdRng::seed_from_u64(splitmix(w ^ 0x7B0C_7B0C));
+        let mut cand: Vec<usize> = wild_species()
+            .filter(|&i| self.s.dex2[i].n > 0 && self.s.biomes[CREATURES[i].b].is_some())
+            .collect();
+        if cand.len() < 2 {
+            return vec![]; // trop tôt : personne ne troque contre rien
+        }
+        let curios: Vec<usize> = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == CURIO_B).collect();
+        /* prix d'une curiosité, en « points de prise » — la valeur de base
+           d'un spécimen sert d'unité, si bien qu'un rare coûte moins de pièces
+           qu'un commun */
+        const PTS: [f64; 5] = [0.0, 120.0, 320.0, 900.0, 2600.0];
+        const VAL: [f64; 5] = [3.0, 9.0, 30.0, 150.0, 900.0];
+        let n = if fair_day() { 6 } else { 3 };
+        let mut out: Vec<(usize, u64, usize)> = vec![];
+        let mut tries = 0;
+        while out.len() < n && tries < 80 {
+            tries += 1;
+            let give = curios[rng.gen_range(0..curios.len())];
+            /* on demande une espèce d'un calibre voisin : sinon une curiosité
+               rare se paie en centaines de communs, et tout finit au plafond */
+            let proches: Vec<usize> = cand
+                .iter()
+                .copied()
+                .filter(|&i| CREATURES[i].r + 1 >= CREATURES[give].r)
+                .collect();
+            let pool = if proches.is_empty() { &cand } else { &proches };
+            let want = pool[rng.gen_range(0..pool.len())];
+            if out.iter().any(|&(w2, _, g2)| w2 == want || g2 == give) {
+                continue;
+            }
+            let qty = (PTS[CREATURES[give].r] / VAL[CREATURES[want].r]).ceil().clamp(2.0, 40.0) as u64;
+            out.push((want, qty, give));
+        }
+        out
+    }
+
     fn gen_contracts(&self, w: u64) -> Vec<(usize, u64, f64)> {
         let mut rng = StdRng::seed_from_u64(splitmix(w ^ 0xC0117AC7));
         let mut cand: Vec<usize> = (0..CREATURES.len())
@@ -2298,6 +2546,13 @@ impl Game {
                 return;
             }
         }
+        if self.merchant_now().is_some() {
+            let (mx, my) = Self::MERCHANT_POS;
+            if (mx as i32 - self.px).abs() <= 6 && (my as i32 - self.py).abs() <= 1 {
+                self.panels.push(Panel::new(PanelKind::Merchant));
+                return;
+            }
+        }
         let Some(z) = self.world.zone_at(self.px as usize, self.py as usize) else { return };
         let kind = match z {
             Zone::Biome(b) => {
@@ -2308,6 +2563,7 @@ impl Game {
                 }
             }
             Zone::Boutique => PanelKind::Shop,
+            Zone::Troc => PanelKind::Trade,
             Zone::Labo => PanelKind::Lab,
             Zone::Bestiaire => PanelKind::Dex,
             Zone::Succes => PanelKind::Achs,
@@ -2328,6 +2584,12 @@ impl Game {
                 return ("des traces fraîches — Entrée : les suivre".into(), C::Gold);
             }
         }
+        if self.merchant_now().is_some() {
+            let (mx, my) = Self::MERCHANT_POS;
+            if (mx as i32 - self.px).abs() <= 6 && (my as i32 - self.py).abs() <= 1 {
+                return ("marchand ambulant — Entrée : voir sa malle".into(), C::Gold);
+            }
+        }
         match self.world.zone_at(self.px as usize, self.py as usize) {
             None => ("promenez-vous · Entrée pour interagir près d'un lieu".into(), C::Dimmer),
             Some(Zone::Biome(b)) => {
@@ -2345,6 +2607,7 @@ impl Game {
             Some(Zone::Succes) => ("trophées — Entrée : succès".into(), C::Gold),
             Some(Zone::Musee) => ("musée — Entrée : exposer vos plus belles prises".into(), C::Gold),
             Some(Zone::Enclos) => ("enclos — Entrée : faire reproduire vos créatures".into(), C::Gold),
+            Some(Zone::Troc) => ("comptoir de troc — Entrée : échanger des doublons contre des curiosités".into(), C::Gold),
         }
     }
 
@@ -2381,6 +2644,8 @@ impl Game {
             PanelKind::Journal => self.rows_journal(),
             PanelKind::Board => self.rows_board(),
             PanelKind::News => self.rows_news(),
+            PanelKind::Trade => self.rows_trade(),
+            PanelKind::Merchant => self.rows_merchant(),
             PanelKind::Offline(sum) => self.rows_offline(sum),
             PanelKind::ResetConfirm => self.rows_reset(),
         }
@@ -2814,7 +3079,7 @@ impl Game {
 
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("biomes — Entrée sur une ligne pour y aller"));
-        for b in 0..BIOMES.len() {
+        for b in 0..WILDB {
             match &self.s.biomes[b] {
                 None => rows.push(Row {
                     segs: vec![
@@ -2920,12 +3185,12 @@ impl Game {
                 fmt(dupes as f64), fmt(dval)),
             if dval > 0.0 { C::Gold } else { C::Dim },
         ));
-        let found_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].n > 0).count();
-        let shiny_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].s > 0).count();
-        let s_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].best >= 4).count();
+        let found_total = wild_species().filter(|&i| self.s.dex2[i].n > 0).count();
+        let shiny_total = wild_species().filter(|&i| self.s.dex2[i].s > 0).count();
+        let s_total = wild_species().filter(|&i| self.s.dex2[i].best >= 4).count();
         rows.push(Row::text(
             format!("bestiaire : {}/{nc} espèces · {}/{nc} shinies · {}/{nc} en rang S · {} biome(s) complet(s)",
-                found_total, shiny_total, s_total, self.completed_biomes(), nc = CREATURES.len()),
+                found_total, shiny_total, s_total, self.completed_biomes(), nc = wild_total()),
             C::Blue,
         ));
         ("tableau de bord".into(), rows)
@@ -3189,7 +3454,7 @@ impl Game {
             ) {
                 rows.push(r);
             }
-            for b in 0..BIOMES.len() {
+            for b in 0..WILDB {
                 let mut list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
                 if list.is_empty() {
                     continue;
@@ -3370,12 +3635,12 @@ impl Game {
     }
 
     fn rows_dex(&self) -> (String, Vec<Row>) {
-        let total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].n > 0).count();
-        let shiny_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].s > 0).count();
-        let s_total = (0..CREATURES.len()).filter(|&i| self.s.dex2[i].best >= 4).count();
+        let total = wild_species().filter(|&i| self.s.dex2[i].n > 0).count();
+        let shiny_total = wild_species().filter(|&i| self.s.dex2[i].s > 0).count();
+        let s_total = wild_species().filter(|&i| self.s.dex2[i].best >= 4).count();
         let mut rows = vec![
             Row::text(
-                format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, CREATURES.len(), ascii_bar(total as f64 / CREATURES.len() as f64, 12), shiny_total, CREATURES.len(), ascii_bar(shiny_total as f64 / CREATURES.len() as f64, 12), s_total, CREATURES.len()),
+                format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, wild_total(), ascii_bar(total as f64 / wild_total() as f64, 12), shiny_total, wild_total(), ascii_bar(shiny_total as f64 / wild_total() as f64, 12), s_total, wild_total()),
                 C::Text,
             ),
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
@@ -3526,9 +3791,20 @@ impl Game {
         for t in [
             "posez des pièges dans les biomes ; ils capturent seuls, à intervalle régulier.",
             "revendez les doublons pour financer de meilleurs pièges, des appâts, de nouveaux biomes et le labo.",
-            "l'objectif de fond : compléter le bestiaire — 60 espèces, leurs shinies ✦, et un rang S partout.",
+            "l'objectif de fond : compléter le bestiaire — 98 espèces, leurs shinies ✦, et un rang S partout.",
             "compléter un biome donne +0,04 de chance pour toujours ; le compléter en shiny, +5% à la vente.",
             "les pièges ne s'usent jamais : posés une fois, ils travaillent indéfiniment. l'horlogerie (labo) ne limite que la progression simulée hors-ligne (2 h de base).",
+        ] {
+            rows.extend(bullet_rows("· ", t, w, C::Dim));
+        }
+
+        rows.push(Row::text("", C::Dim));
+        rows.push(Row::header("le village : troc, marchand, foire"));
+        for t in [
+            "comptoir de troc (touche x) : des collectionneurs échangent des curiosités — six espèces qu'aucun piège n'attrape — contre vos doublons. leurs demandes changent chaque jour.",
+            "les curiosités ne se revendent pas et ne comptent pas dans le pourcentage du bestiaire : ce sont des pièces de collection.",
+            "marchand ambulant : il s'installe sur la place plusieurs fois par jour et repart vite. sa malle change à chaque passage — breloques de chance, licences de piégeage, lots d'appâts, œufs de curiosité.",
+            "jour de foire (un jour sur quatre) : le marchand reste toute la journée, le troc double ses demandes, sa malle est à −25 % et la chance monte de 0,15.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
@@ -3696,6 +3972,138 @@ impl Game {
         ("journal".into(), rows)
     }
 
+    fn merch_label(&self, item: usize) -> (String, String) {
+        match item {
+            0 => (
+                "œuf de curiosité".into(),
+                "éclot en une espèce qu'aucun piège n'attrape. laquelle ? il ne le sait pas non plus.".into(),
+            ),
+            1 => (
+                format!("breloque de chance (vous en avez {})", self.s.charms),
+                "chance +0,10, pour toujours. le prix monte à chaque breloque.".into(),
+            ),
+            2 => (
+                format!("dix {}", BAITS[self.best_bait()].n),
+                format!("son lot du jour, à prix d'ami. {}", BAITS[self.best_bait()].desc),
+            ),
+            3 => (
+                format!("licence de piégeage (vous en avez {})", self.s.licences),
+                "un emplacement de piège de plus, partout. les autorités ferment les yeux.".into(),
+            ),
+            _ => {
+                let t = self.next_trap();
+                (format!("plan de {}", TRAPS[t].n), "un piège monté la veille, vendu moitié prix.".into())
+            }
+        }
+    }
+    fn next_trap(&self) -> usize {
+        let best = (0..TRAPS.len()).rev().find(|&t| self.s.traps[t] > 0).unwrap_or(0);
+        (best + 1).min(TRAPS.len() - 1)
+    }
+    fn rows_merchant(&self) -> (String, Vec<Row>) {
+        let title = "marchand ambulant".to_string();
+        let Some(w) = self.merchant_now() else {
+            return (
+                title,
+                vec![Row::text("il a plié bagage. il repasse plusieurs fois par jour, et toute la journée les jours de foire.", C::Dimmer)],
+            );
+        };
+        let mut rows = Vec::new();
+        let reste = ((w + 1) as f64 * 10_800_000.0) - now_ms();
+        for r in wrap_rows(
+            "il déballe sa malle sur la place, ne reste jamais longtemps, et ne vend chaque chose qu'une fois par passage.",
+            self.panel_w,
+            C::Dimmer,
+        ) {
+            rows.push(r);
+        }
+        rows.push(Row::header(&format!(
+            "sa malle — il repart dans {} min{}",
+            (reste / 60_000.0).ceil() as u64,
+            if fair_day() { " · jour de foire : −25 %" } else { "" }
+        )));
+        for item in self.merchant_stock(w) {
+            let key = w * 8 + item as u64;
+            let vendu = self.s.merchant_done.contains(&key);
+            let prix = self.merchant_price(item);
+            let (nom, desc) = self.merch_label(item);
+            rows.push(Row {
+                segs: vec![
+                    (pad(&nom, 40), C::Text),
+                    (pad(&format!("{} écus", fmt(prix)), 16), if self.s.ecus >= prix { C::GoldDark } else { C::Red }),
+                ],
+                btns: if vendu || self.s.ecus < prix {
+                    vec![]
+                } else {
+                    vec![("acheter".into(), C::Gold, Action::MerchBuy(item))]
+                },
+                act: None,
+                indent: 0,
+            });
+            for r in bullet_rows("  ", &if vendu { format!("{} — déjà vendu", desc) } else { desc }, self.panel_w, C::Dimmer) {
+                rows.push(r);
+            }
+        }
+        (title, rows)
+    }
+
+    fn rows_trade(&self) -> (String, Vec<Row>) {
+        let title = "comptoir de troc".to_string();
+        let mut rows = Vec::new();
+        for r in wrap_rows(
+            "des collectionneurs de passage échangent des espèces qu'aucun piège n'attrape contre vos doublons. leurs demandes changent chaque jour.",
+            self.panel_w,
+            C::Dimmer,
+        ) {
+            rows.push(r);
+        }
+        if self.s.trades.is_empty() {
+            rows.push(Row::text("", C::Dim));
+            rows.push(Row::text(
+                "personne aujourd'hui. revenez avec quelques espèces au bestiaire : on ne troque pas contre du vide.",
+                C::Dimmer,
+            ));
+            return (title, rows);
+        }
+        let reste = 86_400_000.0 - (now_ms() % 86_400_000.0);
+        rows.push(Row::header(&format!(
+            "demandes du jour — renouvelées dans {} h{}",
+            (reste / 3_600_000.0).ceil() as u64,
+            if fair_day() { " · jour de foire : deux fois plus d'offres" } else { "" }
+        )));
+        for (i, &(want, qty, give)) in self.s.trades.iter().enumerate() {
+            let done = self.s.trades_done.get(i).copied().unwrap_or(false);
+            let have = self.s.inv2[want].tn();
+            let (wc, gc) = (&CREATURES[want], &CREATURES[give]);
+            let mut segs = vec![
+                (pad(&format!("{} {} ×{}", wc.g, wc.n, qty), 30), rarity_color(wc.r)),
+                ("→ ".into(), C::Dimmer),
+                (pad(&format!("{} {}", gc.g, gc.n), 22), rarity_color(gc.r)),
+            ];
+            if done {
+                segs.push(("déjà échangé".into(), C::Dimmer));
+            } else {
+                segs.push((format!("vous en avez {}", have), if have >= qty { C::Green } else { C::Dimmer }));
+            }
+            rows.push(Row {
+                segs,
+                btns: if !done && have >= qty {
+                    vec![("échanger".into(), C::Gold, Action::Trade(i))]
+                } else {
+                    vec![]
+                },
+                act: None,
+                indent: 0,
+            });
+        }
+        rows.push(Row::text("", C::Dim));
+        rows.push(Row::text(
+            "les curiosités ne se revendent pas et ne comptent pas dans le pourcentage du bestiaire : ce sont des pièces de collection.",
+            C::Dimmer,
+        ));
+        (title, rows)
+    }
+
     fn rows_news(&self) -> (String, Vec<Row>) {
         let mut rows = Vec::new();
         for (i, (v, date, lignes)) in NEWS.iter().enumerate() {
@@ -3761,7 +4169,7 @@ impl Game {
                         (pad(&format!("{}", i + 1), 3), pos_c),
                         (pad(&e.pseudo, 17), if me { C::Gold } else { C::Blue }),
                         (format!("{:>7}", fmt(e.score)), C::GoldDark),
-                        (format!("{:>7}/{}", fmt(e.especes), CREATURES.len()), C::Text),
+                        (format!("{:>7}/{}", fmt(e.especes), wild_total()), C::Text),
                         (format!("{:>9}", fmt(e.shinies)), if e.shinies > 0.0 { C::Shiny } else { C::Dimmer }),
                         (format!("{:>11}", fmt(e.captures)), C::Dim),
                     ],
@@ -3990,8 +4398,18 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         }
     }
 
+    // le marchand ambulant, quand il est de passage
+    if game.merchant_now().is_some() {
+        let (mx, my) = Game::MERCHANT_POS;
+        let sx = 1 + mx as i32 - cam_x + off_x;
+        let sy = vy0 + my as i32 - cam_y + off_y;
+        if sy >= vy0 && sy <= vy1 {
+            draw_str(buf, area, sx, sy, "╡ marchand ╞", theme.style(C::Gold, false));
+        }
+    }
+
     // étiquettes de biomes
-    for b in 0..BIOMES.len() {
+    for b in 0..WILDB {
         let (lx, ly) = LABEL_POS[b];
         let sx = 1 + lx as i32 - cam_x + off_x;
         let sy = vy0 + ly as i32 - cam_y + off_y;
@@ -4043,7 +4461,13 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     let (hint, hint_c) = game.zone_hint();
     draw_str(buf, area, 3, sep_y, &format!(" {} ", hint), theme.style(hint_c, false));
     let nowc = now_ms();
-    let cond = format!(" {} · {} · {} ", SAISONS[season_at(nowc)], METEOS[weather_at(nowc)], if is_night_at(nowc) { "nuit ☽" } else { "jour" });
+    let cond = format!(
+        " {} · {} · {}{} ",
+        SAISONS[season_at(nowc)],
+        METEOS[weather_at(nowc)],
+        if is_night_at(nowc) { "nuit ☽" } else { "jour" },
+        if fair_day() { " · foire ✧" } else { "" }
+    );
     draw_str(buf, area, cols - cond.chars().count() as i32 - 3, sep_y, &cond, theme.style(C::Ice, false));
     if let Some((wid, lb, _)) = game.legend_now() {
         let left = (((wid + 1) as f64 * 1_800_000.0 - nowc) / 60_000.0).ceil() as u64;
@@ -4088,7 +4512,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         draw_str(buf, area, tx, 0, "▌", theme.style(C::Green, false));
     }
     tx += 1;
-    let dex = (0..CREATURES.len()).filter(|&i| game.s.dex2[i].n > 0).count();
+    let dex = wild_species().filter(|&i| game.s.dex2[i].n > 0).count();
     let stats: Vec<(String, C)> = vec![
         (format!(" {} écus ", fmt(game.s.ecus)), C::Gold),
         (format!("· {} captures ", fmt(game.s.captures as f64)), C::Dim),
@@ -4100,14 +4524,26 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         tx += txt.chars().count() as i32;
     }
     // raccourcis
-    // pastille tant que les nouveautés de cette version n'ont pas été ouvertes
-    let neuf = if game.s.news_seen != VERSION { "[n]ouveautés ● " } else { "[n]ouveautés " };
-    let kb = if cfg!(target_arch = "wasm32") {
-        format!(" zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [p]almarès {}[?] aide · +/- taille ", neuf)
-    } else {
-        format!(" zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal {}[?] aide · ctrl+c quitter ", neuf)
-    };
-    let kbt: String = kb.chars().take((cols - 4) as usize).collect();
+    // la barre s'adapte à la largeur : plutôt trois versions complètes qu'une
+    // seule tronquée en plein milieu d'un raccourci
+    let pastille = if game.s.news_seen != VERSION { " ●" } else { "" };
+    let web = cfg!(target_arch = "wasm32");
+    let fin = if web { "+/- taille" } else { "ctrl+c quitter" };
+    let large = format!(
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [x] troc{} [p]almarès [n]ouveautés{} [?] aide · {} ",
+        "", pastille, fin
+    );
+    let moyen = format!(
+        " zqsd · Entrée · [v]ue [i]nv [b]est b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]roph [j]ourn [x]troc [p]alm [n]euf{} [?] aide ",
+        pastille
+    );
+    let court = format!(" zqsd · Entrée · [?] aide · [n]ouveautés{} ", pastille);
+    let dispo = (cols - 4).max(1) as usize;
+    let kb = [large, moyen, court]
+        .into_iter()
+        .find(|s| s.chars().count() <= dispo)
+        .unwrap_or_else(|| " zqsd · Entrée · [?] aide ".to_string());
+    let kbt: String = kb.chars().take(dispo).collect();
     draw_str(buf, area, 2, rows_n - 1, &kbt, theme.style(C::Dimmer, false));
 
     // ---- toasts ----
@@ -4342,6 +4778,10 @@ fn world_key(game: &mut Game, code: GKey) {
         }
         GKey::Char('p') => {
             game.panels.push(Panel::new(PanelKind::Board));
+            return;
+        }
+        GKey::Char('x') => {
+            game.panels.push(Panel::new(PanelKind::Trade));
             return;
         }
         GKey::Char('n') => {

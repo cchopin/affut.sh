@@ -30,9 +30,18 @@ Interface inspirée de [late.sh](https://late.sh).
   meilleurs pièges, des appâts, de nouveaux biomes et le labo.
 - **Élevage** : à l'enclos, un couple ♂+♀ d'une même espèce donne une naissance,
   parfois d'un rang supérieur, avec shiny ×3.
+- **Comptoir de troc** : des collectionneurs de passage échangent **six
+  curiosités** — des espèces qu'aucun piège n'attrape — contre vos doublons.
+  Leurs demandes changent chaque jour ; les curiosités ne se revendent pas et
+  restent hors du pourcentage du bestiaire.
+- **Marchand ambulant** : il s'installe sur la place plusieurs fois par jour et
+  repart vite. Sa malle change à chaque passage — breloques de chance, licences
+  de piégeage, lots d'appâts, œufs de curiosité.
+- **Jour de foire**, un jour sur quatre : le marchand reste toute la journée, le
+  troc double ses demandes, sa malle est à −25 % et la chance monte.
 - **Et aussi** : battues, contrats renouvelés toutes les 2 h, musée à revenu
   passif, légendes errantes ✧ à tenter une seule fois, 28 succès, prestige par
-  migration (trophées permanents).
+  migration (trophées permanents), et un journal des versions en jeu (`n`).
 
 | tableau de bord | bestiaire |
 |---|---|
@@ -52,7 +61,7 @@ minimum, truecolor recommandé (repli automatique en 256 couleurs).
 **Touches** : flèches ou `zqsd` pour se déplacer, `Entrée` pour interagir,
 `?` ouvre le manuel complet en jeu. Raccourcis : `v` tableau de bord,
 `i` inventaire, `b` bestiaire, `o` boutique, `c` contrats, `l` labo,
-`m` musée, `e` enclos, `t` trophées, `j` journal. `ctrl+c` quitte (et sauvegarde).
+`m` musée, `e` enclos, `x` troc, `t` trophées, `j` journal, `p` palmarès, `n` nouveautés. `ctrl+c` quitte (et sauvegarde).
 
 ## héberger et inviter des amis
 
