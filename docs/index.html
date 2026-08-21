@@ -189,7 +189,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821y'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821z'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -520,6 +520,25 @@ document.getElementById('syncImport').addEventListener('click', () => {
     setTimeout(() => document.getElementById('syncImport').textContent = 'importer ce texte', 2000);
   }
 });
+
+// molette et trackpad sur les panneaux. le trackpad envoie une pluie de très
+// petits deltas : on les accumule et on ne défile qu'au passage d'une ligne,
+// sinon le geste ne produit rien ou part en saccades.
+let molette = 0;
+scr.addEventListener('wheel', e => {
+  if (paused || dlg.classList.contains('open')) return;
+  let dy = e.deltaY;
+  if (e.deltaMode === 1) dy *= ch;            // le delta est déjà en lignes
+  else if (e.deltaMode === 2) dy *= ch * rows; // ... ou en pages
+  molette += dy;
+  const n = Math.trunc(molette / ch);
+  if (n) molette -= n * ch;
+  // scroll(0) ne bouge rien mais dit si un panneau est ouvert : sans panneau
+  // on laisse la page défiler normalement
+  if (!w.scroll(n)) return;
+  e.preventDefault();
+  if (n) render();
+}, { passive: false });
 
 document.addEventListener('keydown', e => {
   const t = e.target;

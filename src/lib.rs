@@ -4835,6 +4835,29 @@ fn draw_panel(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
 
 /* =================================================================== main */
 
+/* un cran de molette fait trois lignes : le pas d'un seul cran paraît collant,
+   celui d'une page entière fait perdre le fil. le web n'en a pas besoin : il
+   convertit les pixels que lui donne le navigateur avec l'interligne réel. */
+#[cfg(not(target_arch = "wasm32"))]
+const WHEEL_LINES: i32 = 3;
+
+/* molette et trackpad : on déplace la fenêtre du panneau sans toucher à la
+   sélection — le geste sert à lire, pas à choisir. renvoie true si un panneau
+   était ouvert, pour que le web sache s'il doit retenir le défilement de page. */
+fn panel_scroll(game: &mut Game, lines: i32) -> bool {
+    let Some(panel) = game.panels.last() else { return false };
+    let (_, rows) = game.build_rows(&panel.kind);
+    let inner = panel.inner.max(1);
+    let max_scroll = rows.len().saturating_sub(inner);
+    let p = game.panels.last_mut().unwrap();
+    p.scroll = if lines < 0 {
+        p.scroll.saturating_sub(lines.unsigned_abs() as usize)
+    } else {
+        (p.scroll + lines as usize).min(max_scroll)
+    };
+    true
+}
+
 fn panel_key(game: &mut Game, code: GKey) {
     let Some(panel) = game.panels.last() else { return };
     let (_, rows) = game.build_rows(&panel.kind);
@@ -5020,7 +5043,10 @@ fn map_key(code: crossterm::event::KeyCode) -> Option<GKey> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> std::io::Result<()> {
-    use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+    use crossterm::event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+        MouseEventKind,
+    };
     use std::time::{Duration, Instant};
     let (mut game, fresh) = Game::new();
     game.run_offline();
@@ -5034,6 +5060,11 @@ pub fn run() -> std::io::Result<()> {
     let mut terminal = ratatui::init();
     let mut last_tick = Instant::now();
     let mut last_save = Instant::now();
+    /* la capture souris coûte la sélection de texte du terminal : on ne la
+       prend que pendant qu'un panneau est ouvert, seul endroit qui défile.
+       (shift + glisser permet de sélectionner malgré tout sur la plupart
+       des terminaux, si le besoin s'en fait sentir sur un panneau.) */
+    let mut mouse_on = false;
 
     while !game.quit {
         if last_tick.elapsed() >= Duration::from_millis(500) {
@@ -5045,6 +5076,19 @@ pub fn run() -> std::io::Result<()> {
             last_save = Instant::now();
         }
 
+
+        let want_mouse = !game.panels.is_empty();
+        if want_mouse != mouse_on {
+            let r = if want_mouse {
+                crossterm::execute!(std::io::stdout(), EnableMouseCapture)
+            } else {
+                crossterm::execute!(std::io::stdout(), DisableMouseCapture)
+            };
+            // un terminal sans support souris ne doit pas faire tomber la partie
+            if r.is_ok() {
+                mouse_on = want_mouse;
+            }
+        }
 
         terminal.draw(|frame| {
             let area = frame.area();
@@ -5068,12 +5112,24 @@ pub fn run() -> std::io::Result<()> {
                         }
                     }
                 }
+                Event::Mouse(m) => match m.kind {
+                    MouseEventKind::ScrollUp => {
+                        panel_scroll(&mut game, -WHEEL_LINES);
+                    }
+                    MouseEventKind::ScrollDown => {
+                        panel_scroll(&mut game, WHEEL_LINES);
+                    }
+                    _ => {}
+                },
                 _ => {}
             }
         }
     }
 
     game.save();
+    if mouse_on {
+        crossterm::execute!(std::io::stdout(), DisableMouseCapture).ok();
+    }
     ratatui::restore();
     println!("partie sauvegardée dans {}. à bientôt.", save_path().display());
     Ok(())
@@ -5177,6 +5233,14 @@ mod webapp {
                 panel_key(&mut self.game, gk);
             }
             true
+        }
+
+        /* molette et trackpad. le navigateur compte en pixels : c'est lui qui
+           convertit en lignes, il est le seul à connaître l'interligne réel.
+           renvoie true si un panneau était ouvert — sinon la page doit garder
+           son défilement normal. */
+        pub fn scroll(&mut self, lines: i32) -> bool {
+            panel_scroll(&mut self.game, lines)
         }
 
         pub fn render(&mut self, cols: u16, rows: u16) -> String {
@@ -5416,5 +5480,34 @@ mod tests {
         let (_, rows) = g.rows_dex();
         let (w, l) = largeur_max(&rows);
         assert!(w <= 75, "ligne d'espèce capturée trop large : {} colonnes pour 75 : {:?}", w, l);
+    }
+
+    /* molette : la fenêtre bouge, la sélection ne bouge pas, et on ne sort
+       jamais des bornes du panneau */
+    #[test]
+    fn la_molette_fait_defiler_le_panneau() {
+        let mut g = jeu_pour_bestiaire();
+        assert!(!panel_scroll(&mut g, 3), "sans panneau ouvert, rien à défiler");
+
+        g.panels.push(Panel::new(PanelKind::Help));
+        g.panels.last_mut().unwrap().inner = 10;
+        let (_, rows) = g.build_rows(&PanelKind::Help);
+        let max = rows.len().saturating_sub(10);
+        assert!(max > 3, "le guide doit être plus long qu'une fenêtre pour ce test");
+
+        assert!(panel_scroll(&mut g, 3), "un panneau est ouvert");
+        assert_eq!(g.panels.last().unwrap().scroll, 3);
+        assert_eq!(g.panels.last().unwrap().sel, 0, "la molette ne touche pas la sélection");
+
+        panel_scroll(&mut g, -1);
+        assert_eq!(g.panels.last().unwrap().scroll, 2);
+
+        // vers le haut : on s'arrête en haut, sans déborder
+        panel_scroll(&mut g, -99);
+        assert_eq!(g.panels.last().unwrap().scroll, 0);
+
+        // vers le bas : on s'arrête sur la dernière fenêtre complète
+        panel_scroll(&mut g, 9_999);
+        assert_eq!(g.panels.last().unwrap().scroll, max);
     }
 }

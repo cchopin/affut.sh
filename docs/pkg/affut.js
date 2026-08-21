@@ -53,6 +53,14 @@ export class Web {
         wasm.web_save(this.__wbg_ptr);
     }
     /**
+     * @param {number} lines
+     * @returns {boolean}
+     */
+    scroll(lines) {
+        const ret = wasm.web_scroll(this.__wbg_ptr, lines);
+        return ret !== 0;
+    }
+    /**
      * @param {string} json
      */
     set_board(json) {
