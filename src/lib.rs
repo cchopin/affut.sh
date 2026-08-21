@@ -356,7 +356,7 @@ const NEWS: [(&str, &str, &[&str]); 8] = [
             "le lac a pris une forme de lac : une nappe arrondie, plus un rectangle.",
             "l'auto-vente met aussi de côté les spécimens réclamés par le troc, comme elle le fait déjà pour les commandes du comptoir.",
             "le comptoir de troc s'ouvre avec r (t[r]oc) plutôt qu'avec x.",
-            "vingt espèces nocturnes ◗ au lieu de sept, et pas le même nombre selon les lieux : trois dans les abysses et les ruines, une seule sur les crêtes ou dans le volcan.",
+            "vingt espèces nocturnes ◦ au lieu de sept, et pas le même nombre selon les lieux : trois dans les abysses et les ruines, une seule sur les crêtes ou dans le volcan.",
         ],
     ),
     (
@@ -1093,7 +1093,7 @@ impl WorldMap {
         w.building(58, 31, 16, 6, "labo", Zone::Labo, 'l');
         w.building(36, 40, 11, 5, "bestiaire", Zone::Bestiaire, 'b');
         w.building(49, 40, 13, 5, "troc", Zone::Troc, 'r');
-        w.building(64, 40, 12, 5, "trophées", Zone::Succes, 't');
+        w.building(64, 40, 12, 5, "succès", Zone::Succes, 't');
         w.building(40, 47, 13, 5, "musée", Zone::Musee, 'm');
         w.building(58, 47, 13, 5, "enclos", Zone::Enclos, 'e');
 
@@ -1776,7 +1776,7 @@ impl Game {
         let rank_c = match rank { 3 => C::Gold, 2 => C::Blue, 1 => C::Text, _ => C::Dimmer };
         let mut segs = vec![
             (format!("{} → ", BIOMES[biome].name), C::Dim),
-            (format!("{}{}", c.n, if shiny { " ✦" } else { "" }), if shiny { C::Shiny } else { rarity_color(c.r) }),
+            (format!("{}{}", c.n, if shiny { " ⋆" } else { "" }), if shiny { C::Shiny } else { rarity_color(c.r) }),
             (format!(" {}[{}]", if sex == 0 { "♂" } else { "♀" }, RANK_NAMES[rank]), rank_c),
             (format!(" ({}{})", RAR_LABEL[c.r], if shiny { " · shiny" } else { "" }), C::Dimmer),
         ];
@@ -1793,7 +1793,7 @@ impl Game {
             self.toast(format!("nouvelle espèce : {}", c.n));
         }
         if new_shiny && !is_new {
-            self.toast(format!("shiny obtenu : {} ✦", c.n));
+            self.toast(format!("shiny obtenu : {} ⋆", c.n));
         }
         if rank == 3 {
             self.toast(format!("rang S : {} !", c.n));
@@ -2168,7 +2168,7 @@ impl Game {
                     let v = v.floor();
                     self.gain(v);
                     self.log(vec![
-                        (format!("vendu : {}× {}{}", q, CREATURES[ci].n, if shiny { " ✦" } else { "" }), C::Text),
+                        (format!("vendu : {}× {}{}", q, CREATURES[ci].n, if shiny { " ⋆" } else { "" }), C::Text),
                         (format!(" (+{} écus)", fmt(v)), C::GoldDark),
                     ]);
                 }
@@ -2295,7 +2295,7 @@ impl Game {
                     self.museum_accrue(now_ms());
                     if let Some((rank, sex)) = self.take_best(ci, shiny) {
                         self.s.museum[slot] = Some(MusE { ci, rank, shiny, sex });
-                        self.log(vec![(format!("exposé au musée : {}{} [{}]", CREATURES[ci].n, if shiny { " ✦" } else { "" }, RANK_NAMES[rank]), C::Blue)]);
+                        self.log(vec![(format!("exposé au musée : {}{} [{}]", CREATURES[ci].n, if shiny { " ⋆" } else { "" }, RANK_NAMES[rank]), C::Blue)]);
                         self.check_achievements();
                         self.panels.pop();
                     }
@@ -2336,7 +2336,7 @@ impl Game {
                         self.log(vec![
                             ("l'œuf éclot : ".into(), C::Dim),
                             (
-                                format!("{}{}", CREATURES[ci].n, if shiny { " ✦" } else { "" }),
+                                format!("{}{}", CREATURES[ci].n, if shiny { " ⋆" } else { "" }),
                                 if shiny { C::Shiny } else { rarity_color(CREATURES[ci].r) },
                             ),
                             (if is_new { " — nouvelle curiosité !".into() } else { String::new() }, C::Green),
@@ -2386,7 +2386,7 @@ impl Game {
                         format!(
                             "{}{} {}[{}]",
                             CREATURES[give].n,
-                            if shiny { " ✦" } else { "" },
+                            if shiny { " ⋆" } else { "" },
                             if sex == 0 { "♂" } else { "♀" },
                             RANK_NAMES[rank]
                         ),
@@ -2425,10 +2425,10 @@ impl Game {
                         self.s.pen_born += 1;
                         self.log(vec![
                             ("naissance à l'enclos : ".into(), C::Green),
-                            (format!("{}{} {}[{}]", CREATURES[pen.ci].n, if shiny { " ✦" } else { "" }, if sex == 0 { "♂" } else { "♀" }, RANK_NAMES[rank]),
+                            (format!("{}{} {}[{}]", CREATURES[pen.ci].n, if shiny { " ⋆" } else { "" }, if sex == 0 { "♂" } else { "♀" }, RANK_NAMES[rank]),
                              if shiny { C::Shiny } else { rarity_color(CREATURES[pen.ci].r) }),
                         ]);
-                        self.toast(format!("naissance : {}{}", CREATURES[pen.ci].n, if shiny { " ✦" } else { "" }));
+                        self.toast(format!("naissance : {}{}", CREATURES[pen.ci].n, if shiny { " ⋆" } else { "" }));
                         let _ = is_new;
                         self.check_achievements();
                     }
@@ -2468,7 +2468,7 @@ impl Game {
                         self.s.legends_caught += 1;
                         self.log(vec![
                             ("légende errante capturée : ".into(), C::Gold),
-                            (format!("{}{} [{}] !", CREATURES[ci].n, if shiny { " ✦" } else { "" }, RANK_NAMES[rank]),
+                            (format!("{}{} [{}] !", CREATURES[ci].n, if shiny { " ⋆" } else { "" }, RANK_NAMES[rank]),
                              if shiny { C::Shiny } else { rarity_color(CREATURES[ci].r) }),
                         ]);
                         self.toast(format!("légende capturée : {}", CREATURES[ci].n));
@@ -2782,7 +2782,7 @@ impl Game {
             Some(Zone::Boutique) => ("boutique — Entrée : acheter et vendre".into(), C::Gold),
             Some(Zone::Labo) => ("labo — Entrée : recherches et migration".into(), C::Gold),
             Some(Zone::Bestiaire) => ("bestiaire — Entrée : consulter".into(), C::Gold),
-            Some(Zone::Succes) => ("trophées — Entrée : succès".into(), C::Gold),
+            Some(Zone::Succes) => ("succès — Entrée : consulter".into(), C::Gold),
             Some(Zone::Musee) => ("musée — Entrée : exposer vos plus belles prises".into(), C::Gold),
             Some(Zone::Enclos) => ("enclos — Entrée : faire reproduire vos créatures".into(), C::Gold),
             Some(Zone::Troc) => ("comptoir de troc — Entrée : échanger des doublons contre des curiosités".into(), C::Gold),
@@ -2877,7 +2877,7 @@ impl Game {
                 }
                 for r in (0..4).rev() {
                     if iv.sr(r) > 0 {
-                        per_rank += &format!("✦{}:{} ", RANK_NAMES[r], iv.sr(r));
+                        per_rank += &format!("⋆{}:{} ", RANK_NAMES[r], iv.sr(r));
                     }
                 }
                 rows.push(Row {
@@ -2973,7 +2973,7 @@ impl Game {
                     rows.push(Row {
                         segs: vec![
                             (format!("├─ salle {} : ", slot + 1), C::Dimmer),
-                            (format!("{} {}{} [{}]", c.g, c.n, if m.shiny { " ✦" } else { "" }, RANK_NAMES[m.rank]),
+                            (format!("{} {}{} [{}]", c.g, c.n, if m.shiny { " ⋆" } else { "" }, RANK_NAMES[m.rank]),
                              if m.shiny { C::Shiny } else { rarity_color(c.r) }),
                             (format!("  {} écus/min", fmt2(self.creature_value_r(m.ci, m.shiny, m.rank) * 0.001)), C::GoldDark),
                         ],
@@ -3004,7 +3004,7 @@ impl Game {
                 btns.push((format!("exposer [{}]", RANK_NAMES[r]), C::Green, Action::MuseumAdd(slot, ci, false)));
             }
             if let Some(r) = best_s {
-                btns.push((format!("exposer ✦ [{}]", RANK_NAMES[r]), C::Blue, Action::MuseumAdd(slot, ci, true)));
+                btns.push((format!("exposer ⋆ [{}]", RANK_NAMES[r]), C::Blue, Action::MuseumAdd(slot, ci, true)));
             }
             rows.push(Row {
                 segs: vec![(pad(&format!("{} {}", c.g, c.n), 28), rarity_color(c.r))],
@@ -3148,7 +3148,7 @@ impl Game {
             segs: vec![
                 (format!("{} · ", SAISONS[sea]), C::Green),
                 (format!("{} · ", METEOS[w]), C::Ice),
-                (if is_night_at(now) { "nuit ◗ (espèces nocturnes de sortie)".into() } else { "jour".to_string() }, C::Text),
+                (if is_night_at(now) { "nuit ◦ (espèces nocturnes de sortie)".into() } else { "jour".to_string() }, C::Text),
             ],
             btns: vec![],
             act: None,
@@ -3365,7 +3365,7 @@ impl Game {
         rows.push(Row::text(
             format!("créatures en réserve : {}{} · doublons vendables : {} (≈ {} écus)",
                 fmt(total_inv as f64),
-                if shiny_inv > 0 { format!(" dont {} ✦", shiny_inv) } else { String::new() },
+                if shiny_inv > 0 { format!(" dont {} ⋆", shiny_inv) } else { String::new() },
                 fmt(dupes as f64), fmt(dval)),
             if dval > 0.0 { C::Gold } else { C::Dim },
         ));
@@ -3681,7 +3681,7 @@ impl Game {
                         let low = (0..4).find(|&r| iv.sr(r) > 0).unwrap_or(0);
                         rows.push(Row {
                             segs: vec![
-                                (pad(&format!("{} {} ✦", c.g, c.n), 24), C::Shiny),
+                                (pad(&format!("{} {} ⋆", c.g, c.n), 24), C::Shiny),
                                 (pad(&format!("×{}", fmt(s as f64)), 6), C::Dim),
                                 (pad(&format!("[{}]", RANK_NAMES[low]), 6), C::Dim),
                                 (pad(&format!("{}/u", fmt(self.creature_value_r(ci, true, low))), 11), C::GoldDark),
@@ -3837,7 +3837,7 @@ impl Game {
                 C::Text,
             ),
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
-            Row::text("colonnes : rareté · ×captures · ✦shinies · [rang] · sexes vus · réserve", C::Dimmer),
+            Row::text("colonnes : rareté · ×captures · ⋆shinies · [rang] · sexes vus · réserve", C::Dimmer),
         ];
         for b in 0..BIOMES.len() {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
@@ -3854,7 +3854,7 @@ impl Game {
                             ("├─ ".into(), C::Dimmer),
                             (pad("???", DEX_W_GLYPH), C::Dimmer),
                             (pad("— inconnu —", DEX_W_NAME), C::Dimmer),
-                            (pad(if NOCTURNES.contains(&ci) { "◗" } else { "" }, DEX_W_MOON), C::Abyss),
+                            (pad(if NOCTURNES.contains(&ci) { "◦" } else { "" }, DEX_W_MOON), C::Abyss),
                             (pad(RAR_LABEL[c.r], DEX_W_RAR), C::Dimmer),
                             (if NOCTURNES.contains(&ci) { "nocturne".into() } else { String::new() }, C::Abyss),
                         ],
@@ -3870,12 +3870,12 @@ impl Game {
                             ("├─ ".into(), C::Dimmer),
                             (pad(c.g, DEX_W_GLYPH), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
                             (pad(c.n, DEX_W_NAME), rarity_color(c.r)),
-                            (pad(if NOCTURNES.contains(&ci) { "◗" } else { "" }, DEX_W_MOON), C::Abyss),
-                            (pad(&format!("{} ×{}{}", RAR_LABEL[c.r], fmt(d.n as f64), if d.s > 0 { format!(" ✦{}", d.s) } else { String::new() }), DEX_W_RAR), C::Dim),
+                            (pad(if NOCTURNES.contains(&ci) { "◦" } else { "" }, DEX_W_MOON), C::Abyss),
+                            (pad(&format!("{} ×{}{}", RAR_LABEL[c.r], fmt(d.n as f64), if d.s > 0 { format!(" ⋆{}", d.s) } else { String::new() }), DEX_W_RAR), C::Dim),
                             (pad(&format!("[{}]", best), DEX_W_RANK), if d.best >= 4 { C::Gold } else { C::Dim }),
                             (pad(&format!("{}{}", if d.mf & 1 != 0 { "♂" } else { "·" }, if d.mf & 2 != 0 { "♀" } else { "·" }), DEX_W_SEX),
                              if d.mf == 3 { C::Green } else { C::Dim }),
-                            (format!("stock {}{}", iv.tn(), if iv.ts() > 0 { format!("+{}✦", iv.ts()) } else { String::new() }),
+                            (format!("stock {}{}", iv.tn(), if iv.ts() > 0 { format!("+{}⋆", iv.ts()) } else { String::new() }),
                              if iv.tn() + iv.ts() > 0 { C::GoldDark } else { C::Dimmer }),
                         ],
                         btns: vec![],
@@ -3894,7 +3894,7 @@ impl Game {
             segs: vec![
                 (format!("{}  ", c.g), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
                 (format!("{} · {}", BIOMES[c.b].name, RAR_LABEL[c.r]), C::Dimmer),
-                (if NOCTURNES.contains(&ci) { "  ◗ nocturne (21 h – 7 h)".into() } else { String::new() }, C::Abyss),
+                (if NOCTURNES.contains(&ci) { "  ◦ nocturne (21 h – 7 h)".into() } else { String::new() }, C::Abyss),
             ],
             btns: vec![],
             act: None,
@@ -3906,7 +3906,7 @@ impl Game {
         }
         rows.push(Row::text("", C::Dim));
         rows.push(Row::text(
-            format!("capturés (total) : {}{}", fmt(d.n as f64), if d.s > 0 { format!(" · shinies : {} ✦", fmt(d.s as f64)) } else { String::new() }),
+            format!("capturés (total) : {}{}", fmt(d.n as f64), if d.s > 0 { format!(" · shinies : {} ⋆", fmt(d.s as f64)) } else { String::new() }),
             C::Text,
         ));
         rows.push(Row::text(
@@ -3927,11 +3927,11 @@ impl Game {
         }
         for r in (0..4).rev() {
             if iv.sr(r) > 0 {
-                per_rank += &format!("✦{}:{} ", RANK_NAMES[r], iv.sr(r));
+                per_rank += &format!("⋆{}:{} ", RANK_NAMES[r], iv.sr(r));
             }
         }
         rows.push(Row::text(
-            format!("en réserve : {}{}{}", iv.tn(), if iv.ts() > 0 { format!(" + {} ✦", iv.ts()) } else { String::new() },
+            format!("en réserve : {}{}{}", iv.tn(), if iv.ts() > 0 { format!(" + {} ⋆", iv.ts()) } else { String::new() },
                 if per_rank.is_empty() { String::new() } else { format!("  ({})", per_rank.trim_end()) }),
             C::Dim,
         ));
@@ -3987,7 +3987,7 @@ impl Game {
         for t in [
             "posez des pièges dans les biomes ; ils capturent seuls, à intervalle régulier.",
             "revendez les doublons pour financer de meilleurs pièges, des appâts, de nouveaux biomes et le labo.",
-            "l'objectif de fond : compléter le bestiaire — 114 espèces, leurs shinies ✦, et un rang S partout.",
+            "l'objectif de fond : compléter le bestiaire — 114 espèces, leurs shinies ⋆, et un rang S partout.",
             "compléter un biome donne +0,04 de chance pour toujours ; le compléter en shiny, +5% à la vente.",
             "les pièges ne s'usent jamais : posés une fois, ils travaillent indéfiniment. l'horlogerie (labo) ne limite que la progression simulée hors-ligne (2 h de base).",
         ] {
@@ -4039,7 +4039,7 @@ impl Game {
         rows.push(Row {
             segs: vec![
                 ("· ".into(), C::Dimmer),
-                ("shiny ✦".into(), C::Shiny),
+                ("shiny ⋆".into(), C::Shiny),
                 (format!("  1/{} de base · valeur ×15 · cumulable avec le rang", (1.0 / SHINY_BASE) as u64), C::Dimmer),
             ],
             btns: vec![],
@@ -4072,7 +4072,7 @@ impl Game {
             noct_names.push(if self.s.dex2[ci].n > 0 { CREATURES[ci].n.to_string() } else { "???".into() });
         }
         rows.extend(bullet_rows("· ", &format!(
-            "la nuit (21 h – 7 h), vingt espèces nocturnes ◗ sortent, introuvables le jour : {}.",
+            "la nuit (21 h – 7 h), vingt espèces nocturnes ◦ sortent, introuvables le jour : {}.",
             noct_names.join(", ")), w, C::Dim));
 
         rows.push(Row::text("", C::Dim));
@@ -4406,7 +4406,7 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::text(format!("├─ captures : {}", fmt(sum.caught as f64)), C::Green));
         if sum.shinies > 0 {
-            rows.push(Row::text(format!("├─ shinies : {} ✦", sum.shinies), C::Blue));
+            rows.push(Row::text(format!("├─ shinies : {} ⋆", sum.shinies), C::Blue));
         }
         if sum.earned > 0.0 {
             rows.push(Row::text(format!("├─ écus gagnés (auto-vente, succès) : +{}", fmt(sum.earned)), C::GoldDark));
@@ -4555,9 +4555,9 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     if now_ms() < game.pentacle_until {
         const PENTACLE: [&str; 5] = [
             "  ·─────────·  ",
-            " ╱  ✦     ✦  ╲ ",
+            " ╱  ⋆     ⋆  ╲ ",
             "│      ✧      │",
-            " ╲  ✦     ✦  ╱ ",
+            " ╲  ⋆     ⋆  ╱ ",
             "  ·─────────·  ",
         ];
         let pulse = (now_ms() / 350.0) as u64 % 2 == 0;
@@ -4574,7 +4574,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
                 }
                 let c = match ch {
                     '✧' => C::Gold,
-                    '✦' => {
+                    '⋆' => {
                         if pulse {
                             C::Purple
                         } else {
@@ -4661,7 +4661,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         " {} · {} · {}{} ",
         SAISONS[season_at(nowc)],
         METEOS[weather_at(nowc)],
-        if is_night_at(nowc) { "nuit ◗" } else { "jour" },
+        if is_night_at(nowc) { "nuit ◦" } else { "jour" },
         if fair_day() { " · foire ✧" } else { "" }
     );
     draw_str(buf, area, cols - cond.chars().count() as i32 - 3, sep_y, &cond, theme.style(C::Ice, false));
@@ -4726,11 +4726,11 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     let web = cfg!(target_arch = "wasm32");
     let fin = if web { "+/- taille" } else { "ctrl+c quitter" };
     let large = format!(
-        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal t[r]oc [p]almarès [n]ouveautés{} [?] aide · {} ",
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t] succès [j]ournal t[r]oc [p]almarès [n]ouveautés{} [?] aide · {} ",
         pastille, fin
     );
     let moyen = format!(
-        " zqsd · Entrée · [v]ue [i]nv [b]est b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]roph [j]ourn t[r]oc [p]alm [n]euf{} [?] aide ",
+        " zqsd · Entrée · [v]ue [i]nv [b]est b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t] succ [j]ourn t[r]oc [p]alm [n]euf{} [?] aide ",
         pastille
     );
     let court = format!(" zqsd · Entrée · [?] aide · [n]ouveautés{} ", pastille);
@@ -4873,7 +4873,7 @@ fn panel_key(game: &mut Game, code: GKey) {
         }
     };
     match code {
-        GKey::Esc | GKey::Char('q') => {
+        GKey::Esc => {
             game.panels.pop();
         }
         GKey::PageDown => {
@@ -4923,7 +4923,7 @@ fn panel_key(game: &mut Game, code: GKey) {
                 game.panels.last_mut().unwrap().sel = sel + 1;
             }
         }
-        GKey::Left | GKey::Char('h') => {
+        GKey::Left | GKey::Char('h') | GKey::Char('q') | GKey::Char('a') => {
             if sel > 0 && sels[sel - 1].0 == sels[sel].0 {
                 game.panels.last_mut().unwrap().sel = sel - 1;
             }
@@ -5509,5 +5509,49 @@ mod tests {
         // vers le bas : on s'arrête sur la dernière fenêtre complète
         panel_scroll(&mut g, 9_999);
         assert_eq!(g.panels.last().unwrap().scroll, max);
+    }
+
+    /* la police du jeu (Iosevka Affut) est à chasse 500, mais certains glyphes
+       y sont dessinés sur 1000 unités : ils prennent deux cellules et décalent
+       d'un cran tout ce qui suit sur la ligne. interdits dans les colonnes
+       alignées — mesuré avec fontTools sur docs/fonts/iosevka-affut-300.woff2. */
+    const GLYPHES_LARGES: [char; 3] = ['◗', '✦', '✓'];
+
+    fn sans_glyphe_large(rows: &[Row], ou: &str) {
+        for r in rows {
+            // les en-têtes à filet se rétrécissent d'eux-mêmes : leur ✓ final
+            // ne décale rien puisque les ─ absorbent la différence
+            if r.segs.last().is_some_and(|(t, _)| t.chars().all(|c| c == '─')) {
+                continue;
+            }
+            let ligne: String = r.segs.iter().map(|(t, _)| t.as_str()).collect();
+            for c in GLYPHES_LARGES {
+                assert!(
+                    !ligne.contains(c),
+                    "{:?} occupe deux cellules et décalera la ligne ({}) : {:?}",
+                    c,
+                    ou,
+                    ligne
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn aucun_glyphe_a_double_chasse_dans_le_bestiaire() {
+        // espèces inconnues : la ligne « ??? » et son marqueur nocturne
+        let g = jeu_pour_bestiaire();
+        let (_, rows) = g.rows_dex();
+        sans_glyphe_large(&rows, "espèce inconnue");
+
+        // espèces capturées, avec shinies : l'autre branche du bestiaire
+        let mut g = jeu_pour_bestiaire();
+        for ci in 0..CREATURES.len() {
+            g.s.dex2[ci] = DexE { n: 999, s: 99, best: 4, bests: 4, mf: 3 };
+            g.s.inv2[ci].m[0] = 99;
+            g.s.inv2[ci].sf[0] = 9;
+        }
+        let (_, rows) = g.rows_dex();
+        sans_glyphe_large(&rows, "espèce capturée");
     }
 }
