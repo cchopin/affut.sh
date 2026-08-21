@@ -3,6 +3,152 @@
 //! sauvegardes : GET/PUT /s/<jeton> — un fichier par jeton, le jeton EST le secret.
 //! classement  : PUT /lb/<jeton> (pseudo + stats), GET /lb (tableau public).
 
+/* ── plausibilité des statistiques du classement ───────────────────────────
+   le client calcule son score et l'envoie : on ne le croit pas. un joueur a
+   modifié sa sauvegarde pour s'attribuer 1 250 milliards d'écus et un score de
+   696 969 693 123, là où la meilleure partie honnête en affichait 9 468.
+
+   trois garde-fous, tous côté serveur puisque le client est précisément ce
+   qu'on ne peut pas croire :
+
+   1. le score est TOUJOURS recalculé ici, jamais repris du client ;
+   2. des bornes de structure, vraies dans n'importe quelle partie : 114 espèces
+      au plus, un rang par espèce découverte, pas plus de shinies que de
+      captures, une migration par million d'écus gagnés (elle exige un trophée,
+      donc au moins un million de gains sur la partie) et des trophées bornés
+      par la formule du jeu, √(gains / 1 M) par migration ;
+   3. un plafond de cadence : ni la partie entière ni l'intervalle depuis le
+      dernier envoi ne peuvent avoir produit plus que le temps ne le permet.
+
+   on BORNE au lieu de refuser : refuser laisserait en place l'entrée déjà
+   écrite, et pourrait bloquer un joueur honnête sur une borne mal réglée. une
+   entrée bornée est marquée « suspect » et disparaît du classement public ;
+   la marque est recalculée à chaque envoi, si bien qu'une partie redevenue
+   plausible revient d'elle-même. */
+
+/* le jeu compte 114 espèces piégeables et quatre rangs (C, B, A, S) */
+const ESPECES_MAX: f64 = 114.0;
+const RANG_MAX: f64 = 4.0;
+/* huit pièges au maximum, le plus rapide toutes les 10 s : 0,8 capture/s.
+   on retient 5, six fois la marge, pour ne jamais gêner une partie honnête. */
+const CAPTURES_PAR_S: f64 = 5.0;
+/* le revenu maximal du jeu, tous pièges et tout le labo au bout, avoisine
+   180 écus/s. on retient 1 000, cinq fois la marge. */
+const ECUS_PAR_S: f64 = 1_000.0;
+/* on ne s'inscrit au classement qu'en choisissant un pseudo, parfois après
+   plusieurs jours de jeu : on crédite d'avance deux jours de partie pour ne
+   pas borner ce premier envoi. */
+const AVANCE_MS: f64 = 2.0 * 86_400_000.0;
+/* migrer coûte 100 000 écus, prix doublé à chaque départ et plafonné au
+   douzième. on ne peut donc pas avoir migré plus souvent que ses gains totaux
+   ne l'ont permis — et sans migration, aucun trophée. */
+const VOYAGE_BASE: f64 = 100_000.0;
+const VOYAGE_PALIER_MAX: i32 = 12;
+/* le jeu accorde √(gains de la partie / 1 M) trophées par migration */
+const ECUS_PAR_TROPHEE: f64 = 1_000_000.0;
+
+/* combien de migrations les gains totaux peuvent avoir payées */
+fn migrations_max(ecus: f64) -> f64 {
+    let (mut cumul, mut m) = (0.0, 0.0);
+    while m < 100.0 {
+        let cout = VOYAGE_BASE * 2f64.powi((m as i32).min(VOYAGE_PALIER_MAX));
+        if cumul + cout > ecus {
+            break;
+        }
+        cumul += cout;
+        m += 1.0;
+    }
+    m
+}
+/* être au bout en peu de temps, c'est louche. la découverte des espèces sature :
+   les communes tombent vite, les dernières demandent d'avoir ouvert les biomes
+   du bout. simuler une partie entière donne plus de 2 000 h pour atteindre les
+   ruines ; on retient une courbe bien plus indulgente, 114 × (1 − e^(−h/10)),
+   qui laisse les parties observées très au large — 29 espèces en 6 h contre un
+   plafond de 79 — et rend le bestiaire complet impossible avant deux jours.
+   l'avance est de six heures ici et non deux jours : c'est elle qui fait mordre
+   la borne sur une partie inscrite du jour et déjà complète. un joueur qui
+   s'inscrirait après plusieurs jours de jeu serait borné une fois, puis rendu
+   au classement de lui-même dès que son ancienneté rattrape sa collection. */
+const ESPECES_TEMPS_H: f64 = 10.0;
+const AVANCE_PROGRES_MS: f64 = 6.0 * 3_600_000.0;
+
+fn lire_nb(e: &serde_json::Map<String, serde_json::Value>, k: &str) -> f64 {
+    e.get(k)
+        .and_then(|x| x.as_f64())
+        .filter(|n| n.is_finite())
+        .unwrap_or(0.0)
+        .max(0.0)
+        .floor()
+}
+
+/* borne les statistiques d'une entrée et recalcule son score.
+   renvoie true si quelque chose a été borné — l'entrée est alors suspecte. */
+fn borner_stats(
+    e: &mut serde_json::Map<String, serde_json::Value>,
+    premier_at: f64,
+    prec: Option<&serde_json::Value>,
+    now: f64,
+) -> bool {
+    let brut: Vec<f64> = ["captures", "especes", "rangs", "shinies", "ecus", "migrations", "trophees"]
+        .iter()
+        .map(|k| lire_nb(e, k))
+        .collect();
+    let (b_capt, b_esp, b_rang, b_shi, b_ecus, b_migr, b_tro) =
+        (brut[0], brut[1], brut[2], brut[3], brut[4], brut[5], brut[6]);
+
+    /* âge de la partie, avance comprise */
+    let age_s = (((now - premier_at).max(0.0) + AVANCE_MS) / 1000.0).max(1.0);
+
+    /* et, si l'on connaît l'envoi précédent, ce qu'il a pu produire depuis */
+    let (capt_max, ecus_max) = match prec {
+        Some(p) => {
+            let pm = p.as_object();
+            let lu = |k: &str| pm.and_then(|m| m.get(k)).and_then(|x| x.as_f64()).filter(|n| n.is_finite()).unwrap_or(0.0);
+            let depuis_s = ((now - lu("at")).max(0.0) / 1000.0).max(1.0);
+            (
+                (lu("captures") + depuis_s * CAPTURES_PAR_S).min(age_s * CAPTURES_PAR_S),
+                (lu("ecus") + depuis_s * ECUS_PAR_S).min(age_s * ECUS_PAR_S),
+            )
+        }
+        None => (age_s * CAPTURES_PAR_S, age_s * ECUS_PAR_S),
+    };
+
+    let captures = b_capt.min(capt_max);
+    let ecus = b_ecus.min(ecus_max);
+    /* on ne découvre pas une espèce sans l'avoir capturée, ni tout un
+       bestiaire en une soirée */
+    let progres_h = ((now - premier_at).max(0.0) + AVANCE_PROGRES_MS) / 3_600_000.0;
+    /* au supérieur : arrondi au plancher, la courbe n'atteindrait jamais 114
+       et un bestiaire réellement complet resterait suspect à vie */
+    let especes_temps = (ESPECES_MAX * (1.0 - (-progres_h / ESPECES_TEMPS_H).exp())).ceil();
+    let especes = b_esp.min(ESPECES_MAX).min(captures).min(especes_temps);
+    let rangs = b_rang.min(especes * RANG_MAX);
+    let shinies = b_shi.min(captures);
+    let migrations = b_migr.min(migrations_max(ecus));
+    /* à gains totaux donnés, la somme des √ est maximale quand les gains sont
+       répartis également entre les migrations, soit √(migrations × gains / 1 M) */
+    let trophees = b_tro.min((migrations * ecus / ECUS_PAR_TROPHEE).sqrt().floor());
+
+    let borne = [
+        (captures, b_capt), (especes, b_esp), (rangs, b_rang), (shinies, b_shi),
+        (ecus, b_ecus), (migrations, b_migr), (trophees, b_tro),
+    ];
+    let suspect = borne.iter().any(|(apres, avant)| apres < avant);
+
+    for (k, v) in [
+        ("captures", captures), ("especes", especes), ("rangs", rangs),
+        ("shinies", shinies), ("ecus", ecus), ("migrations", migrations),
+        ("trophees", trophees),
+    ] {
+        e.insert(k.into(), serde_json::json!(v));
+    }
+    /* le score n'est jamais celui du client */
+    let score = (especes * 100.0 + shinies * 300.0 + rangs * 40.0 + trophees * 1000.0 + ecus / 1000.0).floor();
+    e.insert("score".into(), serde_json::json!(score));
+    suspect
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use std::io::Read;
@@ -119,6 +265,7 @@ fn main() {
                 .into_iter()
                 .map(|(_, v)| v)
                 .filter(|v| !v.get("hidden").and_then(|h| h.as_bool()).unwrap_or(false))
+                .filter(|v| !v.get("suspect").and_then(|h| h.as_bool()).unwrap_or(false))
                 .collect();
             let body = serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into());
             respond_json(req, 200, &body);
@@ -219,11 +366,19 @@ fn main() {
                 serde_json::json!(if prev_pseudo.is_empty() || (changement && !en_grace) { now } else { prev_pseudo_at }),
             );
             entry.insert("renames".into(), serde_json::json!(if changement { renames + 1.0 } else { renames }));
-            for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "score", "migrations"] {
+            /* date du premier envoi : elle sert d'origine au plafond de cadence.
+               une fois posée, elle ne bouge plus. */
+            let premier_at = g("premier_at").and_then(|x| x.as_f64()).filter(|n| n.is_finite()).unwrap_or(now);
+            entry.insert("premier_at".into(), serde_json::json!(premier_at));
+            for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "migrations"] {
                 let n = v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
                 let n = if n.is_finite() { n.clamp(0.0, 1e15).floor() } else { 0.0 };
                 entry.insert(k.into(), serde_json::json!(n));
             }
+            /* le score est recalculé ici et les statistiques bornées : une
+               sauvegarde trafiquée sort du classement au lieu de le dominer */
+            let suspect = borner_stats(&mut entry, premier_at, prev.as_ref(), now);
+            entry.insert("suspect".into(), serde_json::json!(suspect));
             let out = serde_json::to_string(&serde_json::Value::Object(entry)).unwrap_or_default();
             let tmp = format!("{}.tmp", path);
             if std::fs::write(&tmp, &out).is_ok() && std::fs::rename(&tmp, &path).is_ok() {
@@ -279,3 +434,153 @@ fn main() {
 
 #[cfg(target_arch = "wasm32")]
 fn main() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entree(v: serde_json::Value) -> serde_json::Map<String, serde_json::Value> {
+        v.as_object().unwrap().clone()
+    }
+
+    const JOUR: f64 = 86_400_000.0;
+
+    /* la ligne réellement relevée sur le classement : un joueur s'était donné
+       1 250 milliards d'écus et un score de 696 969 693 123. */
+    #[test]
+    fn la_sauvegarde_trafiquee_sort_du_classement() {
+        let now = 1_787_339_565_576.0;
+        let mut e = entree(serde_json::json!({
+            "captures": 31232.0, "ecus": 1_250_023_123_123.0, "especes": 114.0,
+            "migrations": 1.0, "rangs": 87.0, "score": 696_969_693_123.0,
+            "shinies": 3.0, "trophees": 2.0
+        }));
+        // inscrit le jour même
+        let suspect = borner_stats(&mut e, now - 3_600_000.0, None, now);
+        assert!(suspect, "l'entrée doit être marquée suspecte");
+        let ecus = lire_nb(&e, "ecus");
+        let score = lire_nb(&e, "score");
+        assert!(ecus < 1e9, "les écus doivent être bornés, obtenu {}", ecus);
+        assert!(score < 1e6, "le score doit s'effondrer, obtenu {}", score);
+    }
+
+    /* un score inventé sans toucher au reste ne sert à rien non plus :
+       il est recalculé à partir des composantes. */
+    #[test]
+    fn le_score_du_client_nest_jamais_repris() {
+        let now = 1_787_339_565_576.0;
+        let mut e = entree(serde_json::json!({
+            "captures": 3352.0, "ecus": 88121.0, "especes": 38.0, "migrations": 0.0,
+            "rangs": 117.0, "score": 999_999_999.0, "shinies": 3.0, "trophees": 0.0
+        }));
+        let suspect = borner_stats(&mut e, now - 2.0 * JOUR, None, now);
+        assert!(!suspect, "aucune statistique n'est fausse, seul le score l'était");
+        // espèces×100 + shinies×300 + rangs×40 + trophées×1000 + écus/1000
+        let attendu: f64 = (38.0 * 100.0 + 3.0 * 300.0 + 117.0 * 40.0 + 88121.0 / 1000.0_f64).floor();
+        assert_eq!(lire_nb(&e, "score"), attendu);
+    }
+
+    /* les cinq parties honnêtes relevées le même jour doivent passer intactes */
+    #[test]
+    fn les_parties_honnetes_passent_intactes() {
+        let now = 1_787_339_632_825.0;
+        let honnetes = [
+            serde_json::json!({"captures": 1159.0, "ecus": 46151.0, "especes": 29.0, "migrations": 0.0, "rangs": 84.0, "shinies": 2.0, "trophees": 0.0}),
+            serde_json::json!({"captures": 615.0, "ecus": 19150.0, "especes": 11.0, "migrations": 0.0, "rangs": 36.0, "shinies": 1.0, "trophees": 0.0}),
+            serde_json::json!({"captures": 3352.0, "ecus": 88121.0, "especes": 38.0, "migrations": 0.0, "rangs": 117.0, "shinies": 3.0, "trophees": 0.0}),
+            serde_json::json!({"captures": 87.0, "ecus": 275.0, "especes": 8.0, "migrations": 0.0, "rangs": 18.0, "shinies": 0.0, "trophees": 0.0}),
+            serde_json::json!({"captures": 1860.0, "ecus": 58676.0, "especes": 28.0, "migrations": 0.0, "rangs": 88.0, "shinies": 3.0, "trophees": 0.0}),
+        ];
+        for j in honnetes {
+            let avant = entree(j.clone());
+            let mut e = entree(j);
+            // inscrit à l'instant : c'est le cas le plus défavorable, seule
+            // l'avance de deux jours protège l'entrée
+            let suspect = borner_stats(&mut e, now, None, now);
+            assert!(!suspect, "partie honnête marquée suspecte : {:?}", avant);
+            for k in ["captures", "ecus", "especes", "rangs", "shinies"] {
+                assert_eq!(lire_nb(&e, k), lire_nb(&avant, k), "{} modifié", k);
+            }
+        }
+    }
+
+    /* on ne peut pas non plus gonfler ses gains entre deux envois */
+    #[test]
+    fn un_bond_entre_deux_envois_est_borne() {
+        let now = 1_787_339_565_576.0;
+        let prec = serde_json::json!({"at": now - 30_000.0, "captures": 1000.0, "ecus": 50_000.0});
+        let mut e = entree(serde_json::json!({
+            "captures": 1001.0, "ecus": 900_000_000.0, "especes": 30.0,
+            "migrations": 0.0, "rangs": 80.0, "shinies": 1.0, "trophees": 0.0
+        }));
+        let suspect = borner_stats(&mut e, now - 10.0 * JOUR, Some(&prec), now);
+        assert!(suspect);
+        // 30 s à 1 000 écus/s au plus, en partant des 50 000 précédents
+        assert!(lire_nb(&e, "ecus") <= 80_000.0, "obtenu {}", lire_nb(&e, "ecus"));
+    }
+
+    /* les bornes de structure : rien de tout cela n'existe dans une partie */
+    #[test]
+    fn les_bornes_de_structure_tiennent() {
+        let now = 1_787_339_565_576.0;
+        let mut e = entree(serde_json::json!({
+            "captures": 500.0, "ecus": 10_000.0, "especes": 9999.0, "migrations": 50.0,
+            "rangs": 9999.0, "shinies": 9999.0, "trophees": 9999.0
+        }));
+        assert!(borner_stats(&mut e, now - 10.0 * JOUR, None, now));
+        assert_eq!(lire_nb(&e, "especes"), 114.0, "114 espèces au maximum");
+        assert_eq!(lire_nb(&e, "rangs"), 114.0 * 4.0, "un rang par espèce, quatre au plus");
+        assert_eq!(lire_nb(&e, "shinies"), 500.0, "pas plus de shinies que de captures");
+        assert_eq!(lire_nb(&e, "migrations"), 0.0, "10 000 écus ne paient pas le voyage à 100 000");
+        assert_eq!(lire_nb(&e, "trophees"), 0.0, "sans migration, aucun trophée");
+    }
+
+    /* une espèce ne se découvre pas sans capture */
+    #[test]
+    fn on_ne_decouvre_pas_sans_capturer() {
+        let now = 1_787_339_565_576.0;
+        let mut e = entree(serde_json::json!({
+            "captures": 5.0, "ecus": 100.0, "especes": 114.0, "migrations": 0.0,
+            "rangs": 456.0, "shinies": 0.0, "trophees": 0.0
+        }));
+        assert!(borner_stats(&mut e, now - JOUR, None, now));
+        assert_eq!(lire_nb(&e, "especes"), 5.0);
+        assert_eq!(lire_nb(&e, "rangs"), 20.0);
+    }
+
+    /* les trophées doivent coller à la progression : ils ne s'obtiennent qu'en
+       migrant, et migrer se paie — 100 000 écus, prix doublé à chaque départ. */
+    #[test]
+    fn les_trophees_doivent_etre_finances() {
+        let now = 1_787_339_565_576.0;
+        const JOUR: f64 = 86_400_000.0;
+
+        // 50 000 écus gagnés en tout : pas même le premier voyage
+        let mut e = entree(serde_json::json!({
+            "captures": 900.0, "ecus": 50_000.0, "especes": 30.0, "migrations": 3.0,
+            "rangs": 90.0, "shinies": 1.0, "trophees": 12.0
+        }));
+        assert!(borner_stats(&mut e, now - 10.0 * JOUR, None, now));
+        assert_eq!(lire_nb(&e, "migrations"), 0.0);
+        assert_eq!(lire_nb(&e, "trophees"), 0.0, "sans migration, aucun trophée");
+
+        // 300 000 écus : le 1er voyage (100 k) et le 2e (200 k), pas le 3e
+        let mut e = entree(serde_json::json!({
+            "captures": 5000.0, "ecus": 300_000.0, "especes": 40.0, "migrations": 9.0,
+            "rangs": 120.0, "shinies": 2.0, "trophees": 40.0
+        }));
+        assert!(borner_stats(&mut e, now - 10.0 * JOUR, None, now));
+        assert_eq!(lire_nb(&e, "migrations"), 2.0, "300 000 écus paient deux voyages");
+        // √(2 × 300 000 / 1 M) = √0,6 → aucun trophée entier
+        assert_eq!(lire_nb(&e, "trophees"), 0.0);
+
+        // une partie longue et honnête : 40 M gagnés, 5 migrations, 12 trophées
+        let mut e = entree(serde_json::json!({
+            "captures": 200_000.0, "ecus": 40_000_000.0, "especes": 90.0, "migrations": 5.0,
+            "rangs": 300.0, "shinies": 60.0, "trophees": 12.0
+        }));
+        let suspect = borner_stats(&mut e, now - 60.0 * JOUR, None, now);
+        assert!(!suspect, "une progression cohérente doit passer");
+        assert_eq!(lire_nb(&e, "trophees"), 12.0);
+    }
+}
