@@ -805,8 +805,9 @@ impl WorldMap {
         w.scatter(1, 47, 33, 16, &['#', '[', ']'], C::Dim, 0.06, true, &mut rng);
         w.scatter(1, 47, 33, 16, &['.', ','], C::Dim, 0.08, false, &mut rng);
 
-        // plantes du village : purement décoratives, jamais bloquantes
-        w.scatter(37, 12, 40, 22, &['♣'], C::Green, 0.012, false, &mut rng);
+        // mousse entre les pavés : décor discret. surtout pas de ♣ vert ici —
+        // isolé sur la place, il se lit comme un événement à aller voir.
+        w.scatter(37, 12, 40, 22, &[',', '"', '·'], C::Dimmer, 0.012, false, &mut rng);
 
         // sol du quartier sud + chemins d'accès
         for y in 34..=42 {
