@@ -356,8 +356,17 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.8";
-const NEWS: [(&str, &str, &[&str]); 9] = [
+const VERSION: &str = "1.9";
+const NEWS: [(&str, &str, &[&str]); 10] = [
+    (
+        "1.9",
+        "21 août 2026",
+        &[
+            "le classement ne croit plus votre navigateur sur parole : le score est recalculé sur le serveur, à partir des mêmes composantes qu'avant. rien ne change pour vous, le chiffre affiché reste le même.",
+            "une partie dont les chiffres ne tiennent pas debout sort du tableau : plus d'espèces que le temps de jeu n'en permet, des trophées que les gains n'ont pas payés, des écus tombés plus vite que le meilleur piège du jeu ne peut en rapporter. elle y revient d'elle-même dès qu'elle redevient plausible.",
+            "trafiquer sa sauvegarde reste possible — c'est votre partie, elle vit dans votre navigateur. le classement, lui, n'en tiendra pas compte.",
+        ],
+    ),
     (
         "1.8",
         "21 août 2026",
