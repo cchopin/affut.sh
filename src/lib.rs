@@ -371,7 +371,7 @@ const NEWS: [(&str, &str, &[&str]); 9] = [
             "les panneaux défilent à la molette et au trackpad.",
             "dans les menus, q va enfin à gauche : zqsd n'y marchait que dans trois directions sur quatre. Échap ferme le panneau.",
             "le bestiaire ne se décale plus : deux caractères y occupaient deux cases au lieu d'une, la lune des espèces nocturnes ◦ et l'étoile des shinies ⋆. les colonnes tiennent maintenant dans une fenêtre étroite, et la lune reste visible sur les espèces déjà capturées.",
-            "le bâtiment « trophées » s'appelle « succès », ce qu'il contient. les trophées, eux, restent ce que rapporte une migration.",
+            "la fenêtre des trophées s'intitulait « succès » : elle porte enfin le nom du bâtiment. elle liste toujours vos succès et leurs récompenses.",
         ],
     ),
     (
@@ -1124,7 +1124,7 @@ impl WorldMap {
         w.building(58, 31, 16, 6, "labo", Zone::Labo, 'l');
         w.building(36, 40, 11, 5, "bestiaire", Zone::Bestiaire, 'b');
         w.building(49, 40, 13, 5, "troc", Zone::Troc, 'r');
-        w.building(64, 40, 12, 5, "succès", Zone::Succes, 't');
+        w.building(64, 40, 12, 5, "trophées", Zone::Succes, 't');
         w.building(40, 47, 13, 5, "musée", Zone::Musee, 'm');
         w.building(58, 47, 13, 5, "enclos", Zone::Enclos, 'e');
 
@@ -2834,7 +2834,7 @@ impl Game {
             Some(Zone::Boutique) => ("boutique — Entrée : acheter et vendre".into(), C::Gold),
             Some(Zone::Labo) => ("labo — Entrée : recherches et migration".into(), C::Gold),
             Some(Zone::Bestiaire) => ("bestiaire — Entrée : consulter".into(), C::Gold),
-            Some(Zone::Succes) => ("succès — Entrée : consulter".into(), C::Gold),
+            Some(Zone::Succes) => ("trophées — Entrée : consulter".into(), C::Gold),
             Some(Zone::Musee) => ("musée — Entrée : exposer vos plus belles prises".into(), C::Gold),
             Some(Zone::Enclos) => ("enclos — Entrée : faire reproduire vos créatures".into(), C::Gold),
             Some(Zone::Troc) => ("comptoir de troc — Entrée : échanger des doublons contre des curiosités".into(), C::Gold),
@@ -4016,7 +4016,7 @@ impl Game {
                 indent: 0,
             });
         }
-        ("succès".into(), rows)
+        ("trophées".into(), rows)
     }
 
     fn rows_help(&self) -> (String, Vec<Row>) {
@@ -4786,11 +4786,11 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     let web = cfg!(target_arch = "wasm32");
     let fin = if web { "+/- taille" } else { "ctrl+c quitter" };
     let large = format!(
-        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t] succès [j]ournal t[r]oc [p]almarès [n]ouveautés{} [?] aide · {} ",
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal t[r]oc [p]almarès [n]ouveautés{} [?] aide · {} ",
         pastille, fin
     );
     let moyen = format!(
-        " zqsd · Entrée · [v]ue [i]nv [b]est b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t] succ [j]ourn t[r]oc [p]alm [n]euf{} [?] aide ",
+        " zqsd · Entrée · [v]ue [i]nv [b]est b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]roph [j]ourn t[r]oc [p]alm [n]euf{} [?] aide ",
         pastille
     );
     let court = format!(" zqsd · Entrée · [?] aide · [n]ouveautés{} ", pastille);
