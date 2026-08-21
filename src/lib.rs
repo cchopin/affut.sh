@@ -59,10 +59,16 @@ struct BiomeDef {
    terrain ni pièges — on n'y entre pas, ses espèces s'obtiennent au troc. */
 const WILDB: usize = 11;
 const CURIO_B: usize = 11;
+/* les prix du désert aux ruines suivent le revenu des pièges, bien plus élevé
+   depuis que chaque palier double au lieu d'ajouter 40% : sans cela la partie
+   durerait trois fois moins longtemps. la forêt, la rivière, le marais, la
+   montagne et le lac gardent leurs prix d'origine — ce sont les seuls qu'un
+   joueur avait déjà en vue, et le début de partie profite ainsi du gain sans
+   en payer le prix. */
 const BIOMES: [BiomeDef; 12] = [
     BiomeDef { name: "forêt",    cost: 0.0,         mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
     BiomeDef { name: "marais",   cost: 2500.0,      mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
-    BiomeDef { name: "montagne", cost: 25000.0,     mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
+    BiomeDef { name: "montagne", cost: 20000.0,     mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
     BiomeDef { name: "désert",   cost: 240000.0,    mult: 4.0, desc: "des dunes à perte de vue. tout ce qui y survit vaut cher." },
     BiomeDef { name: "glacier",  cost: 1750000.0,   mult: 6.5, desc: "un silence bleu et parfait. les espèces y sont rares et magnifiques." },
     BiomeDef { name: "abysses",  cost: 12500000.0,  mult: 10.0, desc: "là où la lumière renonce. le fond du bestiaire, littéralement." },
@@ -70,7 +76,7 @@ const BIOMES: [BiomeDef; 12] = [
     BiomeDef { name: "récif",    cost: 175000000.0, mult: 16.0, desc: "un jardin sous la surface, plus peuplé qu'il n'y paraît. douze espèces s'y cachent." },
     BiomeDef { name: "ruines",   cost: 650000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
     BiomeDef { name: "rivière",  cost: 900.0,       mult: 1.3, desc: "elle descend de la montagne et traverse tout. neuf espèces la remontent, personne ne sait pourquoi." },
-    BiomeDef { name: "lac",      cost: 70000.0,     mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
+    BiomeDef { name: "lac",      cost: 45000.0,     mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
     BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 1.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
 ];
 
@@ -1645,12 +1651,19 @@ impl Game {
     fn lab_cost(&self, k: usize) -> f64 {
         (LABS[k].base * LABS[k].mult.powi(self.s.lab[k] as i32)).floor()
     }
+    /* un emplacement coûte ce que coûte le piège qu'on y mettra : poser un
+       piège de plus et améliorer un piège d'un palier rapportent à peu près
+       autant (+1/n du revenu contre ×2 sur un piège sur n), ils doivent donc
+       coûter à peu près autant. adossé au prix du biome, le 4e emplacement des
+       ruines valait deux fois le biome lui-même — 1500 h d'économies pour un
+       seul piège, si bien qu'on ne l'achetait jamais. */
     fn slot_cost(&self, b: usize) -> f64 {
-        let base = BIOMES[b].cost.max(250.0);
+        let meilleur = (0..TRAPS.len()).rev().find(|&t| self.s.traps[t] > 0).unwrap_or(0);
+        let base = TRAPS[meilleur].cost;
         if self.s.biomes[b].as_ref().map(|x| x.slots).unwrap_or(2) == 2 {
-            (base * 0.5).floor()
+            base.floor()
         } else {
-            (base * 2.0).floor()
+            (base * 2.5).floor()
         }
     }
     fn placed_count(&self, tier: usize) -> u32 {
@@ -5646,5 +5659,33 @@ mod tests {
                 TRAPS[t - 1].n
             );
         }
+    }
+
+    /* un emplacement doit rester au prix d'un piège : adossé au prix du biome,
+       le 4e emplacement des ruines coûtait deux fois le biome lui-même, soit
+       1500 h d'économies pour un seul piège de plus. */
+    #[test]
+    fn un_emplacement_coute_le_prix_du_piege_quon_y_met() {
+        let mut g = jeu_neuf();
+        // partie neuve : un piège en bois, deux emplacements en forêt
+        assert_eq!(g.slot_cost(0), TRAPS[0].cost);
+
+        // le 4e emplacement est plus cher, mais reste du même ordre
+        g.s.biomes[0].as_mut().unwrap().slots = 3;
+        assert!(g.slot_cost(0) <= TRAPS[0].cost * 3.0);
+
+        // avec un piège quantique en réserve, l'emplacement suit — et reste
+        // très en dessous du prix du biome le plus cher
+        g.s.traps[5] = 1;
+        let plus_cher = BIOMES.iter().map(|b| b.cost).filter(|c| c.is_finite()).fold(0.0, f64::max);
+        for b in 0..WILDB {
+            assert!(
+                g.slot_cost(b) < plus_cher,
+                "un emplacement ({}) coûte plus cher que le biome le plus cher ({})",
+                g.slot_cost(b),
+                plus_cher
+            );
+        }
+        assert_eq!(g.slot_cost(0), (TRAPS[5].cost * 2.5).floor());
     }
 }
