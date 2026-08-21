@@ -60,6 +60,27 @@
     font-size: 11px; color: #7e8a9b; opacity: .75; cursor: pointer;
   }
   #syncbtn:hover { color: #c2cdda; }
+  #lbask {
+    display: none; position: fixed; z-index: 15; bottom: 26px; right: 10px;
+    width: min(23rem, 92vw); background: #171c24; border: 1px solid #4a5462;
+    padding: .7rem .8rem; font-size: 13px; line-height: 1.45;
+  }
+  #lbask.open { display: block; }
+  #lbask .t { color: #ffc45c; margin-bottom: .35rem; }
+  #lbask p { color: #7e8a9b; margin-bottom: .5rem; }
+  #lbask input {
+    font: inherit; background: #101318; color: #c2cdda;
+    border: 1px solid #4a5462; padding: .2rem .4rem; width: 10rem;
+  }
+  #lbask button {
+    font: inherit; font-size: 12px; background: none; color: #c2cdda;
+    border: 1px solid #4a5462; padding: .2rem .5rem; cursor: pointer;
+  }
+  #lbask button:hover { color: #ffc45c; border-color: #d6a04b; }
+  #lbask .row { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+  #lbask .msg { display: block; margin-top: .35rem; }
+  #lbask .ok { color: #98c379; }
+  #lbask .ko { color: #e06c75; }
   #syncdlg {
     display: none; position: fixed; z-index: 20;
     left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -121,6 +142,17 @@
   </div>
 </div>
 <div id="syncbtn" title="exporter / importer la sauvegarde">⇄ sauvegarde</div>
+<div id="lbask">
+  <div class="t">rejoindre le classement ?</div>
+  <p>choisissez un pseudo pour figurer au <a href="./classement.html" target="_blank" style="color:#7ac9ff">tableau du comptoir</a>
+     (espèces, shinies, écus…). vous pourrez le changer à tout moment.</p>
+  <div class="row">
+    <input id="lbaskName" maxlength="16" spellcheck="false" placeholder="votre pseudo">
+    <button id="lbaskOk">valider</button>
+    <button id="lbaskNo">plus tard</button>
+  </div>
+  <span class="msg" id="lbaskMsg"></span>
+</div>
 <div id="syncdlg">
   <div class="t">session partagée entre vos PC</div>
   <p>ouvrez ce lien sur un autre ordinateur : même partie, synchronisée
@@ -146,7 +178,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821f'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821g'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -332,40 +364,72 @@ async function lbPush(name) {
   return r;
 }
 
-// un autre PC de la même partie retrouve le pseudo déjà choisi
-(async () => {
-  if (pseudo) return;
+/* enregistre le pseudo et rend compte dans l'élément de message fourni */
+async function savePseudo(name, msgEl) {
+  msgEl.textContent = '…';
+  msgEl.className = msgEl.className.replace(/\b(ok|ko)\b/g, '');
   try {
-    const r = await fetch(LB + token, { signal: AbortSignal.timeout(4000) });
-    if (!r.ok) return;
-    const j = await r.json();
-    if (j && j.pseudo) { pseudo = j.pseudo; localStorage.setItem('affut_pseudo', pseudo); }
-  } catch (e) {}
+    const r = await lbPush(name);
+    if (r.ok) {
+      pseudo = name;
+      localStorage.setItem('affut_pseudo', name);
+      msgEl.textContent = name ? '✓ inscrit au classement' : '✓ retiré du classement';
+      msgEl.className += ' ok';
+      return true;
+    }
+    msgEl.textContent = await r.text();
+    msgEl.className += ' ko';
+  } catch (e) {
+    msgEl.textContent = 'serveur injoignable';
+    msgEl.className += ' ko';
+  }
+  return false;
+}
+
+// au chargement : on retrouve le pseudo via le jeton (autre PC de la même
+// partie) ; sinon on propose de s'inscrire, sans bloquer le jeu.
+const ask = document.getElementById('lbask');
+const askName = document.getElementById('lbaskName');
+const askMsg = document.getElementById('lbaskMsg');
+(async () => {
+  if (!pseudo) {
+    try {
+      const r = await fetch(LB + token, { signal: AbortSignal.timeout(4000) });
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.pseudo) { pseudo = j.pseudo; localStorage.setItem('affut_pseudo', pseudo); }
+      }
+    } catch (e) {}
+  }
+  const snooze = Number(localStorage.getItem('affut_lb_ask') || 0);
+  if (pseudo || paused || Date.now() < snooze) return;
+  setTimeout(() => { if (!pseudo && !paused) ask.classList.add('open'); }, 4000);
 })();
+
+document.getElementById('lbaskNo').addEventListener('click', () => {
+  ask.classList.remove('open');
+  localStorage.setItem('affut_lb_ask', String(Date.now() + 3 * 86400000)); // on repropose dans 3 jours
+});
+document.getElementById('lbaskOk').addEventListener('click', async () => {
+  const name = askName.value.trim();
+  if (!name) { ask.classList.remove('open'); return; }
+  if (await savePseudo(name, askMsg)) setTimeout(() => ask.classList.remove('open'), 1500);
+});
+askName.addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('lbaskOk').click();
+  if (e.key === 'Escape') document.getElementById('lbaskNo').click();
+});
 
 setInterval(() => { if (pseudo && !paused) lbPush(pseudo).catch(() => {}); }, 300000);
 
 const pseudoIn = document.getElementById('pseudo');
 const pseudoMsg = document.getElementById('pseudoMsg');
 document.getElementById('pseudoSave').addEventListener('click', async () => {
-  const name = pseudoIn.value.trim();
-  pseudoMsg.textContent = '…';
   pseudoMsg.className = '';
-  try {
-    const r = await lbPush(name);
-    if (r.ok) {
-      pseudo = name;
-      localStorage.setItem('affut_pseudo', name);
-      pseudoMsg.textContent = name ? '✓ inscrit au classement' : '✓ retiré du classement';
-      pseudoMsg.className = 'ok';
-    } else {
-      pseudoMsg.textContent = await r.text();
-      pseudoMsg.className = 'ko';
-    }
-  } catch (e) {
-    pseudoMsg.textContent = 'serveur injoignable';
-    pseudoMsg.className = 'ko';
-  }
+  if (await savePseudo(pseudoIn.value.trim(), pseudoMsg)) ask.classList.remove('open');
+});
+pseudoIn.addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('pseudoSave').click();
 });
 
 const dlg = document.getElementById('syncdlg');
@@ -406,6 +470,8 @@ document.getElementById('syncImport').addEventListener('click', () => {
 });
 
 document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
   if (paused) return;
   if (dlg.classList.contains('open')) {
     if (e.key === 'Escape') dlg.classList.remove('open');
