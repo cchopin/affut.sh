@@ -6,7 +6,7 @@
 **[▤ classement](https://cchopin.github.io/affut.sh/classement.html)** — choisissez un pseudo dans « ⇄ session partagée » pour y figurer.
 
 Jeu **idle de capture et de collection dans le terminal**, écrit en Rust avec
-[ratatui](https://ratatui.rs) + crossterm. Posez des pièges dans six biomes,
+[ratatui](https://ratatui.rs) + crossterm. Posez des pièges dans neuf biomes,
 laissez le temps travailler — même le jeu fermé — et complétez le bestiaire.
 Interface inspirée de [late.sh](https://late.sh).
 
@@ -15,23 +15,23 @@ Interface inspirée de [late.sh](https://late.sh).
 ## le jeu
 
 - **Un monde ASCII où l'on se promène** : un village (boutique, labo, bestiaire,
-  trophées, musée, enclos) entouré de six biomes — forêt, marais, montagne,
-  désert, glacier, abysses.
-- **60 espèces à découvrir**, chacune avec sa variante **shiny ✦** (1/128) et un
+  trophées, musée, enclos) entouré de neuf biomes — forêt, marais, montagne,
+  désert, glacier, abysses, volcan, récif, ruines.
+- **98 espèces à découvrir**, chacune avec sa variante **shiny ✦** (1/128) et un
   **rang** par capture (C, B, A, S — valeur ×1 à ×6). Le bestiaire retient vos
   meilleurs spécimens et les **sexes observés** ♂♀.
 - **Idle véritable** : les pièges capturent à intervalle régulier, y compris
   hors-ligne (simulation exacte au retour, plafond extensible au labo).
 - **Météo et saisons** : la météo change toutes les 20 minutes (pluie, brume,
-  canicule, tempête, nuit étoilée…), chaque jour réel est une saison. Six
-  **espèces nocturnes** ☽ ne sortent qu'entre 21 h et 7 h.
+  canicule, tempête, nuit étoilée…), chaque jour réel est une saison. Sept
+  **espèces nocturnes** ◗ ne sortent qu'entre 21 h et 7 h.
 - **Économie** : revendez les doublons (les plus bas rangs d'abord — vos beaux
   spécimens et votre meilleur couple ♂♀ sont toujours protégés), financez de
   meilleurs pièges, des appâts, de nouveaux biomes et le labo.
 - **Élevage** : à l'enclos, un couple ♂+♀ d'une même espèce donne une naissance,
   parfois d'un rang supérieur, avec shiny ×3.
 - **Et aussi** : battues, contrats renouvelés toutes les 2 h, musée à revenu
-  passif, légendes errantes ✧ à tenter une seule fois, 26 succès, prestige par
+  passif, légendes errantes ✧ à tenter une seule fois, 28 succès, prestige par
   migration (trophées permanents).
 
 | tableau de bord | bestiaire |
@@ -95,6 +95,6 @@ Host affut
 
 L'identité visuelle (palette, cadre, fenêtres, minuscules) est un hommage à
 [late.sh](https://late.sh) de mpiorowski — allez-y, c'est bien.
-Les 60 créatures, leurs mœurs discutables et leur lore sont originaux.
+Les 98 créatures, leurs mœurs discutables et leur lore sont originaux.
 
 > le dossier `web/` contient une ancienne variante navigateur (single-file), antérieure aux rangs/météo/élevage — le jeu terminal est la version de référence.

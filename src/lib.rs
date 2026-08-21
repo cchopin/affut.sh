@@ -229,7 +229,8 @@ const LAB_COURTAGE: usize = 11;
 const LAB_LICENCE: usize = 12;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
-const ACHS: [AchDef; 27] = [
+const ACH_666: usize = 27;
+const ACHS: [AchDef; 28] = [
     AchDef { n: "première prise",         d: "capturer une créature",                r: 50.0 },
     AchDef { n: "braconnier du dimanche", d: "capturer 100 créatures",               r: 500.0 },
     AchDef { n: "main verte",             d: "capturer 1 000 créatures",             r: 5000.0 },
@@ -257,6 +258,7 @@ const ACHS: [AchDef; 27] = [
     AchDef { n: "conservateur",           d: "remplir les 6 salles du musée",        r: 15000.0 },
     AchDef { n: "oiseau de nuit",         d: "capturer une espèce nocturne",         r: 1000.0 },
     AchDef { n: "assidu",                 d: "chasser 7 jours d'affilée",            r: 2000.0 },
+    AchDef { n: "le compte est bon",     d: "capturer 666 créatures",               r: 666.0 },
 ];
 
 const SHINY_BASE: f64 = 1.0 / 512.0;
@@ -1136,6 +1138,8 @@ struct Game {
     board: Vec<BoardRow>,
     board_me: String,
     board_state: u8, // 0 = pas encore reçu, 1 = à jour, 2 = injoignable
+    /* clin d'œil : le cercle qui s'ouvre sur la place à la 666e prise */
+    pentacle_until: f64,
 }
 
 impl Game {
@@ -1162,6 +1166,7 @@ impl Game {
             board: Vec::new(),
             board_me: String::new(),
             board_state: 0,
+            pentacle_until: 0.0,
         };
         (game, fresh)
     }
@@ -1716,6 +1721,7 @@ impl Game {
             24 => s.museum.iter().flatten().count() >= 6,
             25 => NOCTURNES.iter().any(|&c| s.dex2[c].n > 0),
             26 => s.streak >= 7,
+            27 => s.captures >= 666,
             _ => false,
         }
     }    fn check_achievements(&mut self) {
@@ -1724,6 +1730,14 @@ impl Game {
                 self.s.ach[i] = true;
                 if ACHS[i].r > 0.0 {
                     self.gain(ACHS[i].r);
+                }
+                if i == ACH_666 {
+                    self.pentacle_until = now_ms() + 12_000.0;
+                    self.log(vec![(
+                        "un cercle s'ouvre au centre du village. personne ne l'a dessiné.".into(),
+                        C::Red,
+                    )]);
+                    self.toast("666 prises…");
                 }
                 self.log(vec![
                     ("succès débloqué : ".into(), C::Green),
@@ -3857,6 +3871,49 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
             }
         }
     }
+    // le cercle des 666 prises : purement décoratif, il s'efface tout seul
+    if now_ms() < game.pentacle_until {
+        const PENTACLE: [&str; 5] = [
+            "  ·─────────·  ",
+            " ╱  ✦     ✦  ╲ ",
+            "│      ✧      │",
+            " ╲  ✦     ✦  ╱ ",
+            "  ·─────────·  ",
+        ];
+        let pulse = (now_ms() / 350.0) as u64 % 2 == 0;
+        for (i, line) in PENTACLE.iter().enumerate() {
+            for (j, ch) in line.chars().enumerate() {
+                // les espaces sont dessinés eux aussi : le cercle doit effacer
+                // le pavage sous lui, sinon il se noie dans le décor
+                let wx = 52 + j as i32; // décalé : la fontaine occupe la gauche de la place
+                let wy = 20 + i as i32;
+                let sx = 1 + wx - cam_x + off_x;
+                let sy = vy0 + wy - cam_y + off_y;
+                if sy < vy0 || sy > vy1 {
+                    continue;
+                }
+                let c = match ch {
+                    '✧' => C::Gold,
+                    '✦' => {
+                        if pulse {
+                            C::Purple
+                        } else {
+                            C::Red
+                        }
+                    }
+                    _ => {
+                        if pulse {
+                            C::Red
+                        } else {
+                            C::Purple
+                        }
+                    }
+                };
+                draw_str(buf, area, sx, sy, &ch.to_string(), theme.style(c, false));
+            }
+        }
+    }
+
     // étiquettes de biomes
     for b in 0..BIOMES.len() {
         let (lx, ly) = LABEL_POS[b];
