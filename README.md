@@ -25,8 +25,9 @@ Interface inspirée de [late.sh](https://late.sh).
 - **Idle véritable** : les pièges capturent à intervalle régulier, y compris
   hors-ligne (simulation exacte au retour, plafond extensible au labo).
 - **Météo et saisons** : la météo change toutes les 20 minutes (pluie, brume,
-  canicule, tempête, nuit étoilée…), chaque jour réel est une saison. Sept
-  **espèces nocturnes** ◗ ne sortent qu'entre 21 h et 7 h.
+  canicule, tempête, nuit étoilée…), chaque jour réel est une saison. Vingt
+  **espèces nocturnes** ◗ ne sortent qu'entre 21 h et 7 h, en nombre inégal
+  selon les lieux — les abysses et les ruines en abritent trois, les crêtes une.
 - **Économie** : revendez les doublons (les plus bas rangs d'abord — vos beaux
   spécimens et votre meilleur couple ♂♀ sont toujours protégés), financez de
   meilleurs pièges, des appâts, de nouveaux biomes et le labo.

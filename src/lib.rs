@@ -313,7 +313,21 @@ const SHINY_BASE: f64 = 1.0 / 512.0;
 const SAISONS: [&str; 4] = ["printemps", "été", "automne", "hiver"];
 const METEOS: [&str; 6] = ["ciel clair", "pluie", "brume", "canicule", "tempête", "nuit étoilée"];
 /* espèces qui ne sortent que la nuit (21 h – 7 h) */
-const NOCTURNES: [usize; 7] = [9, 21, 28, 41, 54, 62, 92]; // lucioleau, feufollet, cristalpin, mirageon, aurorelle, nocturnix
+/* espèces qui ne sortent qu'entre 21 h et 7 h — davantage dans les lieux
+   sombres (abysses, ruines) que sur les crêtes ou dans le volcan */
+const NOCTURNES: [usize; 20] = [
+    1, 9,          // forêt : sourivole, lucioleau
+    21, 23,        // marais : feufollet, basilombre
+    28,            // montagne : cristalpin
+    39, 41,        // désert : scorpiard, mirageon
+    52, 54,        // glacier : rennelune, aurorelle
+    57, 62, 64,    // abysses : lanternet, nocturnix, spectrelle
+    70,            // volcan : fumerol
+    83,            // récif : murénia
+    92, 95, 96,    // ruines : chandelmoine, spectrarque, chronolithe
+    106,           // rivière : silure ancien
+    111, 113,      // lac : brumelac, gardien du lac
+];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
 const VERSION: &str = "1.7";
@@ -328,6 +342,8 @@ const NEWS: [(&str, &str, &[&str]); 8] = [
             "on ne marche plus sur l'eau : la rivière et le lac ne se franchissent qu'aux ponts, et l'on y pose ses pièges depuis la berge.",
             "la fontaine ne bouche plus le passage : la rangée des portes est dégagée, on va de la boutique au labo en ligne droite.",
             "on circule beaucoup mieux dans les biomes : le décor est resté dense, mais l'essentiel ne barre plus la route.",
+            "le lac a pris une forme de lac : une nappe arrondie, plus un rectangle.",
+            "vingt espèces nocturnes ◗ au lieu de sept, et pas le même nombre selon les lieux : trois dans les abysses et les ruines, une seule sur les crêtes ou dans le volcan.",
         ],
     ),
     (
@@ -940,12 +956,20 @@ impl WorldMap {
         w.scatter(80, 50, 32, 28, &['▓'], C::Abyss, 0.03, true, &mut rng);          // abysses
         w.scatter(80, 50, 32, 28, &['▒', '●', '·', '▒'], C::Abyss, 0.12, false, &mut rng);
 
-        // le lac : une nappe pleine, au pied de la montagne
-        for y in 18..27 {
-            for x in 40..66 {
-                let bord = y == 18 || y == 26 || x == 40 || x == 65;
-                let g = if bord { '~' } else if rng.gen::<f64>() < 0.45 { '≈' } else { '~' };
-                w.put(x, y, g, C::Blue, true); // on pêche depuis la berge, pas au milieu du lac
+        /* le lac : une ellipse au pied de la montagne — une nappe d'eau n'a
+           pas de coins. les berges dessinées d'un trait plus clair. */
+        {
+            let (cx, cy, rx, ry) = (52.5_f64, 22.0_f64, 13.0_f64, 4.6_f64);
+            for y in 17..28 {
+                for x in 38..68 {
+                    let (dx, dy) = ((x as f64 - cx) / rx, (y as f64 - cy) / ry);
+                    let d = dx * dx + dy * dy;
+                    if d > 1.0 {
+                        continue;
+                    }
+                    let g = if d > 0.72 { '~' } else if rng.gen::<f64>() < 0.45 { '≈' } else { '~' };
+                    w.put(x, y, g, C::Blue, true); // on pêche depuis la berge
+                }
             }
         }
 
@@ -1017,16 +1041,13 @@ impl WorldMap {
            passage partout où elles rencontrent un obstacle */
         let mut path = |w: &mut WorldMap, x1: usize, y1: usize, x2: usize, y2: usize| {
             let (mut x, mut y) = (x1 as i32, y1 as i32);
+            // une route se voit : elle efface le décor qu'elle traverse
             while x != x2 as i32 {
-                if w.cells[y as usize][x as usize].ch == ' ' || w.cells[y as usize][x as usize].solid {
-                    w.put(x as usize, y as usize, '░', C::Dimmer, false);
-                }
+                w.put(x as usize, y as usize, '░', C::Dimmer, false);
                 x += (x2 as i32 - x).signum();
             }
             while y != y2 as i32 {
-                if w.cells[y as usize][x as usize].ch == ' ' || w.cells[y as usize][x as usize].solid {
-                    w.put(x as usize, y as usize, '░', C::Dimmer, false);
-                }
+                w.put(x as usize, y as usize, '░', C::Dimmer, false);
                 y += (y2 as i32 - y).signum();
             }
         };
@@ -3096,7 +3117,7 @@ impl Game {
             segs: vec![
                 (format!("{} · ", SAISONS[sea]), C::Green),
                 (format!("{} · ", METEOS[w]), C::Ice),
-                (if is_night_at(now) { "nuit ☽ (espèces nocturnes de sortie)".into() } else { "jour".to_string() }, C::Text),
+                (if is_night_at(now) { "nuit ◗ (espèces nocturnes de sortie)".into() } else { "jour".to_string() }, C::Text),
             ],
             btns: vec![],
             act: None,
@@ -3787,7 +3808,7 @@ impl Game {
                             (pad("???", 7), C::Dimmer),
                             (pad("— inconnu —", 23), C::Dimmer),
                             (pad(RAR_LABEL[c.r], 13), C::Dimmer),
-                            (if NOCTURNES.contains(&ci) { "☽ nocturne".into() } else { String::new() }, C::Abyss),
+                            (if NOCTURNES.contains(&ci) { "◗ nocturne".into() } else { String::new() }, C::Abyss),
                         ],
                         btns: vec![],
                         act: None,
@@ -3824,7 +3845,7 @@ impl Game {
             segs: vec![
                 (format!("{}  ", c.g), if d.s > 0 { C::Shiny } else { rarity_color(c.r) }),
                 (format!("{} · {}", BIOMES[c.b].name, RAR_LABEL[c.r]), C::Dimmer),
-                (if NOCTURNES.contains(&ci) { "  ☽ nocturne (21 h – 7 h)".into() } else { String::new() }, C::Abyss),
+                (if NOCTURNES.contains(&ci) { "  ◗ nocturne (21 h – 7 h)".into() } else { String::new() }, C::Abyss),
             ],
             btns: vec![],
             act: None,
@@ -4002,7 +4023,7 @@ impl Game {
             noct_names.push(if self.s.dex2[ci].n > 0 { CREATURES[ci].n.to_string() } else { "???".into() });
         }
         rows.extend(bullet_rows("· ", &format!(
-            "la nuit (21 h – 7 h), six espèces nocturnes ☽ sortent, introuvables le jour : {}.",
+            "la nuit (21 h – 7 h), vingt espèces nocturnes ◗ sortent, introuvables le jour : {}.",
             noct_names.join(", ")), w, C::Dim));
 
         rows.push(Row::text("", C::Dim));
@@ -4591,7 +4612,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         " {} · {} · {}{} ",
         SAISONS[season_at(nowc)],
         METEOS[weather_at(nowc)],
-        if is_night_at(nowc) { "nuit ☽" } else { "jour" },
+        if is_night_at(nowc) { "nuit ◗" } else { "jour" },
         if fair_day() { " · foire ✧" } else { "" }
     );
     draw_str(buf, area, cols - cond.chars().count() as i32 - 3, sep_y, &cond, theme.style(C::Ice, false));
