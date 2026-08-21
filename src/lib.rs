@@ -325,6 +325,8 @@ const NEWS: [(&str, &str, &[&str]); 8] = [
             "nouvelle carte : l'eau descend enfin dans le bon sens. la rivière naît de la montagne, remplit le lac, contourne le village et se jette dans la mer — le récif borde la côte, les abysses sont au large.",
             "deux biomes de plus : la rivière (neuf espèces) et le lac (sept). le bestiaire passe à 114 espèces, votre pourcentage baisse d'autant — c'est du contenu en plus, pas une perte.",
             "le village a été redessiné : rues pavées, place centrale, fontaine, bancs, lampadaires, et des ponts là où les routes franchissent la rivière.",
+            "on ne marche plus sur l'eau : la rivière et le lac ne se franchissent qu'aux ponts, et l'on y pose ses pièges depuis la berge.",
+            "la fontaine ne bouche plus le passage : la rangée des portes est dégagée, on va de la boutique au labo en ligne droite.",
         ],
     ),
     (
@@ -855,7 +857,7 @@ const ZONE_RECTS: [(usize, usize, usize, usize, usize); 10] = [
     (34, 58, 38, 20, 6),  // volcan — le sud fumant
     (80, 22, 32, 25, 7),  // récif — la côte, là où la rivière se jette
     (1, 60, 30, 18, 8),   // ruines — l'ouest oublié
-    (40, 18, 26, 9, 10),  // lac — au pied de la montagne, source de la rivière
+    (39, 17, 28, 11, 10), // lac (rive comprise : on pêche depuis le bord) — au pied de la montagne, source de la rivière
 ];
 const LABEL_POS: [(usize, usize); 11] = [(11, 17), (11, 41), (45, 2), (89, 2), (10, 2), (91, 51), (45, 59), (91, 23), (10, 61), (38, 57), (47, 19)];
 
@@ -934,7 +936,7 @@ impl WorldMap {
             for x in 40..66 {
                 let bord = y == 18 || y == 26 || x == 40 || x == 65;
                 let g = if bord { '~' } else if rng.gen::<f64>() < 0.45 { '≈' } else { '~' };
-                w.put(x, y, g, C::Blue, false);
+                w.put(x, y, g, C::Blue, true); // on pêche depuis la berge, pas au milieu du lac
             }
         }
 
@@ -967,7 +969,7 @@ impl WorldMap {
             for &(x, y) in &trace {
                 for dx in 0..2 {
                     if x + dx < MAPW && y < MAPH {
-                        w.put(x + dx, y, '~', C::Blue, false);
+                        w.put(x + dx, y, '~', C::Blue, true);
                     }
                 }
             }
@@ -989,9 +991,9 @@ impl WorldMap {
                 w.put(x, y, '░', C::Dimmer, false);
             }
         };
-        rue_h(&mut w, 38);
+        rue_h(&mut w, 37);
         rue_h(&mut w, 45);
-        for &x in &[38, 55, 72] {
+        for &x in &[38, 57, 72] {
             for y in 30..=52 {
                 w.put(x, y, '░', C::Dimmer, false);
             }
@@ -1002,12 +1004,12 @@ impl WorldMap {
                 w.put(x, y, '░', C::Dimmer, false);
             }
         }
-        /* ponts : partout où une route franchit la rivière, on pose un tablier
-           plutôt que de laisser la route se noyer dans l'eau */
+        /* ponts : les routes sont tracées après la rivière et rouvrent le
+           passage là où elles la franchissent — on y pose un tablier */
         {
             let cases: Vec<(usize, usize)> = w.river.clone();
             for (x, y) in cases {
-                if (y == 38 || y == 45) && x < 36 {
+                if x < MAPW && y < MAPH && !w.cells[y][x].solid {
                     w.put(x, y, '═', C::Dim, false);
                 }
             }
@@ -1022,15 +1024,15 @@ impl WorldMap {
         w.building(40, 47, 13, 5, "musée", Zone::Musee, 'm');
         w.building(58, 47, 13, 5, "enclos", Zone::Enclos, 'e');
 
-        // la fontaine, au milieu de la place : on la contourne, comme il se doit
-        w.text(52, 37, "╭───╮", C::Blue, true);
-        w.text(52, 38, "│ ≈ │", C::Blue, true);
-        w.text(52, 39, "╰───╯", C::Blue, true);
-        // le mobilier qui fait le village : bancs et lampadaires, sur la place
-        for &(bx, by) in &[(49, 37), (49, 39), (59, 37), (59, 39)] {
+        /* la fontaine et le mobilier occupent le bas de la place : la rangée
+           des portes (y=37) reste entièrement dégagée, si bien qu'on va d'un
+           bâtiment à l'autre en ligne droite */
+        w.text(53, 38, "╭─╮", C::Blue, true);
+        w.text(53, 39, "╰─╯", C::Blue, true);
+        for &(bx, by) in &[(50, 39), (58, 39)] {
             w.put(bx, by, '▬', C::Dim, true);
         }
-        for &(lx, ly) in &[(46, 37), (46, 39), (63, 37), (63, 39)] {
+        for &(lx, ly) in &[(47, 39), (61, 39)] {
             w.put(lx, ly, '╽', C::GoldDark, true);
         }
 
@@ -1050,7 +1052,11 @@ impl WorldMap {
                 return Some(z);
             }
         }
-        if self.river.iter().any(|&(rx, ry)| rx == x && ry == y) {
+        /* depuis la berge : une case au bord de l'eau donne accès au biome,
+           sinon la rivière serait inatteignable une fois rendue infranchissable */
+        if self.river.iter().any(|&(rx, ry)| {
+            (rx as i32 - x as i32).abs() <= 1 && (ry as i32 - y as i32).abs() <= 1
+        }) {
             return Some(Zone::Biome(9));
         }
         for &(zx, zy, zw, zh, b) in &ZONE_RECTS {
@@ -5143,6 +5149,38 @@ mod tests {
         for z in [Zone::Boutique, Zone::Labo, Zone::Bestiaire, Zone::Succes, Zone::Musee, Zone::Enclos, Zone::Troc] {
             assert!(atteint.iter().any(|a| *a == Some(z)), "lieu du village inatteignable");
         }
+    }
+
+    /* on ne doit pas avoir à faire le tour de la place pour aller d'un
+       bâtiment à l'autre : la fontaine ne bouche pas l'axe principal */
+    #[test]
+    fn la_traversee_du_village_reste_courte() {
+        let w = WorldMap::build();
+        let depart = (44usize, 37usize); // devant la boutique
+        let arrivee = (66usize, 37usize); // devant le labo
+        let mut dist = vec![vec![usize::MAX; MAPW]; MAPH];
+        let mut q = VecDeque::new();
+        dist[depart.1][depart.0] = 0;
+        q.push_back(depart);
+        while let Some((x, y)) = q.pop_front() {
+            for (dx, dy) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
+                let (nx, ny) = (x as i32 + dx, y as i32 + dy);
+                if nx < 0 || ny < 0 || nx >= MAPW as i32 || ny >= MAPH as i32 {
+                    continue;
+                }
+                let (nx, ny) = (nx as usize, ny as usize);
+                if w.cells[ny][nx].solid || dist[ny][nx] != usize::MAX {
+                    continue;
+                }
+                dist[ny][nx] = dist[y][x] + 1;
+                q.push_back((nx, ny));
+            }
+        }
+        let pas = dist[arrivee.1][arrivee.0];
+        eprintln!("trajet boutique -> labo : {} pas", pas);
+        assert!(pas != usize::MAX, "le labo est injoignable depuis la boutique");
+        // 22 cases séparent les deux portes : au-delà de 24 pas, c'est un détour
+        assert!(pas <= 24, "trajet boutique -> labo trop long : {} pas", pas);
     }
 
     /* la table des créatures et celle des biomes doivent rester d'accord */
