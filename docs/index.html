@@ -28,11 +28,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeSpeed;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-bottom: 20px;
   }
   #scr {
     white-space: pre; letter-spacing: 0;
-    overflow: hidden;
+    overflow: hidden; max-width: 100vw;
     background: #171c24; /* fond plein sur toute la grille, carte comprise */
     user-select: none; -webkit-user-select: none; cursor: default;
   }
@@ -55,15 +56,15 @@
     position: fixed; bottom: 4px; left: 8px; z-index: 4;
     font-size: 11px; color: #7e8a9b; opacity: .75; pointer-events: none;
   }
-  #syncbtn {
+  /* les deux repères vivent dans la bande du bas, jamais l'un sur l'autre */
+  #hud {
     position: fixed; bottom: 4px; right: 10px; z-index: 5;
-    font-size: 11px; color: #7e8a9b; opacity: .75; cursor: pointer;
+    display: flex; gap: 1.4rem; align-items: center;
+    font-size: 11px; opacity: .75;
   }
+  #syncbtn { color: #7e8a9b; cursor: pointer; white-space: nowrap; }
   #syncbtn:hover { color: #c2cdda; }
-  #lbbtn {
-    position: fixed; bottom: 4px; right: 11rem; z-index: 5;
-    font-size: 11px; color: #7e8a9b; opacity: .75; text-decoration: none;
-  }
+  #lbbtn { color: #7e8a9b; text-decoration: none; white-space: nowrap; }
   #lbbtn:hover { color: #ffc45c; }
   #lbask {
     display: none; position: fixed; z-index: 15; bottom: 26px; right: 10px;
@@ -136,7 +137,7 @@
 <body>
 <div id="boot">chargement d'affut.sh…</div>
 <pre id="scr"></pre>
-<span id="meas">██████████</span>
+<span id="meas">████████████████████████████████████████</span>
 <div id="ver"></div>
 <div id="pause">
   <div class="box">
@@ -146,8 +147,10 @@
     <button id="takeover">jouer ici</button>
   </div>
 </div>
-<a id="lbbtn" href="./classement.html" target="_blank" title="classement des piégeurs">▤ classement</a>
-<div id="syncbtn" title="exporter / importer la sauvegarde">⇄ sauvegarde</div>
+<div id="hud">
+  <a id="lbbtn" href="./classement.html" target="_blank" title="classement des piégeurs">▤ classement</a>
+  <div id="syncbtn" title="exporter / importer la sauvegarde">⇄ sauvegarde</div>
+</div>
 <div id="lbask">
   <div class="t">rejoindre le classement ?</div>
   <p>choisissez un pseudo pour figurer au <a href="./classement.html" target="_blank" style="color:#7ac9ff">tableau du comptoir</a>
@@ -184,7 +187,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821i'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821k'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -289,15 +292,41 @@ function applySize() {
   scr.style.setProperty('--lh', lh + 'px');
   meas.style.fontSize = fs + 'px';
   localStorage.setItem('affut_fs2', String(sizeIdx));
-  document.getElementById('ver').textContent = 'v' + V + ' · ' + fs + 'px (+/− pour ajuster)';
+  document.getElementById('ver').textContent = 'v' + V + ' · ' + fs + 'px';
 }
 
+// bande réservée en bas pour les indicateurs (version, classement, session) :
+// sans elle ils se posent sur la dernière ligne du jeu
+const RESERVE = 20;
 function resize() {
-  const cw = meas.getBoundingClientRect().width / 10;
-  cols = Math.min(190, Math.max(70, Math.floor(window.innerWidth / cw)));
-  rows = Math.min(80, Math.max(24, Math.floor(window.innerHeight / ch)));
+  const cw = meas.getBoundingClientRect().width / 40;
+  cols = Math.min(190, Math.max(40, Math.floor((window.innerWidth - 2) / cw)));
+  rows = Math.min(80, Math.max(20, Math.floor((window.innerHeight - RESERVE) / ch)));
 }
-function render() { scr.innerHTML = w.render(cols, rows); }
+// filet : on vérifie le rendu RÉEL et on retire lignes/colonnes tant que le
+// cadre déborde — la mesure théorique ne suffit pas si la police effective
+// n'est pas exactement celle mesurée (repli, zoom, sous-pixels)
+function render() {
+  scr.innerHTML = w.render(cols, rows);
+  // on déduit la chasse RÉELLE du rendu et on recadre : la mesure théorique
+  // peut se tromper (police de repli, zoom, sous-pixels) et un simple
+  // décrément colonne par colonne mettrait trop d'itérations à rattraper
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    if (scr.scrollWidth > window.innerWidth && cols > 40) {
+      const realCw = scr.scrollWidth / cols;
+      const next = Math.max(40, Math.floor((window.innerWidth - 2) / realCw));
+      if (next < cols) { cols = next; changed = true; }
+    }
+    if (scr.scrollHeight > window.innerHeight - RESERVE && rows > 20) {
+      const realCh = scr.scrollHeight / rows;
+      const next = Math.max(20, Math.floor((window.innerHeight - RESERVE) / realCh));
+      if (next < rows) { rows = next; changed = true; }
+    }
+    if (!changed) break;
+    scr.innerHTML = w.render(cols, rows);
+  }
+}
 
 applySize();
 resize();
