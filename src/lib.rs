@@ -1094,7 +1094,7 @@ impl WorldMap {
         /* le mobilier se tient au-dessus des façades, jamais dans un passage :
            les interstices entre bâtiments (x=47-48 et x=62-63) restent libres */
         for &(bx, by) in &[(50, 39), (58, 39)] {
-            w.put(bx, by, '▬', C::Dim, true);
+            w.put(bx, by, '▬', C::Dim, false); // décoratif : un banc ne barre pas la route
         }
         for &(lx, ly) in &[(50, 38), (58, 38)] {
             w.put(lx, ly, '╽', C::GoldDark, false); // décoratif : on passe devant
