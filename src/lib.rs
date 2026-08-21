@@ -1089,11 +1089,13 @@ impl WorldMap {
            bâtiment à l'autre en ligne droite */
         w.text(53, 38, "╭─╮", C::Blue, true);
         w.text(53, 39, "╰─╯", C::Blue, true);
+        /* le mobilier se tient au-dessus des façades, jamais dans un passage :
+           les interstices entre bâtiments (x=47-48 et x=62-63) restent libres */
         for &(bx, by) in &[(50, 39), (58, 39)] {
             w.put(bx, by, '▬', C::Dim, true);
         }
-        for &(lx, ly) in &[(47, 39), (61, 39)] {
-            w.put(lx, ly, '╽', C::GoldDark, true);
+        for &(lx, ly) in &[(50, 38), (58, 38)] {
+            w.put(lx, ly, '╽', C::GoldDark, false); // décoratif : on passe devant
         }
 
         w
@@ -5246,6 +5248,37 @@ mod tests {
         assert!(pas != usize::MAX, "le labo est injoignable depuis la boutique");
         // 22 cases séparent les deux portes : au-delà de 24 pas, c'est un détour
         assert!(pas <= 24, "trajet boutique -> labo trop long : {} pas", pas);
+    }
+
+    /* chaque bâtiment doit rester accessible depuis la place, sans détour :
+       un banc ou un lampadaire mal posé suffirait à condamner une porte */
+    #[test]
+    fn chaque_batiment_est_accessible_depuis_la_place() {
+        let w = WorldMap::build();
+        let mut dist = vec![vec![usize::MAX; MAPW]; MAPH];
+        let mut q = VecDeque::new();
+        dist[37][60] = 0;
+        q.push_back((60usize, 37usize));
+        while let Some((x, y)) = q.pop_front() {
+            for (dx, dy) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
+                let (nx, ny) = (x as i32 + dx, y as i32 + dy);
+                if nx < 0 || ny < 0 || nx >= MAPW as i32 || ny >= MAPH as i32 {
+                    continue;
+                }
+                let (nx, ny) = (nx as usize, ny as usize);
+                if w.cells[ny][nx].solid || dist[ny][nx] != usize::MAX {
+                    continue;
+                }
+                dist[ny][nx] = dist[y][x] + 1;
+                q.push_back((nx, ny));
+            }
+        }
+        for &(dx, dy, z) in w.doors.iter() {
+            let d = dist[dy][dx];
+            assert!(d != usize::MAX, "porte inatteignable en ({}, {})", dx, dy);
+            assert!(d <= 40, "porte en ({}, {}) atteinte en {} pas : un passage est bouché", dx, dy, d);
+            let _ = z;
+        }
     }
 
     /* la marche doit rester agréable : peu d'obstacles réels dans les biomes */
