@@ -82,6 +82,30 @@ fn lire_nb(e: &serde_json::Map<String, serde_json::Value>, k: &str) -> f64 {
         .floor()
 }
 
+/* vérifie une entrée DÉJÀ écrite, sans rien modifier sur le disque. sert de
+   filet à la lecture du classement, pour deux raisons : les entrées écrites
+   avant ce contrôle n'ont jamais été vérifiées, et une entrée forgée ne serait
+   autrement corrigée qu'au prochain envoi de son auteur — qui peut très bien
+   ne jamais revenir.
+
+   on juge l'entrée à sa propre date d'écriture, avec son premier envoi pour
+   origine : c'est la lecture la plus stricte, et la seule qui ne devienne pas
+   plus indulgente à mesure que le temps passe.
+
+   renvoie l'entrée avec son score recalculé, ou None si elle ne tient pas
+   debout. un score gonflé seul est donc corrigé, pas puni : c'est seulement
+   quand les statistiques elles-mêmes sont impossibles qu'on écarte la ligne. */
+fn entree_verifiee(v: &serde_json::Value) -> Option<serde_json::Value> {
+    let m = v.as_object()?;
+    let at = m.get("at").and_then(|x| x.as_f64()).filter(|n| n.is_finite()).unwrap_or(0.0);
+    let premier_at = m.get("premier_at").and_then(|x| x.as_f64()).filter(|n| n.is_finite()).unwrap_or(at);
+    let mut copie = m.clone();
+    if borner_stats(&mut copie, premier_at, None, at) {
+        return None;
+    }
+    Some(serde_json::Value::Object(copie))
+}
+
 /* borne les statistiques d'une entrée et recalcule son score.
    renvoie true si quelque chose a été borné — l'entrée est alors suspecte. */
 fn borner_stats(
@@ -266,6 +290,7 @@ fn main() {
                 .map(|(_, v)| v)
                 .filter(|v| !v.get("hidden").and_then(|h| h.as_bool()).unwrap_or(false))
                 .filter(|v| !v.get("suspect").and_then(|h| h.as_bool()).unwrap_or(false))
+                .filter_map(|v| entree_verifiee(&v))
                 .collect();
             let body = serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into());
             respond_json(req, 200, &body);
@@ -582,5 +607,45 @@ mod tests {
         let suspect = borner_stats(&mut e, now - 60.0 * JOUR, None, now);
         assert!(!suspect, "une progression cohérente doit passer");
         assert_eq!(lire_nb(&e, "trophees"), 12.0);
+    }
+
+    /* le filet de lecture, éprouvé sur les six lignes réellement servies par le
+       classement au moment du correctif — un seul relevé, pris d'un coup, car
+       mélanger deux instantanés produit des lignes incohérentes qui n'ont
+       jamais existé. aucune n'avait été écrite par la version vérifiée : elles
+       ne portent donc ni premier_at ni suspect. */
+    #[test]
+    fn le_filet_de_lecture_trie_les_lignes_reelles() {
+        let servies = [
+            (serde_json::json!({"pseudo":"Foura","at":1787340532827.0f64,"captures":1236.0,"ecus":46366.0,"especes":29.0,"migrations":0.0,"rangs":87.0,"score":7326.0,"shinies":3.0,"trophees":0.0}), true),
+            (serde_json::json!({"pseudo":"Smour","at":1787339876335.0f64,"captures":31232.0,"ecus":1250023123123.0,"especes":114.0,"migrations":1.0,"rangs":87.0,"score":696969693123.0,"shinies":3.0,"trophees":2.0}), false),
+            (serde_json::json!({"pseudo":"ookChrome","at":1787340596179.0f64,"captures":640.0,"ecus":19150.0,"especes":11.0,"migrations":0.0,"rangs":36.0,"score":2859.0,"shinies":1.0,"trophees":0.0}), true),
+            (serde_json::json!({"pseudo":"tely","at":1787340029702.0f64,"captures":3401.0,"ecus":90219.0,"especes":38.0,"migrations":0.0,"rangs":118.0,"score":9510.0,"shinies":3.0,"trophees":0.0}), true),
+            (serde_json::json!({"pseudo":"Cuswel","at":1787315070221.0f64,"captures":87.0,"ecus":275.0,"especes":8.0,"migrations":0.0,"rangs":18.0,"score":1520.0,"shinies":0.0,"trophees":0.0}), true),
+            (serde_json::json!({"pseudo":"ook","at":1787340479525.0f64,"captures":1903.0,"ecus":58676.0,"especes":28.0,"migrations":0.0,"rangs":88.0,"score":8178.0,"shinies":6.0,"trophees":0.0}), true),
+        ];
+        for (ligne, garde) in servies {
+            let nom = ligne.get("pseudo").and_then(|p| p.as_str()).unwrap_or("?").to_string();
+            assert_eq!(entree_verifiee(&ligne).is_some(), garde, "verdict inattendu pour {}", nom);
+        }
+    }
+
+    /* un score gonflé sans toucher aux statistiques est corrigé, pas puni :
+       le joueur reste au classement, avec le score que la formule donne. */
+    #[test]
+    fn un_score_gonfle_est_corrige_et_non_puni() {
+        let mut l = serde_json::json!({
+            "pseudo": "x", "at": 1787340029702.0f64, "captures": 3401.0, "ecus": 90219.0,
+            "especes": 38.0, "migrations": 0.0, "rangs": 118.0, "score": 999_999.0,
+            "shinies": 3.0, "trophees": 0.0
+        });
+        let v = entree_verifiee(&l).expect("la ligne doit rester au classement");
+        let attendu: f64 = (38.0 * 100.0 + 3.0 * 300.0 + 118.0 * 40.0 + 90219.0 / 1000.0_f64).floor();
+        assert_eq!(v.get("score").and_then(|x| x.as_f64()).unwrap(), attendu);
+
+        // en revanche des statistiques impossibles écartent la ligne
+        l["especes"] = serde_json::json!(114.0);
+        l["premier_at"] = serde_json::json!(1787340029702.0f64);
+        assert!(entree_verifiee(&l).is_none(), "114 espèces le jour même doivent sortir");
     }
 }
