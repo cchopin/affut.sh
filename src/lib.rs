@@ -931,6 +931,7 @@ enum PanelKind {
     Achs,
     Help,
     Journal,
+    Board,
     Offline(OfflineSummary),
     ResetConfirm,
 }
@@ -1098,6 +1099,27 @@ struct LogLine {
     segs: Vec<(String, C)>,
 }
 
+/* une ligne du classement, telle que la sert /lb (version navigateur) */
+#[derive(Deserialize, Clone, Default)]
+struct BoardRow {
+    #[serde(default)]
+    pseudo: String,
+    #[serde(default)]
+    score: f64,
+    #[serde(default)]
+    especes: f64,
+    #[serde(default)]
+    captures: f64,
+    #[serde(default)]
+    shinies: f64,
+    #[serde(default)]
+    ecus: f64,
+    #[serde(default)]
+    rangs: f64,
+    #[serde(default)]
+    trophees: f64,
+}
+
 struct Game {
     s: State,
     world: WorldMap,
@@ -1109,6 +1131,10 @@ struct Game {
     quit: bool,
     panel_w: usize,
     legend_seen: u64,
+    /* classement : alimenté par le navigateur, jamais sauvegardé */
+    board: Vec<BoardRow>,
+    board_me: String,
+    board_state: u8, // 0 = pas encore reçu, 1 = à jour, 2 = injoignable
 }
 
 impl Game {
@@ -1132,6 +1158,9 @@ impl Game {
             quit: false,
             panel_w: 74,
             legend_seen: 0,
+            board: Vec::new(),
+            board_me: String::new(),
+            board_state: 0,
         };
         (game, fresh)
     }
@@ -2276,6 +2305,7 @@ impl Game {
             PanelKind::Achs => self.rows_achs(),
             PanelKind::Help => self.rows_help(),
             PanelKind::Journal => self.rows_journal(),
+            PanelKind::Board => self.rows_board(),
             PanelKind::Offline(sum) => self.rows_offline(sum),
             PanelKind::ResetConfirm => self.rows_reset(),
         }
@@ -3591,6 +3621,84 @@ impl Game {
         ("journal".into(), rows)
     }
 
+    fn rows_board(&self) -> (String, Vec<Row>) {
+        let title = "palmarès du comptoir".to_string();
+        if cfg!(not(target_arch = "wasm32")) {
+            return (
+                title,
+                vec![Row::text("le classement n'existe que dans la version navigateur.", C::Dimmer)],
+            );
+        }
+        let mut rows = Vec::new();
+        if self.board.is_empty() {
+            rows.push(Row::text(
+                match self.board_state {
+                    0 => "chargement du classement…",
+                    2 => "classement injoignable (hors-ligne ?).",
+                    _ => "personne n'est encore inscrit.",
+                },
+                C::Dimmer,
+            ));
+        } else {
+            rows.push(Row {
+                segs: vec![(
+                    format!(
+                        "{}{}{}{}{}{}",
+                        pad("#", 3),
+                        pad("piégeur", 17),
+                        format!("{:>7}", "score"),
+                        format!("{:>10}", "espèces"),
+                        format!("{:>9}", "shinies"),
+                        format!("{:>11}", "captures")
+                    ),
+                    C::Dimmer,
+                )],
+                btns: vec![],
+                act: None,
+                indent: 0,
+            });
+            for (i, e) in self.board.iter().enumerate() {
+                let me = !self.board_me.is_empty() && e.pseudo == self.board_me;
+                let pos_c = match i {
+                    0 => C::Gold,
+                    1 => C::Text,
+                    2 => C::GoldDark,
+                    _ => C::Dimmer,
+                };
+                rows.push(Row {
+                    segs: vec![
+                        (pad(&format!("{}", i + 1), 3), pos_c),
+                        (pad(&e.pseudo, 17), if me { C::Gold } else { C::Blue }),
+                        (format!("{:>7}", fmt(e.score)), C::GoldDark),
+                        (format!("{:>7}/{}", fmt(e.especes), CREATURES.len()), C::Text),
+                        (format!("{:>9}", fmt(e.shinies)), if e.shinies > 0.0 { C::Shiny } else { C::Dimmer }),
+                        (format!("{:>11}", fmt(e.captures)), C::Dim),
+                    ],
+                    btns: vec![],
+                    act: None,
+                    indent: 0,
+                });
+            }
+        }
+        rows.push(Row::text("", C::Dim));
+        if self.board_me.is_empty() {
+            rows.push(Row::text(
+                "vous n'êtes pas inscrit : choisissez un pseudo dans « ⇄ session partagée », en bas à droite de la page.",
+                C::Dimmer,
+            ));
+        } else {
+            rows.push(Row::text(
+                format!("vous jouez sous « {} ». vos statistiques repartent toutes les 5 minutes.", self.board_me),
+                C::Dimmer,
+            ));
+        }
+        rows.push(Row::text(
+            "score = espèces×100 + shinies×300 + cote×40 + trophées×1000 + écus gagnés÷1000.",
+            C::Dimmer,
+        ));
+        (title, rows)
+    }
+
     fn rows_offline(&self, sum: &OfflineSummary) -> (String, Vec<Row>) {
         let mut rows = vec![Row::text(
             format!(
@@ -3859,7 +3967,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     }
     // raccourcis
     let kb = if cfg!(target_arch = "wasm32") {
-        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · +/- taille "
+        " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [p]almarès [?] aide · +/- taille "
     } else {
         " zqsd/←↑↓→ · Entrée · [v]ue [i]nvent. [b]estiaire b[o]utique [c]ontrats [l]abo [m]usée [e]nclos [t]rophées [j]ournal [?] aide · ctrl+c quitter "
     };
@@ -4096,6 +4204,10 @@ fn world_key(game: &mut Game, code: GKey) {
             game.panels.push(Panel::new(PanelKind::Journal));
             return;
         }
+        GKey::Char('p') => {
+            game.panels.push(Panel::new(PanelKind::Board));
+            return;
+        }
         GKey::Char('?') | GKey::Char('/') => {
             game.panels.push(Panel::new(PanelKind::Help));
             return;
@@ -4228,6 +4340,28 @@ mod webapp {
 
         pub fn tick(&mut self) {
             self.game.tick();
+        }
+
+        /* le navigateur pousse ici le classement récupéré sur /lb :
+           {"me":"pseudo","rows":[…]} — trié par score décroissant */
+        pub fn set_board(&mut self, json: &str) {
+            #[derive(Deserialize, Default)]
+            struct Feed {
+                #[serde(default)]
+                me: String,
+                #[serde(default)]
+                rows: Vec<BoardRow>,
+            }
+            match serde_json::from_str::<Feed>(json) {
+                Ok(f) => {
+                    let mut rows = f.rows;
+                    rows.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                    self.game.board = rows;
+                    self.game.board_me = f.me;
+                    self.game.board_state = 1;
+                }
+                Err(_) => self.game.board_state = 2,
+            }
         }
 
         pub fn save(&mut self) {

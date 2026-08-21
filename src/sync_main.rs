@@ -115,7 +115,11 @@ fn main() {
                 respond(req, 405, "");
                 continue;
             }
-            let rows: Vec<serde_json::Value> = read_board(&lb_dir).into_iter().map(|(_, v)| v).collect();
+            let rows: Vec<serde_json::Value> = read_board(&lb_dir)
+                .into_iter()
+                .map(|(_, v)| v)
+                .filter(|v| !v.get("hidden").and_then(|h| h.as_bool()).unwrap_or(false))
+                .collect();
             let body = serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into());
             respond_json(req, 200, &body);
             continue;
@@ -145,9 +149,20 @@ fn main() {
             };
             let path = format!("{}/{}.json", lb_dir, token);
             let raw_pseudo = v.get("pseudo").and_then(|p| p.as_str()).unwrap_or("").to_string();
-            /* pseudo vide = retrait du classement */
+            let prev: Option<serde_json::Value> =
+                std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok());
+            let g = |k: &str| prev.as_ref().and_then(|v| v.get(k)).cloned();
+            let prev_pseudo = g("pseudo").and_then(|p| p.as_str().map(String::from)).unwrap_or_default();
+            let prev_pseudo_at = g("pseudo_at").and_then(|x| x.as_f64()).unwrap_or(0.0);
+            let renames = g("renames").and_then(|x| x.as_f64()).unwrap_or(0.0);
+            /* pseudo vide = retrait de l'affichage. on MASQUE au lieu d'effacer :
+               sinon il suffirait de se retirer puis de revenir pour contourner
+               le délai de changement de pseudo. */
             if raw_pseudo.trim().is_empty() {
-                let _ = std::fs::remove_file(&path);
+                if let Some(mut old) = prev {
+                    old["hidden"] = serde_json::Value::Bool(true);
+                    let _ = std::fs::write(&path, serde_json::to_string(&old).unwrap_or_default());
+                }
                 respond(req, 200, "retiré");
                 continue;
             }
@@ -172,11 +187,38 @@ fn main() {
                 respond(req, 507, "classement plein");
                 continue;
             }
+            /* un changement de pseudo par semaine — avec 10 minutes de grâce
+               après le premier choix, pour corriger une faute de frappe */
+            const SEMAINE: f64 = 7.0 * 86_400_000.0;
+            const GRACE: f64 = 600_000.0;
+            let now = now_ms();
+            let changement = !prev_pseudo.is_empty() && norm_key(&prev_pseudo) != norm_key(&pseudo);
+            let en_grace = changement && now - prev_pseudo_at < GRACE;
+            if changement && !en_grace {
+                let reste = SEMAINE - (now - prev_pseudo_at);
+                if reste > 0.0 {
+                    let jours = (reste / 86_400_000.0).ceil() as i64;
+                    let msg = if jours > 1 {
+                        format!("pseudo déjà changé récemment — vous pourrez le modifier dans {} jours", jours)
+                    } else {
+                        let heures = (reste / 3_600_000.0).ceil().max(1.0) as i64;
+                        format!("pseudo déjà changé récemment — vous pourrez le modifier dans {} h", heures)
+                    };
+                    respond(req, 429, &msg);
+                    continue;
+                }
+            }
             /* liste blanche : on ne stocke QUE des nombres finis et bornés,
                jamais le json brut du client (pas de champ surprise dans /lb) */
             let mut entry = serde_json::Map::new();
             entry.insert("pseudo".into(), serde_json::Value::String(pseudo));
-            entry.insert("at".into(), serde_json::json!(now_ms()));
+            entry.insert("at".into(), serde_json::json!(now));
+            /* ancre du délai : le premier choix, ou le dernier vrai changement */
+            entry.insert(
+                "pseudo_at".into(),
+                serde_json::json!(if prev_pseudo.is_empty() || (changement && !en_grace) { now } else { prev_pseudo_at }),
+            );
+            entry.insert("renames".into(), serde_json::json!(if changement { renames + 1.0 } else { renames }));
             for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "score", "migrations"] {
                 let n = v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
                 let n = if n.is_finite() { n.clamp(0.0, 1e15).floor() } else { 0.0 };

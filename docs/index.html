@@ -184,7 +184,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821h'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821i'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -428,6 +428,21 @@ askName.addEventListener('keydown', e => {
 
 setInterval(() => { if (pseudo && !paused) lbPush(pseudo).catch(() => {}); }, 300000);
 
+// le panneau [p]almarès lit ces données : le moteur ne fait pas de réseau
+async function fetchBoard() {
+  try {
+    const r = await fetch(LB.slice(0, -1), { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(r.status);
+    const rows = await r.json();
+    w.set_board(JSON.stringify({ me: pseudo, rows: Array.isArray(rows) ? rows : [] }));
+  } catch (e) {
+    w.set_board('');
+  }
+  render();
+}
+fetchBoard();
+setInterval(fetchBoard, 60000);
+
 const pseudoIn = document.getElementById('pseudo');
 const pseudoMsg = document.getElementById('pseudoMsg');
 document.getElementById('pseudoSave').addEventListener('click', async () => {
@@ -490,6 +505,7 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     return;
   }
+  if (e.key === 'p' && !e.ctrlKey && !e.altKey) fetchBoard(); // palmarès : données fraîches
   if (e.ctrlKey) {
     if (e.key === 's') { w.key('s', true); e.preventDefault(); }
     return;

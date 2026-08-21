@@ -52,6 +52,14 @@ export class Web {
     save() {
         wasm.web_save(this.__wbg_ptr);
     }
+    /**
+     * @param {string} json
+     */
+    set_board(json) {
+        const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.web_set_board(this.__wbg_ptr, ptr0, len0);
+    }
     tick() {
         wasm.web_tick(this.__wbg_ptr);
     }

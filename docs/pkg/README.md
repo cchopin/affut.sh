@@ -3,6 +3,7 @@
 > un comptoir de capture pour gens patients.
 
 **[▶ jouer dans le navigateur](https://cchopin.github.io/affut.sh/)** — même moteur, même sauvegarde hors-ligne (localStorage).
+**[▤ classement](https://cchopin.github.io/affut.sh/classement.html)** — choisissez un pseudo dans « ⇄ session partagée » pour y figurer.
 
 Jeu **idle de capture et de collection dans le terminal**, écrit en Rust avec
 [ratatui](https://ratatui.rs) + crossterm. Posez des pièges dans six biomes,
