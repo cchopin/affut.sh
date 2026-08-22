@@ -21,6 +21,9 @@ fi
 
 echo "[3/6] build de l'image (sur le serveur)"
 $SSH 'cd /opt/affut/src && docker build -t affut -f deploy/Dockerfile .'
+# le cache de build enfle de quelques centaines de Mo à chaque déploiement :
+# on n'en garde qu'un gigaoctet, de quoi accélérer la prochaine compilation
+$SSH 'docker builder prune -f --keep-storage 1GB >/dev/null 2>&1 || true'
 
 echo "[4/6] migration de l'ancien volume traque_data si présent"
 $SSH 'if docker volume inspect traque_data >/dev/null 2>&1 && ! docker volume inspect affut_data >/dev/null 2>&1; then
