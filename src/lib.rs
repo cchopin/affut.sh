@@ -2515,13 +2515,37 @@ impl Game {
                         let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now) * 2.0;
                         let (is_new, _, sex) = self.add_specimen(pen.ci, shiny, rank);
                         self.s.pen_born += 1;
-                        self.log(vec![
-                            ("naissance à l'enclos : ".into(), C::Green),
-                            (format!("{}{} {}[{}]", CREATURES[pen.ci].n, if shiny { " ⋆" } else { "" }, if sex == 0 { "♂" } else { "♀" }, RANK_NAMES[rank]),
-                             if shiny { C::Shiny } else { rarity_color(CREATURES[pen.ci].r) }),
-                        ]);
-                        self.toast(format!("naissance : {}{}", CREATURES[pen.ci].n, if shiny { " ⋆" } else { "" }));
-                        let _ = is_new;
+                        /* la naissance se raconte : d'où vient le petit et ce
+                           qu'il vaut par rapport à ses parents */
+                        let mieux = rank > pen.r1.max(pen.r2);
+                        let mut segs = vec![
+                            ("naissance à l'enclos — ".into(), C::Green),
+                            (CREATURES[pen.ci].n.to_string(), rarity_color(CREATURES[pen.ci].r)),
+                            (" : ".into(), C::Dim),
+                            (format!("♂[{}] × ♀[{}]", RANK_NAMES[pen.r1], RANK_NAMES[pen.r2]), C::Dim),
+                            (" donnent ".into(), C::Dim),
+                            (
+                                format!("{}[{}]{}", if sex == 0 { "♂" } else { "♀" }, RANK_NAMES[rank], if shiny { " ⋆" } else { "" }),
+                                if shiny { C::Shiny } else if mieux { C::Gold } else { C::Text },
+                            ),
+                        ];
+                        if mieux {
+                            segs.push((" — le petit dépasse ses parents !".into(), C::Gold));
+                        }
+                        if shiny {
+                            segs.push((" et il brille.".into(), C::Shiny));
+                        }
+                        if is_new {
+                            segs.push((" première de son espèce au bestiaire.".into(), C::Green));
+                        }
+                        self.log(segs);
+                        self.toast(format!(
+                            "naissance : {} {}[{}]{}",
+                            CREATURES[pen.ci].n,
+                            if sex == 0 { "♂" } else { "♀" },
+                            RANK_NAMES[rank],
+                            if shiny { " ⋆" } else { "" }
+                        ));
                         self.check_achievements();
                     }
                 }

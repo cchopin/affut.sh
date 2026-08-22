@@ -148,7 +148,11 @@ fn borner_stats(
     let especes_temps = (ESPECES_MAX * (1.0 - (-progres_h / ESPECES_TEMPS_H).exp())).ceil();
     let especes = b_esp.min(ESPECES_MAX).min(captures).min(especes_temps);
     let rangs = b_rang.min(especes * RANG_MAX);
-    let shinies = b_shi.min(captures);
+    /* le jeu plafonne la chance de shiny à 1/128 par capture (1/512 de base).
+       on tolère largement la variance et les gros bonus — au-delà d'un shiny
+       toutes les 80 prises, ce n'est plus de la chance. la constante additive
+       laisse tranquilles les débutants chanceux. */
+    let shinies = b_shi.min(captures).min(4.0 + captures / 80.0);
     let migrations = b_migr.min(migrations_max(ecus));
     /* à gains totaux donnés, la somme des √ est maximale quand les gains sont
        répartis également entre les migrations, soit √(migrations × gains / 1 M) */
