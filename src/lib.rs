@@ -356,8 +356,18 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.10";
-const NEWS: [(&str, &str, &[&str]); 11] = [
+const VERSION: &str = "1.11";
+const NEWS: [(&str, &str, &[&str]); 12] = [
+    (
+        "1.11",
+        "21 août 2026",
+        &[
+            "une naissance se raconte : l'enclos annonce le rang des deux parents et celui du petit, dit s'il dépasse sa lignée, s'il brille, ou s'il inaugure une espèce au bestiaire.",
+            "et il prévient dès que le petit est né, au lieu de vous laisser le découvrir en passant.",
+            "les contrats affichent leur rapport face à la boutique (×N, vert ou rouge) : la prime vaut environ deux fois la vente des mêmes bêtes, mais la livraison prend vos plus bas rangs — avec un stock de beaux spécimens, elle devient perdante.",
+            "le classement ne se laisse plus arranger : un shiny toutes les 80 prises au plus, et surtout, on ne peut pas avoir découvert les espèces de biomes qu'on n'avait pas les moyens d'ouvrir. les deux valeurs se tiennent, baisser l'une fait sauter l'autre.",
+        ],
+    ),
     (
         "1.10",
         "21 août 2026",
