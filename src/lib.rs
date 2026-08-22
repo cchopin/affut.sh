@@ -356,8 +356,20 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.9";
-const NEWS: [(&str, &str, &[&str]); 10] = [
+const VERSION: &str = "1.10";
+const NEWS: [(&str, &str, &[&str]); 11] = [
+    (
+        "1.10",
+        "21 août 2026",
+        &[
+            "le marchand ambulant se voit enfin : son étal reste dessiné sur la place même quand il est sur les routes, et vous y lisez l'heure de son retour. son arrivée est annoncée au journal.",
+            "ses passages ne tombent plus à heures fixes : trois à cinq visites par jour, tirées au sort, de deux à quatre heures chacune — il est là près d'une heure sur deux.",
+            "sa licence de piégeage suit désormais le prix du labo (40 % de moins que votre prochain palier) au lieu d'un tarif fixe qui n'avait de sens à aucun moment de la partie ; son plan de piège coûte bien la moitié du prix neuf.",
+            "les traces disent ce qu'elles ont donné : la piste s'annonce avant la prise, et l'aide détaille les trois issues possibles.",
+            "le conseil de session explique ce qu'il conseille : « le temps avantage la rivière, mais vous n'y avez aucun piège posé ».",
+            "bancs et lampadaires ne barrent plus le passage : le mobilier est décoratif.",
+        ],
+    ),
     (
         "1.9",
         "21 août 2026",
@@ -2701,11 +2713,22 @@ impl Game {
     fn merchant_price(&self, item: usize) -> f64 {
         let fair = if fair_day() { 0.75 } else { 1.0 };
         let p = match item {
-            0 => 180_000.0,                                        // œuf de curiosité
-            1 => 60_000.0 * (1.0 + self.s.charms as f64),          // breloque
-            2 => BAITS[self.best_bait()].cost * 10.0 * 0.6,        // lot d'appâts
-            3 => 400_000.0 * (1.0 + self.s.licences as f64 * 1.5), // licence
-            _ => 25_000.0,                                         // carnet de terrain
+            0 => 180_000.0,                               // œuf de curiosité
+            1 => 60_000.0 * (1.0 + self.s.charms as f64), // breloque
+            2 => BAITS[self.best_bait()].cost * 10.0 * 0.6, // lot d'appâts
+            /* la licence doit rester une affaire face au labo, qui suit une
+               progression géométrique : on s'adosse à son prochain palier.
+               une fois le labo épuisé, elle devient le seul moyen d'aller
+               plus loin — et se paie en conséquence. */
+            3 => {
+                if self.s.lab[LAB_LICENCE] < LABS[LAB_LICENCE].max {
+                    self.lab_cost(LAB_LICENCE) * 0.6
+                } else {
+                    400_000.0 * 2f64.powi(self.s.licences as i32)
+                }
+            }
+            // un piège d'occasion : la moitié du prix neuf, comme annoncé
+            _ => TRAPS[self.next_trap()].cost * 0.5,
         };
         p * fair
     }
@@ -4308,7 +4331,14 @@ impl Game {
             ),
             3 => (
                 format!("licence de piégeage (vous en avez {})", self.s.licences),
-                "un emplacement de piège de plus, partout. les autorités ferment les yeux.".into(),
+                if self.s.lab[LAB_LICENCE] < LABS[LAB_LICENCE].max {
+                    format!(
+                        "un emplacement de piège de plus, partout — 40 % de moins que le prochain palier du labo ({} écus).",
+                        fmt(self.lab_cost(LAB_LICENCE))
+                    )
+                } else {
+                    "un emplacement de plus, au-delà de ce que le labo autorise. les autorités ferment les yeux.".into()
+                },
             ),
             _ => {
                 let t = self.next_trap();
