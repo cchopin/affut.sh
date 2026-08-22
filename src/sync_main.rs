@@ -51,6 +51,12 @@ const RANG_MAX: f64 = 4.0;
    huit fois le maximum atteignable : un envoi pouvait gagner 18 000 captures
    à l'heure sans être borné. */
 const CAPTURES_PAR_S: f64 = 1.5;
+/* le plafond de progression hors-ligne : 2 h de base, +2 h par niveau
+   d'horlogerie, soit 24 h au maximum. un envoi peut légitimement rapporter
+   tout cela d'un coup — le total reste borné par l'âge de la partie. */
+const RATTRAPAGE_S: f64 = 24.0 * 3600.0;
+/* revenu maximal réellement atteignable en jeu, tous pièges et labo au bout */
+const REVENU_REEL_PAR_S: f64 = 180.0;
 /* le revenu maximal du jeu, tous pièges et tout le labo au bout, avoisine
    180 écus/s. on retient 500, presque trois fois la marge. */
 const ECUS_PAR_S: f64 = 500.0;
@@ -148,10 +154,17 @@ fn borner_stats(
         Some(p) => {
             let pm = p.as_object();
             let lu = |k: &str| pm.and_then(|m| m.get(k)).and_then(|x| x.as_f64()).filter(|n| n.is_finite()).unwrap_or(0.0);
+            /* au retour d'une absence, le jeu rejoue d'un coup les heures
+               pendant lesquelles les pièges ont travaillé (horlogerie : 2 h de
+               base, jusqu'à 24 h au dernier niveau). le client, lui, pousse sa
+               sauvegarde toutes les 30 s : ce rattrapage arrive donc dans
+               l'intervalle d'un envoi et n'a rien d'une injection. */
             let depuis_s = ((now - lu("at")).max(0.0) / 1000.0).max(1.0);
             (
-                (lu("captures") + depuis_s * CAPTURES_PAR_S).min(age_s * CAPTURES_PAR_S),
-                (lu("ecus") + depuis_s * ECUS_PAR_S).min(age_s * ECUS_PAR_S),
+                (lu("captures") + (depuis_s + RATTRAPAGE_S) * CAPTURES_PAR_S).min(age_s * CAPTURES_PAR_S),
+                /* le rattrapage rapporte aussi des écus (auto-vente), mais au
+                   revenu réel du jeu, pas au taux de sécurité */
+                (lu("ecus") + depuis_s * ECUS_PAR_S + RATTRAPAGE_S * REVENU_REEL_PAR_S).min(age_s * ECUS_PAR_S),
             )
         }
         None => (age_s * CAPTURES_PAR_S, age_s * ECUS_PAR_S),
@@ -571,8 +584,9 @@ mod tests {
         }));
         let suspect = borner_stats(&mut e, now - 10.0 * JOUR, Some(&prec), now);
         assert!(suspect);
-        // 30 s à 1 000 écus/s au plus, en partant des 50 000 précédents
-        assert!(lire_nb(&e, "ecus") <= 80_000.0, "obtenu {}", lire_nb(&e, "ecus"));
+        /* 30 s de jeu, plus au pire une journée de rattrapage hors-ligne au
+           revenu réel du jeu : 900 millions restent hors de portée */
+        assert!(lire_nb(&e, "ecus") <= 16_000_000.0, "obtenu {}", lire_nb(&e, "ecus"));
     }
 
     /* les bornes de structure : rien de tout cela n'existe dans une partie */
@@ -620,11 +634,19 @@ mod tests {
         // envoi précédent il y a dix minutes, avec 1 550 prises
         let prec = serde_json::json!({ "captures": 1550.0, "ecus": 17_000.0, "at": now - 600_000.0 });
         let mut e = entree(serde_json::json!({
-            "captures": 4500.0, "ecus": 186_000.0, "especes": 50.0, "rangs": 170.0, "shinies": 33.0
+            "captures": 4500.0, "ecus": 186_000.0, "especes": 50.0, "rangs": 170.0, "shinies": 8.0
         }));
-        assert!(borner_stats(&mut e, now - 30.0 * JOUR, Some(&prec), now), "le bond doit être borné");
-        // 600 s à 1,5 capture/s : 900 de plus au maximum
-        assert_eq!(lire_nb(&e, "captures"), 2450.0, "1 550 + dix minutes de pièges");
+        /* dix minutes plus le rattrapage hors-ligne (24 h) : le bond passe,
+           car le jeu rejoue d'un coup les heures où les pièges ont travaillé */
+        borner_stats(&mut e, now - 30.0 * JOUR, Some(&prec), now);
+        assert_eq!(lire_nb(&e, "captures"), 4500.0, "un retour d'absence n'est pas une injection");
+
+        // au-delà du rattrapage, en revanche, le total reste tenu par l'âge de la partie
+        let mut trop = entree(serde_json::json!({
+            "captures": 5_000_000.0, "ecus": 186_000.0, "especes": 50.0, "rangs": 170.0, "shinies": 8.0
+        }));
+        assert!(borner_stats(&mut trop, now - 2.0 * JOUR, Some(&prec), now), "cinq millions de prises, non");
+        assert!(lire_nb(&trop, "captures") < 5_000_000.0);
 
         // la même partie, jouée normalement, n'est pas inquiétée
         let prec_ok = serde_json::json!({ "captures": 1550.0, "ecus": 17_000.0, "at": now - 600_000.0 });
