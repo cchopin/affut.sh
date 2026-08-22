@@ -28,6 +28,34 @@
 
 /* le jeu compte 114 espèces piégeables et quatre rangs (C, B, A, S) */
 const ESPECES_MAX: f64 = 114.0;
+/* prix d'ouverture des biomes et nombre d'espèces qu'ils abritent, du moins
+   cher au plus cher : on ne découvre pas les espèces d'un biome qu'on n'a pas
+   les moyens d'ouvrir. */
+const BIOMES_COUT: [(f64, f64); 11] = [
+    (0.0, 13.0),          // forêt
+    (900.0, 9.0),         // rivière
+    (2_500.0, 11.0),      // marais
+    (20_000.0, 10.0),     // montagne
+    (45_000.0, 7.0),      // lac
+    (120_000.0, 12.0),    // désert
+    (700_000.0, 11.0),    // glacier
+    (4_000_000.0, 11.0),  // abysses
+    (12_000_000.0, 8.0),  // volcan
+    (35_000_000.0, 12.0), // récif
+    (100_000_000.0, 10.0),// ruines
+];
+/* maximum d'espèces qu'un total de gains permet d'atteindre */
+fn especes_financables(ecus: f64) -> f64 {
+    let (mut cumul, mut esp) = (0.0, 0.0);
+    for (cout, n) in BIOMES_COUT {
+        if cumul + cout > ecus {
+            break;
+        }
+        cumul += cout;
+        esp += n;
+    }
+    esp
+}
 const RANG_MAX: f64 = 4.0;
 /* huit pièges au maximum, le plus rapide toutes les 10 s : 0,8 capture/s.
    on retient 5, six fois la marge, pour ne jamais gêner une partie honnête. */
@@ -146,7 +174,11 @@ fn borner_stats(
     /* au supérieur : arrondi au plancher, la courbe n'atteindrait jamais 114
        et un bestiaire réellement complet resterait suspect à vie */
     let especes_temps = (ESPECES_MAX * (1.0 - (-progres_h / ESPECES_TEMPS_H).exp())).ceil();
-    let especes = b_esp.min(ESPECES_MAX).min(captures).min(especes_temps);
+    let especes = b_esp
+        .min(ESPECES_MAX)
+        .min(captures)
+        .min(especes_temps)
+        .min(especes_financables(ecus));
     let rangs = b_rang.min(especes * RANG_MAX);
     /* le jeu plafonne la chance de shiny à 1/128 par capture (1/512 de base).
        on tolère largement la variance et les gros bonus — au-delà d'un shiny
@@ -557,12 +589,32 @@ mod tests {
             "rangs": 9999.0, "shinies": 9999.0, "trophees": 9999.0
         }));
         assert!(borner_stats(&mut e, now - 10.0 * JOUR, None, now));
-        assert_eq!(lire_nb(&e, "especes"), 114.0, "114 espèces au maximum");
-        assert_eq!(lire_nb(&e, "rangs"), 114.0 * 4.0, "un rang par espèce, quatre au plus");
+        // 10 000 écus gagnés n'ouvrent que la forêt, la rivière et le marais
+        assert_eq!(lire_nb(&e, "especes"), 33.0, "les biomes ouverts bornent le bestiaire");
+        assert_eq!(lire_nb(&e, "rangs"), 33.0 * 4.0, "un rang par espèce, quatre au plus");
         // le jeu plafonne la chance de shiny à 1/128 : 500 prises n'en donnent pas 500
         assert_eq!(lire_nb(&e, "shinies"), 10.0, "un shiny toutes les 80 prises au plus");
         assert_eq!(lire_nb(&e, "migrations"), 0.0, "10 000 écus ne paient pas le voyage à 100 000");
         assert_eq!(lire_nb(&e, "trophees"), 0.0, "sans migration, aucun trophée");
+    }
+
+    /* on n'explore pas des biomes qu'on n'a pas les moyens d'ouvrir */
+    #[test]
+    fn on_ne_decouvre_pas_ce_qu_on_ne_peut_pas_financer() {
+        let now = 1_787_339_565_576.0;
+        // 56 espèces réclament six biomes ouverts, soit 188 400 écus gagnés
+        let mut e = entree(serde_json::json!({
+            "captures": 1550.0, "ecus": 17_280.0, "especes": 56.0, "rangs": 185.0, "shinies": 20.0
+        }));
+        assert!(borner_stats(&mut e, now - 20.0 * JOUR, None, now), "l'entrée doit être marquée suspecte");
+        assert_eq!(lire_nb(&e, "especes"), 33.0, "17 280 écus n'ouvrent que forêt, rivière et marais");
+
+        // une partie honnête aux mêmes espèces, mais qui a les moyens, passe intacte
+        let mut ok = entree(serde_json::json!({
+            "captures": 9000.0, "ecus": 250_000.0, "especes": 56.0, "rangs": 180.0, "shinies": 15.0
+        }));
+        borner_stats(&mut ok, now - 20.0 * JOUR, None, now);
+        assert_eq!(lire_nb(&ok, "especes"), 56.0, "250 000 écus ouvrent largement six biomes");
     }
 
     /* une espèce ne se découvre pas sans capture */
