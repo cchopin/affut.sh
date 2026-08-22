@@ -31,6 +31,12 @@ const ESPECES_MAX: f64 = 114.0;
 /* les paliers du bestiaire viennent du jeu lui-même (affut::paliers_bestiaire) :
    prix d'ouverture et nombre d'espèces de chaque biome, du moins cher au plus
    cher. une seule table, jamais deux à resynchroniser quand les prix bougent. */
+/* les prix des biomes changent d'une version à l'autre — le désert est passé
+   de 120 000 à 400 000 écus. une partie qui a ouvert un biome avant un
+   rééquilibrage paraîtrait impossible si on lui appliquait les prix du jour :
+   on triple donc les moyens qu'on lui reconnaît. la règle garde toute sa force
+   contre les écarts grossiers, qui se comptent en ordres de grandeur. */
+const MARGE_PRIX_BIOMES: f64 = 3.0;
 /* maximum d'espèces qu'un total de gains permet d'atteindre */
 fn especes_financables(ecus: f64) -> f64 {
     let (mut cumul, mut esp) = (0.0, 0.0);
@@ -182,7 +188,7 @@ fn borner_stats(
         .min(ESPECES_MAX)
         .min(captures)
         .min(especes_temps)
-        .min(especes_financables(ecus));
+        .min(especes_financables(ecus * MARGE_PRIX_BIOMES));
     let rangs = b_rang.min(especes * RANG_MAX);
     /* le jeu plafonne la chance de shiny à 1/128 par capture (1/512 de base).
        on tolère largement la variance et les gros bonus — au-delà d'un shiny
@@ -198,6 +204,12 @@ fn borner_stats(
        répartis également entre les migrations, soit √(migrations × gains / 1 M) */
     let trophees = b_tro.min((migrations * ecus / ECUS_PAR_TROPHEE).sqrt().floor());
 
+    if std::env::var("AFFUT_DEBUG_BORNES").is_ok() {
+        eprintln!(
+            "  captures {} -> {} | especes {} -> {} | rangs {} -> {} | shinies {} -> {} | ecus {} -> {} | migr {} -> {} | troph {} -> {}",
+            b_capt, captures, b_esp, especes, b_rang, rangs, b_shi, shinies, b_ecus, ecus, b_migr, migrations, b_tro, trophees
+        );
+    }
     let borne = [
         (captures, b_capt), (especes, b_esp), (rangs, b_rang), (shinies, b_shi),
         (ecus, b_ecus), (migrations, b_migr), (trophees, b_tro),
@@ -633,14 +645,29 @@ mod tests {
             "rangs": 9999.0, "shinies": 9999.0, "trophees": 9999.0
         }));
         assert!(borner_stats(&mut e, now - 10.0 * JOUR, None, now));
-        // 10 000 écus gagnés n'ouvrent que la forêt, la rivière et le marais
-        assert_eq!(lire_nb(&e, "especes"), 33.0, "les biomes ouverts bornent le bestiaire");
-        assert_eq!(lire_nb(&e, "rangs"), 33.0 * 4.0, "un rang par espèce, quatre au plus");
+        // 10 000 écus gagnés, même triplés par la marge, n'ouvrent pas le lac
+        assert_eq!(lire_nb(&e, "especes"), 43.0, "les biomes ouverts bornent le bestiaire");
+        assert_eq!(lire_nb(&e, "rangs"), 43.0 * 4.0, "un rang par espèce, quatre au plus");
         /* deux plafonds jouent : un shiny toutes les 80 prises, et surtout ce que
            le labo financé par 10 000 écus permet (niveau 1, soit ~1/233) */
         assert_eq!(lire_nb(&e, "shinies"), 5.0, "le labo finançable borne le taux de shiny");
         assert_eq!(lire_nb(&e, "migrations"), 0.0, "10 000 écus ne paient pas le voyage à 100 000");
         assert_eq!(lire_nb(&e, "trophees"), 0.0, "sans migration, aucun trophée");
+    }
+
+    /* une partie qui a ouvert un biome avant que son prix ne monte ne doit pas
+       être écartée : c'est arrivé à un joueur honnête, une espèce au-dessus du
+       palier calculé avec les prix du jour. */
+    #[test]
+    fn un_biome_ouvert_avant_un_reequilibrage_ne_condamne_pas() {
+        let now = 1_787_440_746_000.0;
+        let prem = now - 25.0 * 3_600_000.0;
+        let mut e = entree(serde_json::json!({
+            "captures": 9013.0, "ecus": 179_630.0, "especes": 51.0,
+            "rangs": 169.0, "shinies": 23.0, "migrations": 0.0, "trophees": 0.0
+        }));
+        assert!(!borner_stats(&mut e, prem, None, now), "51 espèces pour 179 630 écus restent plausibles");
+        assert_eq!(lire_nb(&e, "especes"), 51.0);
     }
 
     /* on n'a pas plus de shinies que son labo n'en permet */
@@ -700,7 +727,7 @@ mod tests {
             "captures": 1550.0, "ecus": 17_280.0, "especes": 56.0, "rangs": 185.0, "shinies": 20.0
         }));
         assert!(borner_stats(&mut e, now - 20.0 * JOUR, None, now), "l'entrée doit être marquée suspecte");
-        assert_eq!(lire_nb(&e, "especes"), 33.0, "17 280 écus n'ouvrent que forêt, rivière et marais");
+        assert_eq!(lire_nb(&e, "especes"), 43.0, "17 280 écus, même triplés, n'ouvrent pas six biomes");
 
         // une partie honnête aux mêmes espèces, mais qui a les moyens, passe intacte
         let mut ok = entree(serde_json::json!({
@@ -799,3 +826,4 @@ mod tests {
         assert!(entree_verifiee(&l).is_none(), "114 espèces le jour même doivent sortir");
     }
 }
+
