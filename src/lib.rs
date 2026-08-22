@@ -524,7 +524,7 @@ const NEWS: [(&str, &str, &[&str]); 12] = [
 const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
 const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
-const LEGEND_SPOTS: [(usize, usize); 11] = [(16, 26), (16, 48), (52, 8), (95, 10), (16, 7), (95, 64), (52, 68), (95, 34), (16, 68), (32, 50), (52, 23)];
+const LEGEND_SPOTS: [(usize, usize); 11] = [(16, 26), (16, 48), (52, 8), (95, 10), (16, 7), (95, 64), (52, 68), (95, 34), (16, 68), (30, 50), (52, 29)];
 /* durée de couvaison à l'enclos, par rareté (minutes) */
 const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
@@ -2912,6 +2912,32 @@ impl Game {
         (w, list)
     }
     /* traces fraîches : par fenêtre de 10 min, ~1 biome débloqué sur 4 en porte */
+    /* ramène un point d'apparition sur une case où l'on peut poser le pied :
+       depuis que l'eau ne se traverse plus, une trace ou une légende tirée au
+       milieu du lac serait à jamais hors d'atteinte. */
+    fn spot_foulable(&self, x: usize, y: usize) -> (usize, usize) {
+        if !self.world.solid(x as i32, y as i32) {
+            return (x, y);
+        }
+        for r in 1..14i32 {
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    if dx.abs() != r && dy.abs() != r {
+                        continue; // seulement le pourtour du carré
+                    }
+                    let (nx, ny) = (x as i32 + dx, y as i32 + dy);
+                    if nx < 2 || ny < 2 || nx >= MAPW as i32 - 2 || ny >= MAPH as i32 - 2 {
+                        continue;
+                    }
+                    if !self.world.solid(nx, ny) {
+                        return (nx as usize, ny as usize);
+                    }
+                }
+            }
+        }
+        (x, y)
+    }
+
     fn traces_now(&self) -> Vec<(u64, usize, (usize, usize))> {
         let w = (now_ms() / 600_000.0) as u64;
         let mut out = vec![];
@@ -2931,7 +2957,7 @@ impl Game {
             let (dx, dy) = offs[(splitmix(w ^ 0xF00 ^ b as u64) % 3) as usize];
             let x = (lx as i32 + dx).clamp(2, MAPW as i32 - 3) as usize;
             let y = (ly as i32 + dy).clamp(2, MAPH as i32 - 3) as usize;
-            out.push((key, b, (x, y)));
+            out.push((key, b, self.spot_foulable(x, y)));
         }
         out
     }
@@ -2946,7 +2972,8 @@ impl Game {
         if self.s.legends_tried.contains(&w) {
             return None;
         }
-        Some((w, b, LEGEND_SPOTS[b]))
+        let (lx, ly) = LEGEND_SPOTS[b];
+        Some((w, b, self.spot_foulable(lx, ly)))
     }
 
     fn interact(&mut self) {
@@ -5718,6 +5745,24 @@ mod tests {
         eprintln!("marchand présent {:.0} % du temps, {:.1} passages par jour", part * 100.0, passages as f64 / 40.0);
         assert!(part > 0.45, "trop rare : {:.0} %", part * 100.0);
         assert!(part < 0.80, "trop souvent là : {:.0} %", part * 100.0);
+    }
+
+    /* aucun point d'apparition ne doit tomber dans l'eau : une trace ou une
+       légende inaccessible serait perdue pour toujours */
+    #[test]
+    fn les_apparitions_tombent_sur_du_solide_foulable() {
+        let g = jeu_neuf();
+        for (b, &(x, y)) in LEGEND_SPOTS.iter().enumerate() {
+            let (fx, fy) = g.spot_foulable(x, y);
+            assert!(!g.world.solid(fx as i32, fy as i32), "légende du biome {} injoignable", b);
+            // les trois décalages possibles d'une trace autour de ce point
+            for (dx, dy) in [(-6i32, 3i32), (5, -2), (-2, 6)] {
+                let tx = (x as i32 + dx).clamp(2, MAPW as i32 - 3) as usize;
+                let ty = (y as i32 + dy).clamp(2, MAPH as i32 - 3) as usize;
+                let (px, py) = g.spot_foulable(tx, ty);
+                assert!(!g.world.solid(px as i32, py as i32), "trace du biome {} injoignable", b);
+            }
+        }
     }
 
     /* la marche doit rester agréable : peu d'obstacles réels dans les biomes */
