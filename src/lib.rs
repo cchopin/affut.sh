@@ -406,6 +406,7 @@ const NEWS: [(&str, &str, &[&str]); 10] = [
             "comptoir de troc (touche r) : des collectionneurs échangent leurs curiosités contre vos doublons. six espèces qu'aucun piège n'attrape.",
             "marchand ambulant : il passe plusieurs fois par jour sur la place, avec une malle qui change — breloques de chance, licences, œufs de curiosité.",
             "jour de foire, un jour sur quatre : le marchand reste, le troc double ses demandes, la chance monte et les prix baissent.",
+            "le marchand passe désormais quatre fois par jour en moyenne, à des heures qui ne se répètent jamais — et son étal reste visible sur la place même quand il est sur les routes, avec l'heure de son retour.",
             "les curiosités ne comptent pas dans le pourcentage du bestiaire : votre progression ne recule pas.",
             "la barre du bas s'adapte enfin aux petits écrans.",
         ],
@@ -1468,6 +1469,8 @@ struct Game {
     board: Vec<BoardRow>,
     board_me: String,
     board_state: u8, // 0 = pas encore reçu, 1 = à jour, 2 = injoignable
+    /* dernière venue du marchand déjà annoncée */
+    merchant_seen: u64,
     /* clin d'œil : le cercle qui s'ouvre sur la place à la 666e prise */
     pentacle_until: f64,
 }
@@ -1496,6 +1499,7 @@ impl Game {
             board: Vec::new(),
             board_me: String::new(),
             board_state: 0,
+            merchant_seen: 0,
             pentacle_until: 0.0,
         };
         (game, fresh)
@@ -1883,6 +1887,21 @@ impl Game {
             self.s.contracts = self.gen_contracts(cw);
             self.s.contracts_done = vec![false; 3];
             self.log(vec![("de nouveaux contrats sont affichés à la boutique.".into(), C::Blue)]);
+        }
+        // le marchand : on prévient quand il s'installe, il ne reste pas longtemps
+        if let Some((mw, mfin)) = self.merchant_now() {
+            if self.merchant_seen != mw {
+                self.merchant_seen = mw;
+                let reste = mfin - now;
+                self.log(vec![(
+                    format!(
+                        "le marchand ambulant déballe sa malle sur la place — il repart dans {} min.",
+                        (reste / 60_000.0).ceil() as u64
+                    ),
+                    C::Gold,
+                )]);
+                self.toast("le marchand est là");
+            }
         }
         // troc : les collectionneurs changent d'envie chaque jour
         let tw = (now / 86_400_000.0) as u64;
@@ -2379,7 +2398,7 @@ impl Game {
                 }
             }
             Action::MerchBuy(item) => {
-                let Some(w) = self.merchant_now() else { return };
+                let Some((w, _)) = self.merchant_now() else { return };
                 let key = w * 8 + item as u64;
                 let prix = self.merchant_price(item);
                 if self.s.merchant_done.contains(&key) || self.s.ecus < prix {
@@ -2625,18 +2644,50 @@ impl Game {
        a déjà découvertes (repli sur les communs des biomes débloqués en tout
        début de partie) — jamais une espèce inconnue ni d'un biome verrouillé */
     /* les offres de troc tiennent une journée ; en jour de foire, elles doublent */
-    /* le marchand passe par fenêtres de 3 h : deux sur cinq, sauf jour de
-       foire où il reste toute la journée. sa position est fixe sur la place. */
+    /* les passages du marchand : trois à cinq par jour, à des heures tirées
+       au sort et pour deux à quatre heures — jamais aux mêmes créneaux d'un
+       jour sur l'autre, mais reproductible (le jeu doit pouvoir rejouer une
+       absence hors-ligne à l'identique). */
     const MERCHANT_POS: (usize, usize) = (66, 38);
-    fn merchant_now(&self) -> Option<u64> {
-        let w = (now_ms() / 10_800_000.0) as u64;
-        if fair_day() || splitmix(w ^ 0x1A2B_3C4D) % 100 < 40 {
-            Some(w)
-        } else {
-            None
-        }
+    fn merchant_visits(jour: u64) -> Vec<(f64, f64)> {
+        let mut rng = StdRng::seed_from_u64(splitmix(jour ^ 0x1A2B_3C4D));
+        let n = 3 + rng.gen_range(0..3u32); // 3, 4 ou 5 passages
+        let tranche = 86_400_000.0 / n as f64;
+        (0..n)
+            .map(|i| {
+                let debut = jour as f64 * 86_400_000.0 + i as f64 * tranche + rng.gen::<f64>() * tranche * 0.55;
+                let duree = 2.0 * 3_600_000.0 + rng.gen::<f64>() * 2.0 * 3_600_000.0;
+                (debut, debut + duree)
+            })
+            .collect()
     }
-    /* trois articles tirés dans la malle, figés pour la durée du passage */
+    /* renvoie (identifiant du passage, instant du départ) */
+    fn merchant_now(&self) -> Option<(u64, f64)> {
+        let now = now_ms();
+        let jour = (now / 86_400_000.0) as u64;
+        if fair_day() {
+            // jour de foire : il tient boutique du matin au soir
+            return Some((jour * 8 + 7, (jour + 1) as f64 * 86_400_000.0));
+        }
+        for d in [jour.saturating_sub(1), jour] {
+            for (i, &(a, b)) in Self::merchant_visits(d).iter().enumerate() {
+                if now >= a && now < b {
+                    return Some((d * 8 + i as u64, b));
+                }
+            }
+        }
+        None
+    }
+    /* prochain passage, pour ne jamais laisser le joueur sans repère */
+    fn merchant_next(&self) -> Option<f64> {
+        let now = now_ms();
+        let jour = (now / 86_400_000.0) as u64;
+        (0..3)
+            .flat_map(|k| Self::merchant_visits(jour + k))
+            .map(|(a, _)| a)
+            .filter(|&a| a > now)
+            .fold(None, |acc: Option<f64>, a| Some(acc.map_or(a, |m| m.min(a))))
+    }
     fn merchant_stock(&self, w: u64) -> Vec<usize> {
         let mut rng = StdRng::seed_from_u64(splitmix(w ^ 0x5EED_1234));
         let mut all: Vec<usize> = (0..MERCH_ITEMS).collect();
@@ -2785,7 +2836,7 @@ impl Game {
                 return;
             }
         }
-        if self.merchant_now().is_some() {
+        {
             let (mx, my) = Self::MERCHANT_POS;
             if (mx as i32 - self.px).abs() <= 6 && (my as i32 - self.py).abs() <= 1 {
                 self.panels.push(Panel::new(PanelKind::Merchant));
@@ -2823,10 +2874,14 @@ impl Game {
                 return ("des traces fraîches — Entrée : les suivre".into(), C::Gold);
             }
         }
-        if self.merchant_now().is_some() {
+        {
             let (mx, my) = Self::MERCHANT_POS;
             if (mx as i32 - self.px).abs() <= 6 && (my as i32 - self.py).abs() <= 1 {
-                return ("marchand ambulant — Entrée : voir sa malle".into(), C::Gold);
+                return if self.merchant_now().is_some() {
+                    ("marchand ambulant — Entrée : voir sa malle".into(), C::Gold)
+                } else {
+                    ("étal du marchand, désert — Entrée : savoir quand il repasse".into(), C::Dimmer)
+                };
             }
         }
         match self.world.zone_at(self.px as usize, self.py as usize) {
@@ -4267,14 +4322,30 @@ impl Game {
     }
     fn rows_merchant(&self) -> (String, Vec<Row>) {
         let title = "marchand ambulant".to_string();
-        let Some(w) = self.merchant_now() else {
+        let Some((w, fin)) = self.merchant_now() else {
+            let quand = match self.merchant_next() {
+                Some(a) => {
+                    let dans = (a - now_ms()) / 60_000.0;
+                    if dans >= 90.0 {
+                        format!("il revient dans {} h environ.", (dans / 60.0).round().max(1.0) as u64)
+                    } else {
+                        format!("il revient dans {} min environ.", dans.ceil().max(1.0) as u64)
+                    }
+                }
+                None => "il repassera, il repasse toujours.".to_string(),
+            };
             return (
                 title,
-                vec![Row::text("il a plié bagage. il repasse plusieurs fois par jour, et toute la journée les jours de foire.", C::Dimmer)],
+                vec![
+                    Row::text("l'étal est vide : le marchand est sur les routes.", C::Dimmer),
+                    Row::text(quand, C::Blue),
+                    Row::text("", C::Dim),
+                    Row::text("il s'installe plusieurs fois par jour, ne reste que trois heures, et tient boutique toute la journée les jours de foire.", C::Dimmer),
+                ],
             );
         };
         let mut rows = Vec::new();
-        let reste = ((w + 1) as f64 * 10_800_000.0) - now_ms();
+        let reste = fin - now_ms();
         for r in wrap_rows(
             "il déballe sa malle sur la place, ne reste jamais longtemps, et ne vend chaque chose qu'une fois par passage.",
             self.panel_w,
@@ -4664,12 +4735,16 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     }
 
     // le marchand ambulant, quand il est de passage
-    if game.merchant_now().is_some() {
+    {
+        // l'étal reste visible même quand il n'y a personne : sinon rien
+        // n'indique au joueur que ce marchand existe
+        let ici = game.merchant_now().is_some();
         let (mx, my) = Game::MERCHANT_POS;
         let sx = 1 + mx as i32 - cam_x + off_x;
         let sy = vy0 + my as i32 - cam_y + off_y;
         if sy >= vy0 && sy <= vy1 {
-            draw_str(buf, area, sx, sy, "╡ marchand ╞", theme.style(C::Gold, false));
+            let (txt, c) = if ici { ("╡ marchand ╞", C::Gold) } else { ("╡ étal vide ╞", C::Dimmer) };
+            draw_str(buf, area, sx, sy, txt, theme.style(c, false));
         }
     }
 
@@ -5459,6 +5534,31 @@ mod tests {
             assert!(d <= 40, "porte en ({}, {}) atteinte en {} pas : un passage est bouché", dx, dy, d);
             let _ = z;
         }
+    }
+
+    /* le marchand doit passer souvent, sans jamais être là en permanence */
+    #[test]
+    fn le_marchand_passe_souvent_mais_pas_toujours() {
+        let (mut couvert, mut total) = (0u32, 0u32);
+        let mut passages = 0usize;
+        for j in 0..40u64 {
+            let v = Game::merchant_visits(j);
+            assert!((3..=5).contains(&v.len()), "{} passages dans la journée", v.len());
+            passages += v.len();
+            let veille = Game::merchant_visits(j.saturating_sub(1));
+            // échantillonnage toutes les 10 minutes
+            for k in 0..144 {
+                let t = j as f64 * 86_400_000.0 + k as f64 * 600_000.0;
+                total += 1;
+                if v.iter().chain(veille.iter()).any(|&(a, b)| t >= a && t < b) {
+                    couvert += 1;
+                }
+            }
+        }
+        let part = couvert as f64 / total as f64;
+        eprintln!("marchand présent {:.0} % du temps, {:.1} passages par jour", part * 100.0, passages as f64 / 40.0);
+        assert!(part > 0.45, "trop rare : {:.0} %", part * 100.0);
+        assert!(part < 0.80, "trop souvent là : {:.0} %", part * 100.0);
     }
 
     /* la marche doit rester agréable : peu d'obstacles réels dans les biomes */
