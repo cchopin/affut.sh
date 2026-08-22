@@ -13,7 +13,7 @@
 
    1. le score est TOUJOURS recalculé ici, jamais repris du client ;
    2. des bornes de structure, vraies dans n'importe quelle partie : 114 espèces
-      au plus, un rang par espèce découverte, pas plus de shinies que de
+      au plus, un rang par espèce découverte, un shiny toutes les 80 prises au plus, pas plus de
       captures, une migration par million d'écus gagnés (elle exige un trophée,
       donc au moins un million de gains sur la partie) et des trophées bornés
       par la formule du jeu, √(gains / 1 M) par migration ;
@@ -559,7 +559,8 @@ mod tests {
         assert!(borner_stats(&mut e, now - 10.0 * JOUR, None, now));
         assert_eq!(lire_nb(&e, "especes"), 114.0, "114 espèces au maximum");
         assert_eq!(lire_nb(&e, "rangs"), 114.0 * 4.0, "un rang par espèce, quatre au plus");
-        assert_eq!(lire_nb(&e, "shinies"), 500.0, "pas plus de shinies que de captures");
+        // le jeu plafonne la chance de shiny à 1/128 : 500 prises n'en donnent pas 500
+        assert_eq!(lire_nb(&e, "shinies"), 10.0, "un shiny toutes les 80 prises au plus");
         assert_eq!(lire_nb(&e, "migrations"), 0.0, "10 000 écus ne paient pas le voyage à 100 000");
         assert_eq!(lire_nb(&e, "trophees"), 0.0, "sans migration, aucun trophée");
     }

@@ -1483,6 +1483,8 @@ struct Game {
     board_state: u8, // 0 = pas encore reçu, 1 = à jour, 2 = injoignable
     /* dernière venue du marchand déjà annoncée */
     merchant_seen: u64,
+    /* naissances déjà signalées, pour ne pas répéter l'annonce à chaque tick */
+    pens_seen: Vec<f64>,
     /* clin d'œil : le cercle qui s'ouvre sur la place à la 666e prise */
     pentacle_until: f64,
 }
@@ -1512,6 +1514,7 @@ impl Game {
             board_me: String::new(),
             board_state: 0,
             merchant_seen: 0,
+            pens_seen: vec![],
             pentacle_until: 0.0,
         };
         (game, fresh)
@@ -1900,6 +1903,28 @@ impl Game {
             self.s.contracts_done = vec![false; 3];
             self.log(vec![("de nouveaux contrats sont affichés à la boutique.".into(), C::Blue)]);
         }
+        // l'enclos : on prévient dès qu'un petit est né, une seule fois
+        {
+            let prets: Vec<(usize, f64)> = self
+                .s
+                .pens
+                .iter()
+                .enumerate()
+                .filter_map(|(i, p)| p.as_ref().filter(|p| p.ready_at <= now).map(|p| (p.ci, p.ready_at)))
+                .collect();
+            self.s_pens_cleanup();
+            for (ci, at) in prets {
+                if !self.pens_seen.contains(&at) {
+                    self.pens_seen.push(at);
+                    self.log(vec![
+                        ("l'enclos s'agite : ".into(), C::Green),
+                        (format!("un petit {} est né", CREATURES[ci].n), rarity_color(CREATURES[ci].r)),
+                        (" — allez le chercher.".into(), C::Dim),
+                    ]);
+                    self.toast(format!("naissance : {} vous attend", CREATURES[ci].n));
+                }
+            }
+        }
         // le marchand : on prévient quand il s'installe, il ne reste pas longtemps
         if let Some((mw, mfin)) = self.merchant_now() {
             if self.merchant_seen != mw {
@@ -1966,6 +1991,12 @@ impl Game {
         self.check_achievements();
         self.s.last_seen = now;
     }
+    /* oublie les naissances déjà récupérées : la liste ne grandit pas */
+    fn s_pens_cleanup(&mut self) {
+        let vivants: Vec<f64> = self.s.pens.iter().flatten().map(|p| p.ready_at).collect();
+        self.pens_seen.retain(|a| vivants.contains(a));
+    }
+
     fn museum_accrue(&mut self, now: f64) {
         if self.s.museum_at == 0.0 {
             self.s.museum_at = now;
@@ -5697,6 +5728,7 @@ mod tests {
             board_me: String::new(),
             board_state: 0,
             merchant_seen: 0,
+            pens_seen: vec![],
             pentacle_until: 0.0,
         }
     }
