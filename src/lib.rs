@@ -5616,6 +5616,7 @@ mod tests {
             board: Vec::new(),
             board_me: String::new(),
             board_state: 0,
+            merchant_seen: 0,
             pentacle_until: 0.0,
         }
     }
