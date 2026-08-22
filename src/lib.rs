@@ -235,6 +235,26 @@ fn fair_day() -> bool {
     ((now_ms() / 86_400_000.0) as u64) % 4 == 0
 }
 
+/* chance de shiny maximale qu'un total de gains permet d'atteindre : le bonus
+   se paie au labo (chasse nocturne), et la nuit étoilée double la mise. sert au
+   serveur du classement — 33 shinies pour 4 500 prises supposent un labo que
+   186 000 écus gagnés ne financent pas. */
+pub fn shiny_max_par_capture(ecus_gagnes: f64) -> f64 {
+    let (mut cumul, mut niveau) = (0.0, 0u32);
+    while niveau < LABS[LAB_ECLAT].max {
+        let cout = LABS[LAB_ECLAT].base * LABS[LAB_ECLAT].mult.powi(niveau as i32);
+        if cumul + cout > ecus_gagnes {
+            break;
+        }
+        cumul += cout;
+        niveau += 1;
+    }
+    /* la nuit étoilée double la chance, mais n'occupe qu'une fenêtre météo sur
+       six : on retient 1,5, soit bien plus que la moyenne réelle (~1,17) sans
+       aller jusqu'à supposer une nuit étoilée perpétuelle. */
+    SHINY_BASE * (1.0 + niveau as f64 * 0.10) * 1.5
+}
+
 /* les biomes de la carte, du moins cher au plus cher : l'ordre d'affichage
    suit la progression du joueur, pas l'ordre interne de la table (rivière et
    lac ont été ajoutés après coup et coûtent pourtant presque rien). */

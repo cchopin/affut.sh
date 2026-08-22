@@ -175,7 +175,11 @@ fn borner_stats(
        on tolère largement la variance et les gros bonus — au-delà d'un shiny
        toutes les 80 prises, ce n'est plus de la chance. la constante additive
        laisse tranquilles les débutants chanceux. */
-    let shinies = b_shi.min(captures).min(4.0 + captures / 80.0);
+    /* les shinies sont bornés par ce que la partie a pu financer : le bonus de
+       chasse nocturne se paie au labo. on laisse 30 % de marge au-dessus du
+       maximum théorique — lui-même calculé avec la météo idéale en continu. */
+    let shiny_plafond = 3.0 + captures * affut::shiny_max_par_capture(ecus) * 1.3;
+    let shinies = b_shi.min(captures).min(4.0 + captures / 80.0).min(shiny_plafond);
     let migrations = b_migr.min(migrations_max(ecus));
     /* à gains totaux donnés, la somme des √ est maximale quand les gains sont
        répartis également entre les migrations, soit √(migrations × gains / 1 M) */
@@ -583,10 +587,30 @@ mod tests {
         // 10 000 écus gagnés n'ouvrent que la forêt, la rivière et le marais
         assert_eq!(lire_nb(&e, "especes"), 33.0, "les biomes ouverts bornent le bestiaire");
         assert_eq!(lire_nb(&e, "rangs"), 33.0 * 4.0, "un rang par espèce, quatre au plus");
-        // le jeu plafonne la chance de shiny à 1/128 : 500 prises n'en donnent pas 500
-        assert_eq!(lire_nb(&e, "shinies"), 10.0, "un shiny toutes les 80 prises au plus");
+        /* deux plafonds jouent : un shiny toutes les 80 prises, et surtout ce que
+           le labo financé par 10 000 écus permet (niveau 1, soit ~1/233) */
+        assert_eq!(lire_nb(&e, "shinies"), 5.0, "le labo finançable borne le taux de shiny");
         assert_eq!(lire_nb(&e, "migrations"), 0.0, "10 000 écus ne paient pas le voyage à 100 000");
         assert_eq!(lire_nb(&e, "trophees"), 0.0, "sans migration, aucun trophée");
+    }
+
+    /* on n'a pas plus de shinies que son labo n'en permet */
+    #[test]
+    fn le_taux_de_shiny_suit_les_moyens_du_joueur() {
+        let now = 1_787_339_565_576.0;
+        // 4 500 prises, 186 000 écus gagnés : le labo n'ouvre pas 33 shinies
+        let mut e = entree(serde_json::json!({
+            "captures": 4500.0, "ecus": 186_000.0, "especes": 50.0, "rangs": 150.0, "shinies": 33.0
+        }));
+        assert!(borner_stats(&mut e, now - 30.0 * JOUR, None, now), "l'entrée doit être marquée suspecte");
+        assert!(lire_nb(&e, "shinies") < 33.0, "le taux de shiny doit être ramené aux moyens de la partie");
+
+        // une partie honnête et bien dotée n'est pas inquiétée
+        let mut ok = entree(serde_json::json!({
+            "captures": 9460.0, "ecus": 180_884.0, "especes": 42.0, "rangs": 144.0, "shinies": 17.0
+        }));
+        borner_stats(&mut ok, now - 30.0 * JOUR, None, now);
+        assert_eq!(lire_nb(&ok, "shinies"), 17.0, "17 shinies sur 9 460 prises, c'est banal");
     }
 
     /* on ne triple pas ses captures entre deux envois rapprochés */
