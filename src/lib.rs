@@ -3036,12 +3036,30 @@ impl Game {
         ("inventaire".into(), rows)
     }
 
+    /* valeur, à la boutique, des spécimens qu'une livraison consommerait :
+       ce sont les plus bas rangs disponibles, dans l'ordre où take_lowest les
+       prendrait. sert à dire au joueur si la prime vaut le coup. */
+    fn valeur_a_la_vente(&self, ci: usize, qty: u64) -> f64 {
+        let iv = &self.s.inv2[ci];
+        let (mut reste, mut total) = (qty, 0.0);
+        for r in 0..4 {
+            if reste == 0 {
+                break;
+            }
+            let dispo = iv.nr(r).min(reste);
+            total += dispo as f64 * self.creature_value_r(ci, false, r);
+            reste -= dispo;
+        }
+        total + reste as f64 * self.creature_value_r(ci, false, 0)
+    }
+
     fn rows_contracts(&self) -> (String, Vec<Row>) {
         let (w, contracts) = self.contracts_now();
         let left_ms = ((w + 1) as f64 * 7_200_000.0) - now_ms();
         let mut rows = vec![
             Row::text("le comptoir affiche trois commandes ; livrez depuis votre réserve.", C::Dim),
             Row::text("jamais les shinies, jamais votre meilleur couple ♂♀ (« livrables » = stock hors couple).", C::Dimmer),
+            Row::text("le ×N compare la prime à ce que rapporteraient les mêmes bêtes à la boutique. la livraison prend vos plus bas rangs : si vous n'avez que du beau, le rapport tombe sous 1.", C::Dimmer),
             Row::text(format!("renouvellement dans {} min", (left_ms / 60_000.0).ceil() as u64), C::Dimmer),
             Row::text("", C::Dim),
         ];
@@ -3067,7 +3085,11 @@ impl Game {
                         ("□ ".into(), C::Dim),
                         (pad(&format!("{}× {}", c.qty, cr.n), 28), rarity_color(cr.r)),
                         (pad(&format!("(livrables : {})", have), 18), if ok { C::Green } else { C::Red }),
-                        (format!("+{} écus", fmt(c.reward)), C::GoldDark),
+                        (pad(&format!("+{} écus", fmt(c.reward)), 16), C::GoldDark),
+                        {
+                            let gain = c.reward / self.valeur_a_la_vente(c.ci, c.qty).max(1.0);
+                            (format!("×{}", fmt2(gain)), if gain >= 1.0 { C::Green } else { C::Red })
+                        },
                     ],
                     btns: vec![("livrer".into(), if ok { C::Green } else { C::Dimmer }, Action::Deliver(i))],
                     act: None,
@@ -3730,7 +3752,11 @@ impl Game {
                         ("□ ".into(), C::Dim),
                         (pad(&format!("{}× {}", c.qty, cr.n), 26), rarity_color(cr.r)),
                         (pad(&format!("(livrables : {})", have), 18), if ok { C::Green } else { C::Red }),
-                        (format!("+{} écus", fmt(c.reward)), C::GoldDark),
+                        (pad(&format!("+{} écus", fmt(c.reward)), 16), C::GoldDark),
+                        {
+                            let gain = c.reward / self.valeur_a_la_vente(c.ci, c.qty).max(1.0);
+                            (format!("×{}", fmt2(gain)), if gain >= 1.0 { C::Green } else { C::Red })
+                        },
                     ],
                     btns: vec![("livrer".into(), if ok { C::Green } else { C::Dimmer }, Action::Deliver(i))],
                     act: None,
