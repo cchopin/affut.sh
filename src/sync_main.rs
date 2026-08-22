@@ -44,12 +44,16 @@ fn especes_financables(ecus: f64) -> f64 {
     esp
 }
 const RANG_MAX: f64 = 4.0;
-/* huit pièges au maximum, le plus rapide toutes les 10 s : 0,8 capture/s.
-   on retient 5, six fois la marge, pour ne jamais gêner une partie honnête. */
-const CAPTURES_PAR_S: f64 = 5.0;
+/* le plafond physique du jeu : 8 emplacements au maximum (2 de base, +6 au
+   labo, plus les licences du marchand), le piège le plus rapide à 20 s ramené
+   à ~12 s par l'affûtage, 85 % de réussite — soit 0,6 capture/s. battues et
+   naissances comprises, on retient 1,5, plus du double de la marge. cinq était
+   huit fois le maximum atteignable : un envoi pouvait gagner 18 000 captures
+   à l'heure sans être borné. */
+const CAPTURES_PAR_S: f64 = 1.5;
 /* le revenu maximal du jeu, tous pièges et tout le labo au bout, avoisine
-   180 écus/s. on retient 1 000, cinq fois la marge. */
-const ECUS_PAR_S: f64 = 1_000.0;
+   180 écus/s. on retient 500, presque trois fois la marge. */
+const ECUS_PAR_S: f64 = 500.0;
 /* on ne s'inscrit au classement qu'en choisissant un pseudo, parfois après
    plusieurs jours de jeu : on crédite d'avance deux jours de partie pour ne
    pas borner ce premier envoi. */
@@ -583,6 +587,27 @@ mod tests {
         assert_eq!(lire_nb(&e, "shinies"), 10.0, "un shiny toutes les 80 prises au plus");
         assert_eq!(lire_nb(&e, "migrations"), 0.0, "10 000 écus ne paient pas le voyage à 100 000");
         assert_eq!(lire_nb(&e, "trophees"), 0.0, "sans migration, aucun trophée");
+    }
+
+    /* on ne triple pas ses captures entre deux envois rapprochés */
+    #[test]
+    fn la_vitesse_de_capture_est_bornee() {
+        let now = 1_787_339_565_576.0;
+        // envoi précédent il y a dix minutes, avec 1 550 prises
+        let prec = serde_json::json!({ "captures": 1550.0, "ecus": 17_000.0, "at": now - 600_000.0 });
+        let mut e = entree(serde_json::json!({
+            "captures": 4500.0, "ecus": 186_000.0, "especes": 50.0, "rangs": 170.0, "shinies": 33.0
+        }));
+        assert!(borner_stats(&mut e, now - 30.0 * JOUR, Some(&prec), now), "le bond doit être borné");
+        // 600 s à 1,5 capture/s : 900 de plus au maximum
+        assert_eq!(lire_nb(&e, "captures"), 2450.0, "1 550 + dix minutes de pièges");
+
+        // la même partie, jouée normalement, n'est pas inquiétée
+        let prec_ok = serde_json::json!({ "captures": 1550.0, "ecus": 17_000.0, "at": now - 600_000.0 });
+        let mut ok = entree(serde_json::json!({
+            "captures": 1700.0, "ecus": 19_000.0, "especes": 30.0, "rangs": 90.0, "shinies": 3.0
+        }));
+        assert!(!borner_stats(&mut ok, now - 30.0 * JOUR, Some(&prec_ok), now), "150 prises en dix minutes, c'est normal");
     }
 
     /* on n'explore pas des biomes qu'on n'a pas les moyens d'ouvrir */
