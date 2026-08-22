@@ -28,26 +28,13 @@
 
 /* le jeu compte 114 espèces piégeables et quatre rangs (C, B, A, S) */
 const ESPECES_MAX: f64 = 114.0;
-/* prix d'ouverture des biomes et nombre d'espèces qu'ils abritent, du moins
-   cher au plus cher : on ne découvre pas les espèces d'un biome qu'on n'a pas
-   les moyens d'ouvrir. */
-const BIOMES_COUT: [(f64, f64); 11] = [
-    (0.0, 13.0),          // forêt
-    (900.0, 9.0),         // rivière
-    (2_500.0, 11.0),      // marais
-    (20_000.0, 10.0),     // montagne
-    (45_000.0, 7.0),      // lac
-    (120_000.0, 12.0),    // désert
-    (700_000.0, 11.0),    // glacier
-    (4_000_000.0, 11.0),  // abysses
-    (12_000_000.0, 8.0),  // volcan
-    (35_000_000.0, 12.0), // récif
-    (100_000_000.0, 10.0),// ruines
-];
+/* les paliers du bestiaire viennent du jeu lui-même (affut::paliers_bestiaire) :
+   prix d'ouverture et nombre d'espèces de chaque biome, du moins cher au plus
+   cher. une seule table, jamais deux à resynchroniser quand les prix bougent. */
 /* maximum d'espèces qu'un total de gains permet d'atteindre */
 fn especes_financables(ecus: f64) -> f64 {
     let (mut cumul, mut esp) = (0.0, 0.0);
-    for (cout, n) in BIOMES_COUT {
+    for (cout, n) in affut::paliers_bestiaire() {
         if cumul + cout > ecus {
             break;
         }
@@ -611,10 +598,10 @@ mod tests {
 
         // une partie honnête aux mêmes espèces, mais qui a les moyens, passe intacte
         let mut ok = entree(serde_json::json!({
-            "captures": 9000.0, "ecus": 250_000.0, "especes": 56.0, "rangs": 180.0, "shinies": 15.0
+            "captures": 9000.0, "ecus": 600_000.0, "especes": 56.0, "rangs": 180.0, "shinies": 15.0
         }));
         borner_stats(&mut ok, now - 20.0 * JOUR, None, now);
-        assert_eq!(lire_nb(&ok, "especes"), 56.0, "250 000 écus ouvrent largement six biomes");
+        assert_eq!(lire_nb(&ok, "especes"), 56.0, "600 000 écus ouvrent les six premiers biomes");
     }
 
     /* une espèce ne se découvre pas sans capture */
@@ -656,9 +643,9 @@ mod tests {
         // √(2 × 300 000 / 1 M) = √0,6 → aucun trophée entier
         assert_eq!(lire_nb(&e, "trophees"), 0.0);
 
-        // une partie longue et honnête : 40 M gagnés, 5 migrations, 12 trophées
+        // une partie longue et honnête : 40 M gagnés (de quoi ouvrir jusqu'aux abysses), 5 migrations, 12 trophées
         let mut e = entree(serde_json::json!({
-            "captures": 200_000.0, "ecus": 40_000_000.0, "especes": 90.0, "migrations": 5.0,
+            "captures": 200_000.0, "ecus": 40_000_000.0, "especes": 84.0, "migrations": 5.0,
             "rangs": 300.0, "shinies": 60.0, "trophees": 12.0
         }));
         let suspect = borner_stats(&mut e, now - 60.0 * JOUR, None, now);

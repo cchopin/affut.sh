@@ -235,6 +235,24 @@ fn fair_day() -> bool {
     ((now_ms() / 86_400_000.0) as u64) % 4 == 0
 }
 
+/* les biomes de la carte, du moins cher au plus cher : l'ordre d'affichage
+   suit la progression du joueur, pas l'ordre interne de la table (rivière et
+   lac ont été ajoutés après coup et coûtent pourtant presque rien). */
+pub fn biomes_par_prix() -> Vec<usize> {
+    let mut v: Vec<usize> = (0..WILDB).collect();
+    v.sort_by(|&a, &b| BIOMES[a].cost.partial_cmp(&BIOMES[b].cost).unwrap_or(std::cmp::Ordering::Equal));
+    v
+}
+/* (prix d'ouverture, nombre d'espèces) de chaque biome, du moins cher au plus
+   cher — le serveur du classement s'en sert pour vérifier qu'un bestiaire
+   annoncé était finançable. une seule table, jamais deux à resynchroniser. */
+pub fn paliers_bestiaire() -> Vec<(f64, f64)> {
+    biomes_par_prix()
+        .into_iter()
+        .map(|b| (BIOMES[b].cost, biome_creatures(b).count() as f64))
+        .collect()
+}
+
 fn wild_species() -> impl Iterator<Item = usize> {
     (0..CREATURES.len()).filter(|&i| CREATURES[i].b < WILDB)
 }
@@ -3489,7 +3507,7 @@ impl Game {
 
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("biomes — Entrée sur une ligne pour y aller"));
-        for b in 0..WILDB {
+        for b in biomes_par_prix() {
             match &self.s.biomes[b] {
                 None => rows.push(Row {
                     segs: vec![
@@ -3885,7 +3903,7 @@ impl Game {
             ) {
                 rows.push(r);
             }
-            for b in 0..WILDB {
+            for b in biomes_par_prix() {
                 let mut list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
                 if list.is_empty() {
                     continue;
@@ -4077,7 +4095,7 @@ impl Game {
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
             Row::text("colonnes : rareté · ×captures · ⋆shinies · [rang] · sexes vus · réserve", C::Dimmer),
         ];
-        for b in 0..BIOMES.len() {
+        for b in biomes_par_prix().into_iter().chain(std::iter::once(CURIO_B)) {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
             rows.push(Row::text("", C::Dim));
             rows.push(Row::header(&format!("{} — {}/{}{}", BIOMES[b].name, found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" })));
