@@ -227,6 +227,41 @@ fn main() {
     let server = tiny_http::Server::http("0.0.0.0:2323").expect("bind 2323");
     eprintln!("affut-sync sur :2323, stockage {}", data_dir);
 
+    /* les règles de vérification évoluent : on réévalue les entrées déjà
+       stockées au démarrage. sans quoi un joueur écarté à tort resterait
+       invisible jusqu'à sa prochaine partie, et un tricheur d'hier passerait
+       entre les mailles des règles d'aujourd'hui. */
+    {
+        let maintenant = now_ms();
+        let (mut relus, mut liberes, mut retenus) = (0u32, 0u32, 0u32);
+        if let Ok(dir) = std::fs::read_dir(&lb_dir) {
+            for f in dir.flatten() {
+                let p = f.path();
+                if p.extension().map(|x| x != "json").unwrap_or(true) {
+                    continue;
+                }
+                let Ok(txt) = std::fs::read_to_string(&p) else { continue };
+                let Ok(serde_json::Value::Object(mut e)) = serde_json::from_str(&txt) else { continue };
+                let avant = e.get("suspect").and_then(|v| v.as_bool()).unwrap_or(false);
+                let premier = e.get("premier_at").and_then(|v| v.as_f64()).unwrap_or_else(|| {
+                    e.get("at").and_then(|v| v.as_f64()).unwrap_or(maintenant)
+                });
+                let apres = borner_stats(&mut e, premier, None, maintenant);
+                e.insert("suspect".into(), serde_json::json!(apres));
+                if std::fs::write(&p, serde_json::to_string(&serde_json::Value::Object(e)).unwrap_or_default()).is_ok() {
+                    relus += 1;
+                    if avant && !apres {
+                        liberes += 1;
+                    }
+                    if !avant && apres {
+                        retenus += 1;
+                    }
+                }
+            }
+        }
+        eprintln!("classement : {} entrées réévaluées, {} réhabilitées, {} écartées", relus, liberes, retenus);
+    }
+
     fn valid_token(t: &str) -> bool {
         t.len() >= 16 && t.len() <= 64 && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
     }
