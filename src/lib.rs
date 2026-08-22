@@ -394,8 +394,18 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.11";
-const NEWS: [(&str, &str, &[&str]); 12] = [
+const VERSION: &str = "1.12";
+const NEWS: [(&str, &str, &[&str]); 13] = [
+    (
+        "1.12",
+        "22 août 2026",
+        &[
+            "les biomes s'affichent enfin dans l'ordre des prix, au tableau de bord comme au bestiaire et au comptoir : la rivière (900 écus) et le lac (45 k) traînaient derrière les ruines à 440 M.",
+            "les traces et les légendes ne tombent plus au milieu de l'eau : depuis que le lac et la rivière ne se traversent plus, elles y étaient hors d'atteinte. tout point d'apparition rejoint la berge la plus proche.",
+            "le classement croise désormais quatre valeurs qui se tiennent entre elles — captures, espèces, shinies et écus gagnés. améliorer sa chance de shiny se paie au labo : en déclarer plus que sa cagnotte ne l'autorise sort du tableau, comme découvrir des biomes qu'on n'a pas les moyens d'ouvrir.",
+            "la vitesse de capture retrouve une limite réaliste : elle autorisait 18 000 prises à l'heure, huit fois ce que huit pièges peuvent produire.",
+        ],
+    ),
     (
         "1.11",
         "21 août 2026",
