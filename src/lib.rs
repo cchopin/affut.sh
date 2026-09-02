@@ -4790,16 +4790,23 @@ impl Game {
 
 /* ================================================================== format */
 
+/* on tronque au lieu d'arrondir : avec 2 999 500 écus, « 3,00 M » laissait
+   croire qu'un biome à 3 M était payable alors que le déblocage refusait. */
+fn tronque(x: f64, dec: i32) -> f64 {
+    let p = 10f64.powi(dec);
+    (x * p).floor() / p
+}
+
 fn fmt(n: f64) -> String {
     let n = n.floor();
     if n >= 1e9 {
-        return format!("{:.2} Md", n / 1e9).replace('.', ",");
+        return format!("{:.2} Md", tronque(n / 1e9, 2)).replace('.', ",");
     }
     if n >= 1e6 {
-        return format!("{:.2} M", n / 1e6).replace('.', ",");
+        return format!("{:.2} M", tronque(n / 1e6, 2)).replace('.', ",");
     }
     if n >= 10000.0 {
-        return format!("{:.1} k", n / 1e3).replace(",0", "").replace('.', ",");
+        return format!("{:.1} k", tronque(n / 1e3, 1)).replace(",0", "").replace('.', ",");
     }
     let s = format!("{}", n as i64);
     let mut out = String::new();
@@ -6034,5 +6041,20 @@ mod tests {
             );
         }
         assert_eq!(g.slot_cost(0), (TRAPS[5].cost * 2.5).floor());
+    }
+
+    /* un montant abrégé ne doit jamais paraître plus gros qu'il n'est : sinon
+       le prix d'un biome semble payable alors que le déblocage refuse. */
+    #[test]
+    fn les_montants_abreges_ne_sur_annoncent_jamais() {
+        for n in [2_999_500.0, 2_999_999.0, 3_000_000.0, 29_960.0, 999_999_999.0, 9_999.0] {
+            let s = fmt(n);
+            let brut: String = s.chars().filter(|c| c.is_ascii_digit() || *c == ',').collect();
+            let mult = if s.ends_with("Md") { 1e9 } else if s.ends_with('M') { 1e6 } else if s.ends_with('k') { 1e3 } else { 1.0 };
+            let v = brut.replace(',', ".").parse::<f64>().unwrap_or(0.0) * mult;
+            assert!(v <= n, "{} affiché « {} », soit {} écus annoncés en trop", n, s, v - n);
+        }
+        assert_eq!(fmt(2_999_500.0), "2,99 M");
+        assert_eq!(fmt(3_000_000.0), "3,00 M");
     }
 }
