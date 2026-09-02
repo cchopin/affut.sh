@@ -394,8 +394,15 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.13";
-const NEWS: [(&str, &str, &[&str]); 14] = [
+const VERSION: &str = "1.14";
+const NEWS: [(&str, &str, &[&str]); 15] = [
+    (
+        "1.14",
+        "2 septembre 2026",
+        &[
+            "les curiosités obtenues au troc ne font plus sortir du classement : elles étaient comptées comme des espèces de biome, et le serveur refusait un bestiaire plus large que ce que la partie pouvait s'offrir.",
+        ],
+    ),
     (
         "1.13",
         "2 septembre 2026",
@@ -5633,6 +5640,27 @@ mod webapp {
             self.game.tick();
         }
 
+        /* les statistiques du classement, calculées ici et pas dans le
+           navigateur : le serveur vérifie un bestiaire d'espèces sauvages
+           (celles qu'on peut capturer dans un biome payé). compter en plus
+           les curiosités du troc, qui ne vivent dans aucun biome, faisait
+           passer un joueur honnête pour un tricheur. */
+        pub fn lb_stats(&self) -> String {
+            let s = &self.game.s;
+            let especes = wild_species().filter(|&i| s.dex2[i].n > 0).count();
+            let rangs: u64 = wild_species().filter(|&i| s.dex2[i].n > 0).map(|i| s.dex2[i].best as u64).sum();
+            serde_json::json!({
+                "captures": s.captures,
+                "especes": especes,
+                "rangs": rangs,
+                "shinies": s.shinies,
+                "ecus": s.total_earned.floor(),
+                "trophees": s.trophies,
+                "migrations": s.migrations,
+            })
+            .to_string()
+        }
+
         /* le navigateur pousse ici le classement récupéré sur /lb :
            {"me":"pseudo","rows":[…]} — trié par score décroissant */
         pub fn set_board(&mut self, json: &str) {
@@ -6212,5 +6240,17 @@ mod tests {
         }
         // idempotent : relancer ne bouge plus rien
         assert!(!g.museum_optimize(), "un second passage ne devait rien changer");
+    }
+
+    /* le serveur du classement plafonne le bestiaire par ce que la partie peut
+       financer, biome par biome. les curiosités du troc ne vivant dans aucun
+       biome, elles doivent rester hors de ce décompte — sinon un joueur
+       honnête qui troque passe pour un tricheur. */
+    #[test]
+    fn les_curiosites_restent_hors_du_bestiaire_finançable() {
+        let par_prix: f64 = paliers_bestiaire().iter().map(|(_, n)| n).sum();
+        assert_eq!(par_prix as usize, wild_total(), "la table de prix et le bestiaire sauvage divergent");
+        assert!(CREATURES.iter().any(|c| c.b == CURIO_B), "plus aucune curiosité : le test n'a plus d'objet");
+        assert!(wild_species().all(|i| CREATURES[i].b != CURIO_B));
     }
 }

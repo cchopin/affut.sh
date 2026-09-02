@@ -189,7 +189,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821ar'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821as'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -374,22 +374,14 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) w.sav
 const LB = 'https://vps.tely.info:8444/lb/';
 let pseudo = localStorage.getItem('affut_pseudo') || '';
 
+/* les chiffres viennent du moteur, pas d'une relecture de la sauvegarde : le
+   serveur vérifie un bestiaire d'espèces sauvages, et les curiosités du troc
+   (qui ne vivent dans aucun biome) faisaient dépasser ce plafond. */
 function lbStats() {
-  let s;
-  try { s = JSON.parse(localStorage.getItem('affutsh_save2') || '{}'); } catch (e) { return null; }
-  const dex = Array.isArray(s.dex2) ? s.dex2 : [];
-  const especes = dex.filter(d => (d && d.n) > 0).length;
-  const rangs = dex.reduce((a, d) => a + (d && d.n > 0 ? (d.best || 0) : 0), 0);
-  const ecus = Math.floor(s.total_earned || 0);
-  const st = {
-    captures: Math.floor(s.captures || 0),
-    especes, rangs,
-    shinies: Math.floor(s.shinies || 0),
-    ecus,
-    trophees: Math.floor(s.trophies || 0),
-    migrations: Math.floor(s.migrations || 0),
-  };
-  st.score = Math.floor(especes * 100 + st.shinies * 300 + rangs * 40 + st.trophees * 1000 + ecus / 1000);
+  let st;
+  try { st = JSON.parse(w.lb_stats()); } catch (e) { return null; }
+  st.score = Math.floor(st.especes * 100 + st.shinies * 300 + st.rangs * 40
+    + st.trophees * 1000 + st.ecus / 1000);
   return st;
 }
 

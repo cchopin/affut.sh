@@ -5,6 +5,7 @@ export class Web {
     free(): void;
     [Symbol.dispose](): void;
     key(k: string, ctrl: boolean): boolean;
+    lb_stats(): string;
     constructor();
     render(cols: number, rows: number): string;
     save(): void;
@@ -19,6 +20,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_web_free: (a: number, b: number) => void;
     readonly web_key: (a: number, b: number, c: number, d: number) => number;
+    readonly web_lb_stats: (a: number, b: number) => void;
     readonly web_new: () => number;
     readonly web_render: (a: number, b: number, c: number, d: number) => void;
     readonly web_save: (a: number) => void;
