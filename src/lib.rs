@@ -394,8 +394,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.12";
-const NEWS: [(&str, &str, &[&str]); 13] = [
+const VERSION: &str = "1.13";
+const NEWS: [(&str, &str, &[&str]); 14] = [
+    (
+        "1.13",
+        "2 septembre 2026",
+        &[
+            "le musée sait se garnir seul : une option choisit les spécimens les mieux payés de la réserve et suit vos nouvelles prises, sans passer les salles une par une.",
+            "les montants abrégés sont tronqués et non plus arrondis : avec 2 999 500 écus, le prix d'un biome à 3 M ne s'affiche plus comme s'il était payable.",
+        ],
+    ),
     (
         "1.12",
         "22 août 2026",
@@ -667,6 +675,9 @@ struct State {
     news_seen: String,
     lab: Vec<u32>,
     autosell: Vec<bool>,
+    /* le musée se garnit tout seul avec les spécimens les plus rentables */
+    #[serde(default)]
+    museum_auto: bool,
     ach: Vec<bool>,
     last_seen: f64,
 }
@@ -715,6 +726,7 @@ impl Default for State {
             news_seen: String::new(),
             lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
+            museum_auto: false,
             ach: vec![false; ACHS.len()],
             last_seen: now_ms(),
         }
@@ -1283,6 +1295,8 @@ enum Action {
     MuseumAdd(usize, usize, bool),
     MuseumRemove(usize),
     MuseumCollect,
+    MuseumAuto,
+    ToggleMuseumAuto,
     PenStart(usize, usize),
     PenCollect(usize),
     Trade(usize),
@@ -1545,6 +1559,8 @@ struct Game {
     pens_seen: Vec<f64>,
     /* clin d'œil : le cercle qui s'ouvre sur la place à la 666e prise */
     pentacle_until: f64,
+    /* dernier passage du garnissage automatique du musée */
+    museum_auto_at: f64,
 }
 
 impl Game {
@@ -1574,6 +1590,7 @@ impl Game {
             merchant_seen: 0,
             pens_seen: vec![],
             pentacle_until: 0.0,
+            museum_auto_at: 0.0,
         };
         (game, fresh)
     }
@@ -2045,6 +2062,12 @@ impl Game {
         }
         // musée : le revenu s'accumule (plafond extensible au labo)
         self.museum_accrue(now);
+        /* garnissage automatique : inutile de le refaire à chaque image,
+           les salles ne changent qu'au rythme des prises */
+        if self.s.museum_auto && now - self.museum_auto_at > 3000.0 {
+            self.museum_auto_at = now;
+            self.museum_optimize();
+        }
         self.toasts.retain(|&(_, t)| now - t < 3800.0);
         self.check_achievements();
         self.s.last_seen = now;
@@ -2065,6 +2088,49 @@ impl Game {
         let cap = self.museum_rate() * self.museum_cap_h() * 3_600_000.0;
         self.s.museum_pool = (self.s.museum_pool + self.museum_rate() * dt).min(cap);
     }
+    /* garnit le musée avec les spécimens les plus rentables : ce qui est
+       exposé retourne d'abord en réserve, puis on reprend les meilleurs.
+       l'opération est donc idempotente, et le revenu étant la somme des
+       pièces, prendre les N plus chères est bien l'optimum. */
+    fn museum_optimize(&mut self) -> bool {
+        let n = self.museum_slots().min(self.s.museum.len());
+        self.museum_accrue(now_ms());
+        let avant: Vec<Option<(usize, usize, bool)>> =
+            self.s.museum.iter().take(n).map(|o| o.as_ref().map(|m| (m.ci, m.rank, m.shiny))).collect();
+        for slot in 0..n {
+            if let Some(m) = self.s.museum[slot].take() {
+                self.give_back(m.ci, m.shiny, m.sex, m.rank);
+            }
+        }
+        let mut lots: Vec<(f64, usize, bool)> = vec![];
+        for ci in 0..CREATURES.len() {
+            for shiny in [false, true] {
+                for r in 0..4 {
+                    let iv = &self.s.inv2[ci];
+                    let dispo = if shiny { iv.sr(r) } else { iv.nr(r) };
+                    if dispo == 0 {
+                        continue;
+                    }
+                    let v = self.creature_value_r(ci, shiny, r);
+                    for _ in 0..dispo.min(n as u64) {
+                        lots.push((v, ci, shiny));
+                    }
+                }
+            }
+        }
+        lots.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let mut pose = 0;
+        for &(_, ci, shiny) in lots.iter().take(n) {
+            if let Some((rank, sex)) = self.take_best(ci, shiny) {
+                self.s.museum[pose] = Some(MusE { ci, rank, shiny, sex });
+                pose += 1;
+            }
+        }
+        let apres: Vec<Option<(usize, usize, bool)>> =
+            self.s.museum.iter().take(n).map(|o| o.as_ref().map(|m| (m.ci, m.rank, m.shiny))).collect();
+        avant != apres
+    }
+
     fn museum_slots(&self) -> usize {
         6 + self.s.lab[LAB_AILES] as usize
     }
@@ -2487,6 +2553,23 @@ impl Game {
                 if let Some(m) = self.s.museum[slot].take() {
                     self.give_back(m.ci, m.shiny, m.sex, m.rank);
                     self.log(vec![(format!("retiré du musée : {}", CREATURES[m.ci].n), C::Dim)]);
+                }
+            }
+            Action::MuseumAuto => {
+                if self.museum_optimize() {
+                    self.log(vec![("musée : les salles reprennent les spécimens les plus rentables.".into(), C::Blue)]);
+                    self.toast("musée garni");
+                } else {
+                    self.toast("le musée expose déjà le mieux payé");
+                }
+                self.check_achievements();
+            }
+            Action::ToggleMuseumAuto => {
+                self.s.museum_auto = !self.s.museum_auto;
+                if self.s.museum_auto {
+                    self.museum_auto_at = now_ms();
+                    self.museum_optimize();
+                    self.check_achievements();
                 }
             }
             Action::MuseumCollect => {
@@ -3259,13 +3342,37 @@ impl Game {
                 act: None,
                 indent: 0,
             },
+            Row {
+                segs: vec![(
+                    if self.s.museum_auto {
+                        "■ garnissage automatique : les salles suivent vos plus belles prises".into()
+                    } else {
+                        "□ garnissage automatique".to_string()
+                    },
+                    if self.s.museum_auto { C::Green } else { C::Dim },
+                )],
+                btns: vec![
+                    (
+                        if self.s.museum_auto { "désactiver".into() } else { "activer".to_string() },
+                        if self.s.museum_auto { C::Red } else { C::Green },
+                        Action::ToggleMuseumAuto,
+                    ),
+                    ("garnir maintenant".into(), C::Gold, Action::MuseumAuto),
+                ],
+                act: None,
+                indent: 0,
+            },
             Row::text("", C::Dim),
         ];
         for slot in 0..self.museum_slots() {
             match &self.s.museum[slot] {
                 None => rows.push(Row {
                     segs: vec![(format!("├─ salle {} : ", slot + 1), C::Dimmer), ("vide".into(), C::Dim)],
-                    btns: vec![("exposer une créature".into(), C::Green, Action::Open(PanelKind::MuseumPick(slot)))],
+                    btns: if self.s.museum_auto {
+                        vec![]
+                    } else {
+                        vec![("exposer une créature".into(), C::Green, Action::Open(PanelKind::MuseumPick(slot)))]
+                    },
                     act: None,
                     indent: 0,
                 }),
@@ -3278,7 +3385,11 @@ impl Game {
                              if m.shiny { C::Shiny } else { rarity_color(c.r) }),
                             (format!("  {} écus/min", fmt2(self.creature_value_r(m.ci, m.shiny, m.rank) * 0.001)), C::GoldDark),
                         ],
-                        btns: vec![("retirer".into(), C::Red, Action::MuseumRemove(slot))],
+                        btns: if self.s.museum_auto {
+                            vec![]
+                        } else {
+                            vec![("retirer".into(), C::Red, Action::MuseumRemove(slot))]
+                        },
                         act: None,
                         indent: 0,
                     });
@@ -4408,7 +4519,7 @@ impl Game {
             "labo ╡ l ╞ : améliorations permanentes (vitesse, chance, prix, hors-ligne, shiny) et la migration.",
             "bestiaire ╡ b ╞ : le registre — découvertes, shinies, meilleurs rangs. jamais décrémenté par les ventes.",
             "trophées ╡ t ╞ : la liste des succès et leurs récompenses.",
-            "musée ╡ m ╞ : exposez vos plus beaux spécimens ; chacun génère des écus en continu (cagnotte plafonnée à 4 h de base, extensible au labo). le spécimen exposé quitte la réserve, récupérable à tout moment.",
+            "musée ╡ m ╞ : exposez vos plus beaux spécimens ; chacun génère des écus en continu (cagnotte plafonnée à 4 h de base, extensible au labo). le spécimen exposé quitte la réserve, récupérable à tout moment. le garnissage automatique choisit seul les pièces les mieux payées et suit vos nouvelles prises.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
@@ -5840,6 +5951,7 @@ mod tests {
             merchant_seen: 0,
             pens_seen: vec![],
             pentacle_until: 0.0,
+            museum_auto_at: 0.0,
         }
     }
 
@@ -6058,5 +6170,47 @@ mod tests {
         assert_eq!(fmt(29_960.0), "29,9 k");
         assert_eq!(fmt(10_000.0), "10 k");
         assert_eq!(fmt(3_000_000.0), "3,00 M");
+    }
+
+    /* le garnissage automatique doit exposer exactement les pièces les mieux
+       payées : rien en réserve ne doit rapporter plus qu'une pièce exposée. */
+    #[test]
+    fn le_musee_expose_les_specimens_les_mieux_payes() {
+        let mut g = jeu_neuf();
+        for ci in 0..20 {
+            for r in 0..4 {
+                g.add_specimen(ci, false, r);
+            }
+        }
+        g.add_specimen(3, true, 3);
+        // une pièce médiocre déjà exposée doit céder sa place
+        g.s.museum[0] = g.take_best(0, false).map(|(rank, sex)| MusE { ci: 0, rank, shiny: false, sex });
+
+        assert!(g.museum_optimize(), "le musée aurait dû changer");
+        let n = g.museum_slots();
+        let exposes: Vec<f64> = g
+            .s
+            .museum
+            .iter()
+            .take(n)
+            .filter_map(|m| m.as_ref())
+            .map(|m| g.creature_value_r(m.ci, m.shiny, m.rank))
+            .collect();
+        assert_eq!(exposes.len(), n, "toutes les salles devaient être garnies");
+        let plancher = exposes.iter().cloned().fold(f64::INFINITY, f64::min);
+        for ci in 0..CREATURES.len() {
+            for shiny in [false, true] {
+                for r in 0..4 {
+                    let iv = &g.s.inv2[ci];
+                    let reste = if shiny { iv.sr(r) } else { iv.nr(r) };
+                    if reste > 0 {
+                        let v = g.creature_value_r(ci, shiny, r);
+                        assert!(v <= plancher, "{} [{}] vaut {} et dort en réserve alors qu'une salle expose {}", CREATURES[ci].n, RANK_NAMES[r], v, plancher);
+                    }
+                }
+            }
+        }
+        // idempotent : relancer ne bouge plus rien
+        assert!(!g.museum_optimize(), "un second passage ne devait rien changer");
     }
 }
