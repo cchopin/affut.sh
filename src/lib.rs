@@ -4806,7 +4806,7 @@ fn fmt(n: f64) -> String {
         return format!("{:.2} M", tronque(n / 1e6, 2)).replace('.', ",");
     }
     if n >= 10000.0 {
-        return format!("{:.1} k", tronque(n / 1e3, 1)).replace(",0", "").replace('.', ",");
+        return format!("{:.1} k", tronque(n / 1e3, 1)).replace('.', ",").replace(",0 k", " k");
     }
     let s = format!("{}", n as i64);
     let mut out = String::new();
@@ -6055,6 +6055,8 @@ mod tests {
             assert!(v <= n, "{} affiché « {} », soit {} écus annoncés en trop", n, s, v - n);
         }
         assert_eq!(fmt(2_999_500.0), "2,99 M");
+        assert_eq!(fmt(29_960.0), "29,9 k");
+        assert_eq!(fmt(10_000.0), "10 k");
         assert_eq!(fmt(3_000_000.0), "3,00 M");
     }
 }
