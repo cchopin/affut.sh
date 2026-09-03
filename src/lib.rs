@@ -266,6 +266,12 @@ pub fn biomes_par_prix() -> Vec<usize> {
 /* (prix d'ouverture, nombre d'espèces) de chaque biome, du moins cher au plus
    cher — le serveur du classement s'en sert pour vérifier qu'un bestiaire
    annoncé était finançable. une seule table, jamais deux à resynchroniser. */
+/* les curiosités ne s'attrapent nulle part : elles s'obtiennent au troc.
+   le classement doit donc les tolérer au-dessus du bestiaire finançable. */
+pub fn curiosites_total() -> usize {
+    CREATURES.iter().filter(|c| c.b == CURIO_B).count()
+}
+
 pub fn paliers_bestiaire() -> Vec<(f64, f64)> {
     biomes_par_prix()
         .into_iter()

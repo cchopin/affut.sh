@@ -188,7 +188,10 @@ fn borner_stats(
         .min(ESPECES_MAX)
         .min(captures)
         .min(especes_temps)
-        .min(especes_financables(ecus * MARGE_PRIX_BIOMES));
+        /* les curiosités du troc ne vivent dans aucun biome et n'entrent dans
+           aucun palier de prix : un client d'une version antérieure les compte
+           encore, et son joueur ne doit pas sortir du classement pour ça. */
+        .min(especes_financables(ecus * MARGE_PRIX_BIOMES) + affut::curiosites_total() as f64);
     let rangs = b_rang.min(especes * RANG_MAX);
     /* le jeu plafonne la chance de shiny à 1/128 par capture (1/512 de base).
        on tolère largement la variance et les gros bonus — au-delà d'un shiny
@@ -645,9 +648,11 @@ mod tests {
             "rangs": 9999.0, "shinies": 9999.0, "trophees": 9999.0
         }));
         assert!(borner_stats(&mut e, now - 10.0 * JOUR, None, now));
-        // 10 000 écus gagnés, même triplés par la marge, n'ouvrent pas le lac
-        assert_eq!(lire_nb(&e, "especes"), 43.0, "les biomes ouverts bornent le bestiaire");
-        assert_eq!(lire_nb(&e, "rangs"), 43.0 * 4.0, "un rang par espèce, quatre au plus");
+        /* 10 000 écus gagnés, même triplés par la marge, n'ouvrent pas le lac :
+           43 espèces de biome, plus la tolérance des curiosités du troc */
+        let plafond = 43.0 + affut::curiosites_total() as f64;
+        assert_eq!(lire_nb(&e, "especes"), plafond, "les biomes ouverts bornent le bestiaire");
+        assert_eq!(lire_nb(&e, "rangs"), plafond * 4.0, "un rang par espèce, quatre au plus");
         /* deux plafonds jouent : un shiny toutes les 80 prises, et surtout ce que
            le labo financé par 10 000 écus permet (niveau 1, soit ~1/233) */
         assert_eq!(lire_nb(&e, "shinies"), 5.0, "le labo finançable borne le taux de shiny");
@@ -727,7 +732,11 @@ mod tests {
             "captures": 1550.0, "ecus": 17_280.0, "especes": 56.0, "rangs": 185.0, "shinies": 20.0
         }));
         assert!(borner_stats(&mut e, now - 20.0 * JOUR, None, now), "l'entrée doit être marquée suspecte");
-        assert_eq!(lire_nb(&e, "especes"), 43.0, "17 280 écus, même triplés, n'ouvrent pas six biomes");
+        assert_eq!(
+            lire_nb(&e, "especes"),
+            43.0 + affut::curiosites_total() as f64,
+            "17 280 écus, même triplés, n'ouvrent pas six biomes"
+        );
 
         // une partie honnête aux mêmes espèces, mais qui a les moyens, passe intacte
         let mut ok = entree(serde_json::json!({
