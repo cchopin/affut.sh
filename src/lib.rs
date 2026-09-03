@@ -400,8 +400,15 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.14";
-const NEWS: [(&str, &str, &[&str]); 15] = [
+const VERSION: &str = "1.15";
+const NEWS: [(&str, &str, &[&str]); 16] = [
+    (
+        "1.15",
+        "3 septembre 2026",
+        &[
+            "les listes bouclent : dans un panneau, le haut depuis la première entrée saute à la dernière, et le bas depuis la dernière revient au début. les menus d'espèces s'allongeant à chaque biome ouvert, la fin de liste n'est plus à vingt appuis.",
+        ],
+    ),
     (
         "1.14",
         "2 septembre 2026",
@@ -5365,6 +5372,14 @@ fn panel_key(game: &mut Game, code: GKey) {
                     p.sel = n;
                     snap(p, sels[n].0);
                 }
+                /* dernière entrée et rien de plus à lire : la liste boucle.
+                   les menus d'espèces sont longs, revenir au début ne doit pas
+                   demander vingt appuis. */
+                None if p_scroll >= max_scroll && !sels.is_empty() => {
+                    let p = game.panels.last_mut().unwrap();
+                    p.sel = 0;
+                    p.scroll = 0;
+                }
                 // sinon : simple défilement d'une ligne, la lecture d'abord
                 _ => {
                     let p = game.panels.last_mut().unwrap();
@@ -5381,6 +5396,15 @@ fn panel_key(game: &mut Game, code: GKey) {
                     let first = (0..=n).rev().take_while(|&i| sels[i].0 == rt).last().unwrap();
                     let p = game.panels.last_mut().unwrap();
                     p.sel = first;
+                    snap(p, rt);
+                }
+                /* première entrée, panneau déjà en haut : on saute à la fin */
+                None if p_scroll == 0 && !sels.is_empty() => {
+                    let rt = sels[sels.len() - 1].0;
+                    let first = (0..sels.len()).find(|&i| sels[i].0 == rt).unwrap();
+                    let p = game.panels.last_mut().unwrap();
+                    p.sel = first;
+                    p.scroll = max_scroll;
                     snap(p, rt);
                 }
                 _ => {
@@ -6258,5 +6282,44 @@ mod tests {
         assert_eq!(par_prix as usize, wild_total(), "la table de prix et le bestiaire sauvage divergent");
         assert!(CREATURES.iter().any(|c| c.b == CURIO_B), "plus aucune curiosité : le test n'a plus d'objet");
         assert!(wild_species().all(|i| CREATURES[i].b != CURIO_B));
+    }
+
+    /* les listes d'espèces sont longues : la sélection doit boucler, sinon
+       atteindre la dernière entrée demande de traverser tout le panneau. */
+    #[test]
+    fn les_listes_bouclent_en_haut_et_en_bas() {
+        let mut g = jeu_neuf();
+        g.panels.push(Panel::new(PanelKind::Shop));
+        let (_, rows) = g.build_rows(&PanelKind::Shop);
+        let sels = selectables(&rows);
+        assert!(sels.len() > 2, "la boutique doit proposer plusieurs entrées");
+        // panneau assez haut pour tout montrer : la lecture ne prime pas
+        g.panels.last_mut().unwrap().inner = rows.len();
+
+        // depuis la première entrée, le haut mène à la dernière
+        panel_key(&mut g, GKey::Up);
+        let derniere_ligne = sels[sels.len() - 1].0;
+        assert_eq!(sels[g.panels.last().unwrap().sel].0, derniere_ligne, "le haut devait boucler vers la fin");
+
+        // et depuis la dernière, le bas ramène à la première
+        panel_key(&mut g, GKey::Down);
+        assert_eq!(g.panels.last().unwrap().sel, 0, "le bas devait boucler vers le début");
+        assert_eq!(g.panels.last().unwrap().scroll, 0, "et remonter le panneau");
+
+        // au milieu de la liste, rien ne boucle
+        panel_key(&mut g, GKey::Down);
+        let milieu = g.panels.last().unwrap().sel;
+        assert!(milieu > 0 && milieu < sels.len() - 1);
+
+        /* cas réel : un panneau plus court que sa liste. le haut boucle depuis
+           le sommet, et la ligne visée reste visible. */
+        g.panels.clear();
+        g.panels.push(Panel::new(PanelKind::Shop));
+        g.panels.last_mut().unwrap().inner = 6;
+        panel_key(&mut g, GKey::Up);
+        let p = g.panels.last().unwrap();
+        let ligne = sels[p.sel].0;
+        assert_eq!(ligne, derniere_ligne, "le haut devait boucler malgré le défilement");
+        assert!(ligne >= p.scroll && ligne < p.scroll + p.inner, "la dernière entrée doit être à l'écran");
     }
 }
