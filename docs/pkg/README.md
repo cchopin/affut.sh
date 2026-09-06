@@ -19,7 +19,8 @@ Interface inspirée de [late.sh](https://late.sh).
   désert, glacier, volcan, ruines, et toute une hydrographie : la rivière qui
   naît de la montagne, le lac qu'elle remplit, le récif le long de la côte et
   les abysses au large.
-- **114 espèces à découvrir**, chacune avec sa variante **shiny ✦** (1/128) et un
+- **114 espèces sauvages à découvrir**, plus six curiosités du troc et douze
+  légendes errantes qu'aucun piège n'attrape, chacune avec sa variante **shiny ✦** (1/128) et un
   **rang** par capture (C, B, A, S — valeur ×1 à ×6). Le bestiaire retient vos
   meilleurs spécimens et les **sexes observés** ♂♀.
 - **Idle véritable** : les pièges capturent à intervalle régulier, y compris
@@ -43,7 +44,9 @@ Interface inspirée de [late.sh](https://late.sh).
 - **Jour de foire**, un jour sur quatre : le marchand reste toute la journée, le
   troc double ses demandes, sa malle est à −25 % et la chance monte.
 - **Et aussi** : battues, contrats renouvelés toutes les 2 h, musée à revenu
-  passif, légendes errantes ✧ à tenter une seule fois, 28 succès, prestige par
+  passif, légendes errantes ✧ à tenter une seule fois — chaque battue les
+  attire une heure durant, et elles paraissent jusque sur les terres non
+  ouvertes —, 29 succès, prestige par
   migration (trophées permanents), et un journal des versions en jeu (`n`).
 
 | tableau de bord | bestiaire |
@@ -107,6 +110,6 @@ Host affut
 
 L'identité visuelle (palette, cadre, fenêtres, minuscules) est un hommage à
 [late.sh](https://late.sh) de mpiorowski — allez-y, c'est bien.
-Les 114 créatures, leurs mœurs discutables et leur lore sont originaux.
+Les 132 créatures, leurs mœurs discutables et leur lore sont originaux.
 
 > le dossier `web/` contient une ancienne variante navigateur (single-file), antérieure aux rangs/météo/élevage — le jeu terminal est la version de référence.

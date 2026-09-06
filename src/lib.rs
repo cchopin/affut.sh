@@ -59,6 +59,9 @@ struct BiomeDef {
    terrain ni pièges — on n'y entre pas, ses espèces s'obtiennent au troc. */
 const WILDB: usize = 11;
 const CURIO_B: usize = 11;
+/* les légendes errantes n'appartiennent à aucun biome : elles traversent le
+   monde entier, y compris les terres qu'on n'a pas encore les moyens d'ouvrir. */
+const LEGEND_B: usize = 12;
 /* les prix du désert aux ruines suivent le revenu des pièges, bien plus élevé
    depuis que chaque palier double au lieu d'ajouter 40% : sans cela la partie
    durerait trois fois moins longtemps. la forêt, la rivière, le marais, la
@@ -71,7 +74,7 @@ const CURIO_B: usize = 11;
    80% de la partie après le volcan contre 64% à l'origine. avec cette courbe,
    69% — la longueur totale est la même, mais elle n'est plus concentrée dans un
    seul mur final. */
-const BIOMES: [BiomeDef; 12] = [
+const BIOMES: [BiomeDef; 13] = [
     BiomeDef { name: "forêt",    cost: 0.0,         mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
     BiomeDef { name: "marais",   cost: 2500.0,      mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
     BiomeDef { name: "montagne", cost: 20000.0,     mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
@@ -84,6 +87,7 @@ const BIOMES: [BiomeDef; 12] = [
     BiomeDef { name: "rivière",  cost: 900.0,       mult: 1.3, desc: "elle descend de la montagne et traverse tout. neuf espèces la remontent, personne ne sait pourquoi." },
     BiomeDef { name: "lac",      cost: 45000.0,     mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
     BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 1.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
+    BiomeDef { name: "légendes",   cost: f64::INFINITY, mult: 18.0, desc: "elles ne vivent nulle part et passent partout. on ne les croise qu'en silhouette, une fois de temps en temps." },
 ];
 
 struct CreatureDef {
@@ -93,7 +97,7 @@ struct CreatureDef {
     n: &'static str,
     lore: &'static str,
 }
-const CREATURES: [CreatureDef; 120] = [
+const CREATURES: [CreatureDef; 132] = [
     // ---- forêt (13)
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
@@ -226,6 +230,20 @@ const CREATURES: [CreatureDef; 120] = [
     CreatureDef { b: 11, r: 3, g: "<*>",  n: "curiosa",     lore: "vient d'un biome que personne n'a cartographié. elle refuse d'en parler." },
     CreatureDef { b: 11, r: 3, g: "(:)",  n: "porcelin",    lore: "une figurine qui respire. les collectionneurs se l'arrachent, elle s'en moque." },
     CreatureDef { b: 11, r: 4, g: "=@=",  n: "chimérel",    lore: "trois marchands jurent l'avoir vendu le même jour. aucun ne ment." },
+    /* légendes errantes : aucun piège ne les prend, elles n'apparaissent qu'en
+       silhouette, n'importe où sur la carte, et se tentent à la main */
+    CreatureDef { b: 12, r: 3, g: "^v^",  n: "arpenteur",     lore: "il traverse la carte d'un bout à l'autre chaque nuit. personne ne sait ce qu'il compte." },
+    CreatureDef { b: 12, r: 3, g: "(~~)", n: "brumaille",     lore: "une brume qui a pris l'habitude d'avoir une forme. elle y tient." },
+    CreatureDef { b: 12, r: 3, g: "<^>",  n: "veilleur pâle", lore: "il se poste là où l'on va passer, puis attend. il attend depuis longtemps." },
+    CreatureDef { b: 12, r: 3, g: "}o{",  n: "colporteur des vents", lore: "il transporte des odeurs d'un biome à l'autre. c'est ainsi qu'on sait qu'il est venu." },
+    CreatureDef { b: 12, r: 4, g: "*^*",  n: "aube-errante",  lore: "elle n'apparaît qu'entre deux instants. les horloges du village avancent d'une seconde après son passage." },
+    CreatureDef { b: 12, r: 4, g: "<=>",  n: "faucheur de sel", lore: "il suit les côtes et les vieilles routes. là où il s'arrête, plus rien ne pousse." },
+    CreatureDef { b: 12, r: 4, g: "[o]",  n: "sentinelle creuse", lore: "une carapace sans habitant, qui se déplace pourtant. on a renoncé à savoir." },
+    CreatureDef { b: 12, r: 4, g: "~*~",  n: "mirage du nord", lore: "vu au glacier, au désert et au marais le même soir. les trois témoins sont formels." },
+    CreatureDef { b: 12, r: 4, g: "(*)",  n: "œil du monde",  lore: "il regarde le joueur, jamais le piège. c'est déjà une réponse." },
+    CreatureDef { b: 12, r: 4, g: "}*{",  n: "ombre-lierre",  lore: "elle pousse sur les traces des autres légendes. là où elle est, une autre est passée." },
+    CreatureDef { b: 12, r: 4, g: "<*>",  n: "porte-écailles", lore: "chaque écaille vient d'une espèce différente. aucune ne manque à personne." },
+    CreatureDef { b: 12, r: 4, g: "*@*",  n: "premier piégé", lore: "la toute première prise du tout premier traqueur. elle s'est échappée depuis, et n'a pas vieilli." },
 ];
 
 /* espèces qui comptent dans le bestiaire : les curiosités en sont exclues,
@@ -266,10 +284,11 @@ pub fn biomes_par_prix() -> Vec<usize> {
 /* (prix d'ouverture, nombre d'espèces) de chaque biome, du moins cher au plus
    cher — le serveur du classement s'en sert pour vérifier qu'un bestiaire
    annoncé était finançable. une seule table, jamais deux à resynchroniser. */
-/* les curiosités ne s'attrapent nulle part : elles s'obtiennent au troc.
-   le classement doit donc les tolérer au-dessus du bestiaire finançable. */
-pub fn curiosites_total() -> usize {
-    CREATURES.iter().filter(|c| c.b == CURIO_B).count()
+/* les espèces hors biome — curiosités du troc et légendes errantes — ne
+   s'attrapent dans aucune terre et n'entrent dans aucun palier de prix. le
+   classement doit donc les tolérer au-dessus du bestiaire finançable. */
+pub fn especes_hors_biome() -> usize {
+    CREATURES.iter().filter(|c| c.b >= WILDB).count()
 }
 
 pub fn paliers_bestiaire() -> Vec<(f64, f64)> {
@@ -284,6 +303,24 @@ fn wild_species() -> impl Iterator<Item = usize> {
 }
 fn wild_total() -> usize {
     CREATURES.iter().filter(|c| c.b < WILDB).count()
+}
+
+/* les légendes errantes, avec leurs poids : les épiques paraissent trois fois
+   plus souvent que les légendaires. */
+fn tirage_legende() -> usize {
+    let pool: Vec<(usize, u32)> = (0..CREATURES.len())
+        .filter(|&i| CREATURES[i].b == LEGEND_B)
+        .map(|i| (i, if CREATURES[i].r >= 4 { 1 } else { 3 }))
+        .collect();
+    let total: u32 = pool.iter().map(|&(_, w)| w).sum();
+    let mut tir = rand::thread_rng().gen_range(0..total);
+    for (i, w) in &pool {
+        if tir < *w {
+            return *i;
+        }
+        tir -= w;
+    }
+    pool[0].0
 }
 
 fn biome_creatures(b: usize) -> impl Iterator<Item = usize> {
@@ -315,7 +352,7 @@ const BAIT_TRUFFE: usize = 3;
 const BAIT_ESSENCE: usize = 4;
 
 struct LabDef { n: &'static str, max: u32, base: f64, mult: f64, desc: &'static str }
-const LABS: [LabDef; 13] = [
+const LABS: [LabDef; 15] = [
     LabDef { n: "affûtage",        max: 10, base: 600.0,  mult: 2.4, desc: "des mâchoires mieux huilées : +6% de vitesse par niveau." },
     LabDef { n: "flair",           max: 15, base: 900.0,  mult: 2.3, desc: "l'instinct du traqueur : +0,08 de chance par niveau." },
     LabDef { n: "négoce",          max: 15, base: 800.0,  mult: 2.3, desc: "l'art de la marge : +5% aux prix de vente par niveau." },
@@ -329,6 +366,8 @@ const LABS: [LabDef; 13] = [
     LabDef { n: "traqueur",        max: 5,  base: 4000.0, mult: 2.2, desc: "meilleure endurance : le repos entre deux battues diminue de 30 s par niveau (5 min de base)." },
     LabDef { n: "courtage",        max: 5,  base: 6000.0, mult: 2.3, desc: "carnet d'adresses : les primes de contrats augmentent de 15% par niveau." },
     LabDef { n: "licence de piégeage", max: 6, base: 3000.0, mult: 2.6, desc: "l'administration est tatillonne : 2 pièges posés autorisés de base, +1 par niveau." },
+    LabDef { n: "appel des légendes", max: 5, base: 25000.0, mult: 2.7, desc: "des appeaux qui portent loin : +4 points de chance qu'une légende errante paraisse (30 de base, et vos battues s'y ajoutent)." },
+    LabDef { n: "approche silencieuse", max: 5, base: 35000.0, mult: 2.7, desc: "on apprend à ne plus faire craquer les branches : +5% de réussite face à une légende." },
 ];
 const LAB_AFFUTAGE: usize = 0;
 const LAB_FLAIR: usize = 1;
@@ -343,11 +382,13 @@ const LAB_LIGNEES: usize = 9;
 const LAB_TRAQUEUR: usize = 10;
 const LAB_COURTAGE: usize = 11;
 const LAB_LICENCE: usize = 12;
+const LAB_APPEL: usize = 13;
+const LAB_APPROCHE: usize = 14;
 const MERCH_ITEMS: usize = 5;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
 const ACH_666: usize = 27;
-const ACHS: [AchDef; 28] = [
+const ACHS: [AchDef; 29] = [
     AchDef { n: "première prise",         d: "capturer une créature",                r: 50.0 },
     AchDef { n: "braconnier du dimanche", d: "capturer 100 créatures",               r: 500.0 },
     AchDef { n: "main verte",             d: "capturer 1 000 créatures",             r: 5000.0 },
@@ -376,6 +417,7 @@ const ACHS: [AchDef; 28] = [
     AchDef { n: "oiseau de nuit",         d: "capturer une espèce nocturne",         r: 1000.0 },
     AchDef { n: "assidu",                 d: "chasser 7 jours d'affilée",            r: 2000.0 },
     AchDef { n: "le compte est bon",     d: "capturer 666 créatures",               r: 666.0 },
+    AchDef { n: "panthéon",               d: "capturer les 12 légendes errantes",    r: 120000.0 },
 ];
 
 const SHINY_BASE: f64 = 1.0 / 512.0;
@@ -400,8 +442,19 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.15";
-const NEWS: [(&str, &str, &[&str]); 16] = [
+const VERSION: &str = "1.16";
+const NEWS: [(&str, &str, &[&str]); 17] = [
+    (
+        "1.16",
+        "3 septembre 2026",
+        &[
+            "douze légendes errantes rejoignent le bestiaire. aucun piège ne les prend : elles ne s'obtiennent qu'en approchant une silhouette ✧, et elles n'appartiennent à aucun biome.",
+            "les silhouettes paraissent désormais partout, y compris sur les terres que vous n'avez pas encore ouvertes : une légende peut vous attendre au volcan bien avant que vous ayez les moyens d'y poser un piège.",
+            "chaque battue remue le terrain : pendant une heure, les légendes ont +3 chances sur 100 de paraître, et les battues se cumulent jusqu'à +24. le tableau de bord affiche la pression en cours.",
+            "deux nouvelles compétences au labo : l'appel des légendes (leur fréquence) et l'approche silencieuse (votre réussite face à elles).",
+            "et ce panneau s'ouvre tout seul au premier lancement après une mise à jour, plutôt que d'attendre que vous remarquiez la pastille.",
+        ],
+    ),
     (
         "1.15",
         "3 septembre 2026",
@@ -563,6 +616,11 @@ const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
 const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
 const LEGEND_SPOTS: [(usize, usize); 11] = [(16, 26), (16, 48), (52, 8), (95, 10), (16, 7), (95, 64), (52, 68), (95, 34), (16, 68), (30, 50), (52, 29)];
+/* une battue attire les légendes une heure durant, +3 points par battue et
+   jusqu'à +24 : huit battues suffisent à doubler presque la chance de base. */
+const HUNT_BUFF_MS: f64 = 3_600_000.0;
+const HUNT_BUFF_PTS: u64 = 3;
+const HUNT_BUFF_MAX: u64 = 24;
 /* durée de couvaison à l'enclos, par rareté (minutes) */
 const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
@@ -682,6 +740,14 @@ struct State {
     contracts_delivered: u64,
     #[serde(default)]
     legends_caught: u64,
+    /* horodatage des battues récentes : chacune attire les légendes une heure
+       durant, et l'effet se cumule */
+    #[serde(default)]
+    hunts_at: Vec<f64>,
+    /* fenêtres où une légende s'est montrée : une fois parue, elle reste
+       jusqu'au bout même si la pression des battues retombe */
+    #[serde(default)]
+    legends_open: Vec<u64>,
     #[serde(default)]
     pen_born: u64,
     #[serde(default)]
@@ -739,6 +805,8 @@ impl Default for State {
             hunts_done: 0,
             contracts_delivered: 0,
             legends_caught: 0,
+            hunts_at: vec![],
+            legends_open: vec![],
             pen_born: 0,
             last_day: 0,
             streak: 0,
@@ -2070,6 +2138,12 @@ impl Game {
         }
         // légende errante : annoncer son apparition (une fois par fenêtre)
         if let Some((w, b, _)) = self.legend_now() {
+            if !self.s.legends_open.contains(&w) {
+                self.s.legends_open.push(w);
+                if self.s.legends_open.len() > 8 {
+                    self.s.legends_open.remove(0);
+                }
+            }
             if w != self.legend_seen {
                 self.legend_seen = w;
                 let left = (((w + 1) as f64 * 1_800_000.0 - now) / 60_000.0).ceil() as u64;
@@ -2289,6 +2363,7 @@ impl Game {
             25 => NOCTURNES.iter().any(|&c| s.dex2[c].n > 0),
             26 => s.streak >= 7,
             27 => s.captures >= 666,
+            28 => (0..CREATURES.len()).filter(|&i| CREATURES[i].b == LEGEND_B).all(|i| s.dex2[i].n > 0),
             _ => false,
         }
     }    fn check_achievements(&mut self) {
@@ -2525,6 +2600,13 @@ impl Game {
                     let cd = self.hunt_cooldown_ms();
                     self.s.biomes[b].as_mut().unwrap().hunt_at = now + cd;
                     self.s.hunts_done += 1;
+                    /* chaque battue remue le terrain : les légendes s'en
+                       approchent pendant une heure, et l'effet s'accumule */
+                    self.s.hunts_at.push(now);
+                    self.s.hunts_at.retain(|&t| now - t < HUNT_BUFF_MS);
+                    if self.s.hunts_at.len() > 32 {
+                        self.s.hunts_at.remove(0);
+                    }
                     self.log(vec![(format!("battue en {} : {} prise{}", BIOMES[b].name, hits, if hits > 1 { "s" } else { "" }), C::Green)]);
                     self.check_achievements();
                 }
@@ -2742,7 +2824,7 @@ impl Game {
                     }
                 }
             }
-            Action::LegendTry(biome, window, bait) => {
+            Action::LegendTry(_biome, window, bait) => {
                 if self.s.legends_tried.contains(&window) {
                     self.panels.pop();
                 } else {
@@ -2750,7 +2832,8 @@ impl Game {
                     if self.s.legends_tried.len() > 24 {
                         self.s.legends_tried.remove(0);
                     }
-                    let mut p = 0.25 + (self.global_luck() * 0.05).min(0.15);
+                    let mut p = 0.25 + (self.global_luck() * 0.05).min(0.15)
+                        + self.s.lab[LAB_APPROCHE] as f64 * 0.05;
                     let mut shiny_mult = 4.0;
                     if let Some(bt) = bait {
                         if self.s.baits[bt] > 0 {
@@ -2768,8 +2851,7 @@ impl Game {
                     }
                     let now = now_ms();
                     if rand::thread_rng().gen::<f64>() < p {
-                        let pool: Vec<usize> = biome_creatures(biome).filter(|&i| CREATURES[i].r >= 3).collect();
-                        let ci = pool[rand::thread_rng().gen_range(0..pool.len())];
+                        let ci = tirage_legende();
                         let rank = self.roll_rank(self.global_luck() + 0.5).max(2);
                         let shiny = rand::thread_rng().gen::<f64>() < (SHINY_BASE * shiny_mult).min(0.05);
                         self.add_specimen(ci, shiny, rank);
@@ -3075,13 +3157,33 @@ impl Game {
         out
     }
     /* légende errante : fenêtre de 30 min, 30% de chance, position fixe par biome */
+    /* battues encore actives : chacune tient une heure */
+    fn hunts_actives(&self, at: f64) -> usize {
+        self.s.hunts_at.iter().filter(|&&t| at - t < HUNT_BUFF_MS).count()
+    }
+    /* chance qu'une légende paraisse dans la demi-heure, en points de
+       pourcentage : 30 de base, la pression des battues, l'appel du labo. */
+    fn legend_chance(&self, at: f64) -> u64 {
+        let pression = (self.hunts_actives(at) as u64 * HUNT_BUFF_PTS).min(HUNT_BUFF_MAX);
+        let appel = self.s.lab[LAB_APPEL] as u64 * 4;
+        (30 + pression + appel).min(80)
+    }
+    /* la chance d'une approche à mains nues, appâts non compris */
+    fn legend_take_chance(&self) -> f64 {
+        0.25 + (self.global_luck() * 0.05).min(0.15) + self.s.lab[LAB_APPROCHE] as f64 * 0.05
+    }
     fn legend_now(&self) -> Option<(u64, usize, (usize, usize))> {
-        let w = (now_ms() / 1_800_000.0) as u64;
-        if splitmix(w ^ 0x1E9E17D) % 100 >= 30 {
+        let now = now_ms();
+        let w = (now / 1_800_000.0) as u64;
+        let tirage = splitmix(w ^ 0x1E9E17D) % 100;
+        /* une fenêtre déjà ouverte le reste : la silhouette ne disparaît pas
+           parce qu'une battue vient d'expirer */
+        if tirage >= self.legend_chance(now) && !self.s.legends_open.contains(&w) {
             return None;
         }
-        let unlocked: Vec<usize> = (0..BIOMES.len()).filter(|&b| self.s.biomes[b].is_some()).collect();
-        let b = unlocked[(splitmix(w ^ 0xB10) % unlocked.len() as u64) as usize];
+        /* les légendes ne connaissent pas les frontières : elles paraissent
+           aussi sur les terres qu'on n'a pas encore ouvertes */
+        let b = (splitmix(w ^ 0xB10) % WILDB as u64) as usize;
         if self.s.legends_tried.contains(&w) {
             return None;
         }
@@ -3540,7 +3642,15 @@ impl Game {
             self.panel_w,
             C::Dim,
         );
-        rows.push(Row::text(format!("créature épique ou légendaire — {} · rang A minimum", BIOMES[b].name), C::Gold));
+        rows.push(Row::text(
+            format!("légende errante — aperçue en {}{} · rang A minimum", BIOMES[b].name,
+                if self.s.biomes[b].is_none() { " (terre non ouverte)" } else { "" }),
+            C::Gold,
+        ));
+        rows.push(Row::text(
+            format!("chances d'approche : {}%", (self.legend_take_chance() * 100.0).round() as u64),
+            C::Dimmer,
+        ));
         rows.push(Row::text("", C::Dim));
         rows.push(Row {
             segs: vec![("approche à mains nues".into(), C::Text)],
@@ -3599,6 +3709,32 @@ impl Game {
             rows.push(Row::text(
                 format!("✧ une légende errante rôde en {} — encore {} min pour la trouver !", BIOMES[b].name, left),
                 C::Gold,
+            ));
+        }
+        /* la pression des battues : ce qu'elles rapportent vraiment, au-delà
+           des prises immédiates */
+        let actives = self.hunts_actives(now);
+        let chance = self.legend_chance(now);
+        if actives > 0 {
+            let reste = self
+                .s
+                .hunts_at
+                .iter()
+                .filter(|&&t| now - t < HUNT_BUFF_MS)
+                .map(|&t| ((t + HUNT_BUFF_MS - now) / 60_000.0).ceil() as u64)
+                .max()
+                .unwrap_or(0);
+            rows.push(Row::text(
+                format!(
+                    "battues actives : {} — légendes à {} chances sur 100 (la plus ancienne retombe dans {} min)",
+                    actives, chance, reste
+                ),
+                C::Gold,
+            ));
+        } else {
+            rows.push(Row::text(
+                format!("légendes : {} chances sur 100 par demi-heure — chaque battue en ajoute {}", chance, HUNT_BUFF_PTS),
+                C::Dimmer,
             ));
         }
         rows.push(Row::text("", C::Dim));
@@ -4179,7 +4315,9 @@ impl Game {
                 LAB_LIGNEES => format!("montée de rang : {}%", 35 + lv * 5),
                 LAB_TRAQUEUR => format!("battue toutes les {} s", 300 - lv * 30),
                 LAB_COURTAGE => format!("primes de contrats +{}%", lv * 15),
-                _ => format!("{} pièges posés autorisés", 2 + lv),
+                LAB_LICENCE => format!("{} pièges posés autorisés", 2 + lv),
+                LAB_APPEL => format!("légendes : {} chances sur 100", 30 + lv * 4),
+                _ => format!("approche des légendes +{}%", lv * 5),
             };
             rows.push(Row {
                 segs: vec![
@@ -4283,7 +4421,7 @@ impl Game {
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
             Row::text("colonnes : rareté · ×captures · ⋆shinies · [rang] · sexes vus · réserve", C::Dimmer),
         ];
-        for b in biomes_par_prix().into_iter().chain(std::iter::once(CURIO_B)) {
+        for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B]) {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
             rows.push(Row::text("", C::Dim));
             rows.push(Row::header(&format!("{} — {}/{}{}", BIOMES[b].name, found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" })));
@@ -4522,9 +4660,9 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("sur le terrain"));
         for t in [
-            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo).",
+            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo). chaque battue remue le terrain : pendant une heure, les légendes ont +3 chances sur 100 de paraître, et les battues se cumulent.",
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
-            "légende errante : une silhouette ✧ apparaît parfois sur la carte. approchez-la et tentez votre chance — une seule fois. créature épique ou légendaire, rang A minimum.",
+            "légende errante : une silhouette ✧ paraît parfois sur la carte, 30 chances sur 100 par demi-heure — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
             "des traces fraîches ∵ apparaissent sur la carte : approchez-vous et faites Entrée pour les suivre. tout se joue immédiatement — trois fois sur cinq une prise offerte du biome, une fois sur sept une cache d'appâts, sinon la piste se perd. une trace ne se suit qu'une fois.",
             "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
@@ -5548,7 +5686,12 @@ pub fn run() -> std::io::Result<()> {
     game.welcome(fresh);
     if fresh {
         // première partie : ouvrir le guide directement
+        game.s.news_seen = VERSION.to_string();
         game.panels.push(Panel::new(PanelKind::Help));
+    } else if game.s.news_seen != VERSION {
+        // le jeu a changé depuis la dernière session : on montre ce qui est neuf
+        game.s.news_seen = VERSION.to_string();
+        game.panels.push(Panel::new(PanelKind::News));
     }
 
     let theme = Theme::detect();
@@ -5660,8 +5803,15 @@ mod webapp {
             let (mut game, fresh) = Game::new();
             game.run_offline();
             game.welcome(fresh);
+            /* première partie : le guide. sinon, si le jeu a changé depuis la
+               dernière session, on ouvre le journal des nouveautés — comme un
+               vrai jeu au premier lancement après une mise à jour. */
             if fresh {
+                game.s.news_seen = VERSION.to_string();
                 game.panels.push(Panel::new(PanelKind::Help));
+            } else if game.s.news_seen != VERSION {
+                game.s.news_seen = VERSION.to_string();
+                game.panels.push(Panel::new(PanelKind::News));
             }
             Web { game, theme: Theme::detect() }
         }
@@ -5984,7 +6134,15 @@ mod tests {
         for b in 0..WILDB {
             assert!(biome_creatures(b).count() > 0, "biome {} sans espèce", BIOMES[b].name);
         }
-        assert_eq!(wild_total() + 6, CREATURES.len(), "six curiosités hors bestiaire");
+        let curios = CREATURES.iter().filter(|c| c.b == CURIO_B).count();
+        let legendes = CREATURES.iter().filter(|c| c.b == LEGEND_B).count();
+        assert_eq!(curios, 6, "six curiosités au troc");
+        assert_eq!(legendes, 12, "douze légendes errantes");
+        assert_eq!(
+            wild_total() + curios + legendes,
+            CREATURES.len(),
+            "curiosités et légendes restent hors du bestiaire sauvage"
+        );
     }
 
     /* une partie neuve, sans toucher au disque : un piège en bois, la forêt
@@ -6321,5 +6479,58 @@ mod tests {
         let ligne = sels[p.sel].0;
         assert_eq!(ligne, derniere_ligne, "le haut devait boucler malgré le défilement");
         assert!(ligne >= p.scroll && ligne < p.scroll + p.inner, "la dernière entrée doit être à l'écran");
+    }
+
+    /* les battues doivent payer autrement qu'en prises immédiates : elles
+       attirent les légendes une heure durant, et l'effet se cumule. */
+    #[test]
+    fn les_battues_attirent_les_legendes() {
+        let mut g = jeu_neuf();
+        let t = 1_788_000_000_000.0;
+        assert_eq!(g.legend_chance(t), 30, "sans battue, la chance de base");
+
+        for _ in 0..3 {
+            g.s.hunts_at.push(t);
+        }
+        assert_eq!(g.legend_chance(t), 30 + 3 * HUNT_BUFF_PTS, "trois battues, trois fois le bonus");
+
+        for _ in 0..30 {
+            g.s.hunts_at.push(t);
+        }
+        assert_eq!(g.legend_chance(t), 30 + HUNT_BUFF_MAX, "le cumul reste plafonné");
+
+        assert_eq!(g.legend_chance(t + HUNT_BUFF_MS + 1.0), 30, "une heure plus tard, tout est retombé");
+
+        g.s.lab[LAB_APPEL] = 5;
+        assert_eq!(g.legend_chance(t + HUNT_BUFF_MS + 1.0), 50, "l'appel du labo s'ajoute à la base");
+        assert!(g.legend_chance(t) <= 80, "la chance reste bornée");
+    }
+
+    /* les légendes errantes n'appartiennent à aucun biome : aucun piège ne
+       doit pouvoir les sortir, et elles restent hors du bestiaire sauvage. */
+    #[test]
+    fn les_legendes_vivent_hors_des_biomes() {
+        let pantheon: Vec<usize> = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == LEGEND_B).collect();
+        assert_eq!(pantheon.len(), 12);
+        for &i in &pantheon {
+            assert!(!wild_species().any(|w| w == i), "{} compte à tort dans le bestiaire sauvage", CREATURES[i].n);
+            assert!(CREATURES[i].r >= 3, "une légende doit être au moins épique");
+        }
+        for b in 0..WILDB {
+            assert!(biome_creatures(b).all(|i| CREATURES[i].b != LEGEND_B));
+        }
+        // et le tirage d'une approche ne sort jamais du panthéon
+        for _ in 0..200 {
+            assert_eq!(CREATURES[tirage_legende()].b, LEGEND_B);
+        }
+    }
+
+    /* une silhouette peut paraître sur une terre non ouverte : c'est ce qui
+       donne envie d'aller voir avant d'en avoir les moyens. */
+    #[test]
+    fn les_silhouettes_ignorent_les_frontieres() {
+        let vus: std::collections::HashSet<usize> =
+            (0..500u64).map(|w| (splitmix(w ^ 0xB10) % WILDB as u64) as usize).collect();
+        assert_eq!(vus.len(), WILDB, "tous les biomes doivent pouvoir accueillir une légende");
     }
 }
