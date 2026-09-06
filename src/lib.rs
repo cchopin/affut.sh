@@ -366,7 +366,7 @@ const LABS: [LabDef; 15] = [
     LabDef { n: "traqueur",        max: 5,  base: 4000.0, mult: 2.2, desc: "meilleure endurance : le repos entre deux battues diminue de 30 s par niveau (5 min de base)." },
     LabDef { n: "courtage",        max: 5,  base: 6000.0, mult: 2.3, desc: "carnet d'adresses : les primes de contrats augmentent de 15% par niveau." },
     LabDef { n: "licence de piégeage", max: 6, base: 3000.0, mult: 2.6, desc: "l'administration est tatillonne : 2 pièges posés autorisés de base, +1 par niveau." },
-    LabDef { n: "appel des légendes", max: 5, base: 25000.0, mult: 2.7, desc: "des appeaux qui portent loin : +4 points de chance qu'une légende errante paraisse (30 de base, et vos battues s'y ajoutent)." },
+    LabDef { n: "appel des légendes", max: 5, base: 25000.0, mult: 2.7, desc: "des appeaux qui portent loin : +1,3 point de chance qu'une légende errante paraisse à chaque tirage (10% de base, et vos battues s'y ajoutent)." },
     LabDef { n: "approche silencieuse", max: 5, base: 35000.0, mult: 2.7, desc: "on apprend à ne plus faire craquer les branches : +5% de réussite face à une légende." },
 ];
 const LAB_AFFUTAGE: usize = 0;
@@ -442,8 +442,17 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.16";
-const NEWS: [(&str, &str, &[&str]); 17] = [
+const VERSION: &str = "1.17";
+const NEWS: [(&str, &str, &[&str]); 18] = [
+    (
+        "1.17",
+        "3 septembre 2026",
+        &[
+            "les légendes se tirent maintenant toutes les 10 minutes au lieu de toutes les 30, à 10 chances sur 100 par tirage : le rythme quotidien ne change pas, mais une battue se fait sentir tout de suite au lieu d'attendre la demi-heure suivante.",
+            "en échange, la silhouette ne reste que ces dix minutes-là. il faut être présent pour la croiser — c'est le but.",
+            "les battues ajoutent +1 point par tirage pendant une heure, cumulables jusqu'à +8, et l'appel du labo +1,3 point par niveau. tout à fond, on passe de 14 à plus de 40 silhouettes par jour.",
+        ],
+    ),
     (
         "1.16",
         "3 septembre 2026",
@@ -616,11 +625,22 @@ const RANK_NAMES: [&str; 4] = ["C", "B", "A", "S"];
 const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 /* position de la légende errante dans chaque biome */
 const LEGEND_SPOTS: [(usize, usize); 11] = [(16, 26), (16, 48), (52, 8), (95, 10), (16, 7), (95, 64), (52, 68), (95, 34), (16, 68), (30, 50), (52, 29)];
-/* une battue attire les légendes une heure durant, +3 points par battue et
-   jusqu'à +24 : huit battues suffisent à doubler presque la chance de base. */
+/* les légendes se tirent souvent et faiblement plutôt que rarement et fort :
+   un tirage toutes les 10 minutes rend la pression des battues sensible tout
+   de suite, au lieu d'attendre la demi-heure suivante. la silhouette ne reste
+   que le temps de sa fenêtre : il faut être là pour la voir, c'est tout
+   l'intérêt. les chances se comptent pour mille, la finesse du dixième de
+   point servant à répartir l'effet des battues et du labo. */
+const LEGEND_WINDOW_MS: f64 = 600_000.0;
+const LEGEND_LINGER: u64 = 1;
+const LEGEND_BASE_PM: u64 = 100;
+const LEGEND_MAX_PM: u64 = 300;
+const LAB_APPEL_PM: u64 = 13;
+/* une battue attire les légendes une heure durant, et l'effet se cumule
+   jusqu'à huit battues — de quoi presque doubler la chance de base. */
 const HUNT_BUFF_MS: f64 = 3_600_000.0;
-const HUNT_BUFF_PTS: u64 = 3;
-const HUNT_BUFF_MAX: u64 = 24;
+const HUNT_BUFF_PM: u64 = 10;
+const HUNT_BUFF_MAX_PM: u64 = 80;
 /* durée de couvaison à l'enclos, par rareté (minutes) */
 const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
@@ -2146,7 +2166,7 @@ impl Game {
             }
             if w != self.legend_seen {
                 self.legend_seen = w;
-                let left = (((w + 1) as f64 * 1_800_000.0 - now) / 60_000.0).ceil() as u64;
+                let left = self.legend_left_min(w, now);
                 self.log(vec![
                     ("✧ une silhouette immense rôde ".into(), C::Gold),
                     (format!("en {} — {} min pour la trouver (repérez le ✧ sur l'étiquette du biome) !", BIOMES[b].name, left), C::Gold),
@@ -3161,34 +3181,45 @@ impl Game {
     fn hunts_actives(&self, at: f64) -> usize {
         self.s.hunts_at.iter().filter(|&&t| at - t < HUNT_BUFF_MS).count()
     }
-    /* chance qu'une légende paraisse dans la demi-heure, en points de
-       pourcentage : 30 de base, la pression des battues, l'appel du labo. */
+    /* chance qu'une légende paraisse à un tirage (toutes les 10 min), pour
+       mille : 100 de base, la pression des battues, l'appel du labo. */
     fn legend_chance(&self, at: f64) -> u64 {
-        let pression = (self.hunts_actives(at) as u64 * HUNT_BUFF_PTS).min(HUNT_BUFF_MAX);
-        let appel = self.s.lab[LAB_APPEL] as u64 * 4;
-        (30 + pression + appel).min(80)
+        let pression = (self.hunts_actives(at) as u64 * HUNT_BUFF_PM).min(HUNT_BUFF_MAX_PM);
+        let appel = self.s.lab[LAB_APPEL] as u64 * LAB_APPEL_PM;
+        (LEGEND_BASE_PM + pression + appel).min(LEGEND_MAX_PM)
     }
     /* la chance d'une approche à mains nues, appâts non compris */
     fn legend_take_chance(&self) -> f64 {
         0.25 + (self.global_luck() * 0.05).min(0.15) + self.s.lab[LAB_APPROCHE] as f64 * 0.05
     }
+    /* la silhouette du tirage en cours, s'il y en a une : elle ne survit pas à
+       sa fenêtre de dix minutes — on ne la croise qu'en jouant. */
     fn legend_now(&self) -> Option<(u64, usize, (usize, usize))> {
         let now = now_ms();
-        let w = (now / 1_800_000.0) as u64;
-        let tirage = splitmix(w ^ 0x1E9E17D) % 100;
-        /* une fenêtre déjà ouverte le reste : la silhouette ne disparaît pas
-           parce qu'une battue vient d'expirer */
-        if tirage >= self.legend_chance(now) && !self.s.legends_open.contains(&w) {
-            return None;
+        let w = (now / LEGEND_WINDOW_MS) as u64;
+        let seuil = self.legend_chance(now);
+        for k in (0..LEGEND_LINGER).rev() {
+            let Some(cand) = w.checked_sub(k) else { continue };
+            if self.s.legends_tried.contains(&cand) {
+                continue;
+            }
+            /* un tirage déjà sorti le reste : la silhouette ne s'évanouit pas
+               parce qu'une battue vient d'expirer */
+            let tirage = splitmix(cand ^ 0x1E9E17D) % 1000;
+            if tirage >= seuil && !self.s.legends_open.contains(&cand) {
+                continue;
+            }
+            /* les légendes ne connaissent pas les frontières : elles paraissent
+               aussi sur les terres qu'on n'a pas encore ouvertes */
+            let b = (splitmix(cand ^ 0xB10) % WILDB as u64) as usize;
+            let (lx, ly) = LEGEND_SPOTS[b];
+            return Some((cand, b, self.spot_foulable(lx, ly)));
         }
-        /* les légendes ne connaissent pas les frontières : elles paraissent
-           aussi sur les terres qu'on n'a pas encore ouvertes */
-        let b = (splitmix(w ^ 0xB10) % WILDB as u64) as usize;
-        if self.s.legends_tried.contains(&w) {
-            return None;
-        }
-        let (lx, ly) = LEGEND_SPOTS[b];
-        Some((w, b, self.spot_foulable(lx, ly)))
+        None
+    }
+    /* minutes restantes avant que la silhouette du tirage w s'en aille */
+    fn legend_left_min(&self, w: u64, now: f64) -> u64 {
+        ((((w + LEGEND_LINGER) as f64 * LEGEND_WINDOW_MS) - now) / 60_000.0).ceil().max(0.0) as u64
     }
 
     fn interact(&mut self) {
@@ -3705,7 +3736,7 @@ impl Game {
             ));
         }
         if let Some((wid, b, _)) = self.legend_now() {
-            let left = (((wid + 1) as f64 * 1_800_000.0 - now) / 60_000.0).ceil() as u64;
+            let left = self.legend_left_min(wid, now);
             rows.push(Row::text(
                 format!("✧ une légende errante rôde en {} — encore {} min pour la trouver !", BIOMES[b].name, left),
                 C::Gold,
@@ -3714,7 +3745,7 @@ impl Game {
         /* la pression des battues : ce qu'elles rapportent vraiment, au-delà
            des prises immédiates */
         let actives = self.hunts_actives(now);
-        let chance = self.legend_chance(now);
+        let chance = fmt2(self.legend_chance(now) as f64 / 10.0);
         if actives > 0 {
             let reste = self
                 .s
@@ -3726,14 +3757,18 @@ impl Game {
                 .unwrap_or(0);
             rows.push(Row::text(
                 format!(
-                    "battues actives : {} — légendes à {} chances sur 100 (la plus ancienne retombe dans {} min)",
+                    "battues actives : {} — légendes à {}% par tirage, toutes les 10 min (la plus ancienne retombe dans {} min)",
                     actives, chance, reste
                 ),
                 C::Gold,
             ));
         } else {
             rows.push(Row::text(
-                format!("légendes : {} chances sur 100 par demi-heure — chaque battue en ajoute {}", chance, HUNT_BUFF_PTS),
+                format!(
+                    "légendes : {}% par tirage, toutes les 10 min — chaque battue ajoute {}% pendant une heure",
+                    chance,
+                    fmt2(HUNT_BUFF_PM as f64 / 10.0)
+                ),
                 C::Dimmer,
             ));
         }
@@ -4316,7 +4351,7 @@ impl Game {
                 LAB_TRAQUEUR => format!("battue toutes les {} s", 300 - lv * 30),
                 LAB_COURTAGE => format!("primes de contrats +{}%", lv * 15),
                 LAB_LICENCE => format!("{} pièges posés autorisés", 2 + lv),
-                LAB_APPEL => format!("légendes : {} chances sur 100", 30 + lv * 4),
+                LAB_APPEL => format!("légendes : {}% par tirage", fmt2((LEGEND_BASE_PM + lv as u64 * LAB_APPEL_PM) as f64 / 10.0)),
                 _ => format!("approche des légendes +{}%", lv * 5),
             };
             rows.push(Row {
@@ -4660,9 +4695,9 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("sur le terrain"));
         for t in [
-            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo). chaque battue remue le terrain : pendant une heure, les légendes ont +3 chances sur 100 de paraître, et les battues se cumulent.",
+            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo). chaque battue remue le terrain : pendant une heure, chaque tirage de légende gagne +1 point (10% de base), et les battues se cumulent jusqu'à +8.",
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
-            "légende errante : une silhouette ✧ paraît parfois sur la carte, 30 chances sur 100 par demi-heure — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
+            "légende errante : une silhouette ✧ paraît parfois sur la carte — un tirage toutes les 10 min, 10 chances sur 100, et elle ne reste que ces dix minutes-là — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
             "des traces fraîches ∵ apparaissent sur la carte : approchez-vous et faites Entrée pour les suivre. tout se joue immédiatement — trois fois sur cinq une prise offerte du biome, une fois sur sept une cache d'appâts, sinon la piste se perd. une trace ne se suit qu'une fois.",
             "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
@@ -5282,7 +5317,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     );
     draw_str(buf, area, cols - cond.chars().count() as i32 - 3, sep_y, &cond, theme.style(C::Ice, false));
     if let Some((wid, lb, _)) = game.legend_now() {
-        let left = (((wid + 1) as f64 * 1_800_000.0 - nowc) / 60_000.0).ceil() as u64;
+        let left = game.legend_left_min(wid, nowc);
         let lg = format!(" ✧ légende en {} ({} min) ", BIOMES[lb].name, left);
         let lx = cols - cond.chars().count() as i32 - lg.chars().count() as i32 - 4;
         draw_str(buf, area, lx, sep_y, &lg, theme.style(C::Gold, false));
@@ -6487,23 +6522,33 @@ mod tests {
     fn les_battues_attirent_les_legendes() {
         let mut g = jeu_neuf();
         let t = 1_788_000_000_000.0;
-        assert_eq!(g.legend_chance(t), 30, "sans battue, la chance de base");
+        assert_eq!(g.legend_chance(t), LEGEND_BASE_PM, "sans battue, la chance de base");
 
         for _ in 0..3 {
             g.s.hunts_at.push(t);
         }
-        assert_eq!(g.legend_chance(t), 30 + 3 * HUNT_BUFF_PTS, "trois battues, trois fois le bonus");
+        assert_eq!(g.legend_chance(t), LEGEND_BASE_PM + 3 * HUNT_BUFF_PM, "trois battues, trois fois le bonus");
 
         for _ in 0..30 {
             g.s.hunts_at.push(t);
         }
-        assert_eq!(g.legend_chance(t), 30 + HUNT_BUFF_MAX, "le cumul reste plafonné");
+        assert_eq!(g.legend_chance(t), LEGEND_BASE_PM + HUNT_BUFF_MAX_PM, "le cumul reste plafonné");
 
-        assert_eq!(g.legend_chance(t + HUNT_BUFF_MS + 1.0), 30, "une heure plus tard, tout est retombé");
+        assert_eq!(g.legend_chance(t + HUNT_BUFF_MS + 1.0), LEGEND_BASE_PM, "une heure plus tard, tout est retombé");
 
         g.s.lab[LAB_APPEL] = 5;
-        assert_eq!(g.legend_chance(t + HUNT_BUFF_MS + 1.0), 50, "l'appel du labo s'ajoute à la base");
-        assert!(g.legend_chance(t) <= 80, "la chance reste bornée");
+        assert_eq!(
+            g.legend_chance(t + HUNT_BUFF_MS + 1.0),
+            LEGEND_BASE_PM + 5 * LAB_APPEL_PM,
+            "l'appel du labo s'ajoute à la base"
+        );
+        assert!(g.legend_chance(t) <= LEGEND_MAX_PM, "la chance reste bornée");
+
+        /* le rythme visé : une quinzaine de silhouettes par jour sans rien
+           faire, une quarantaine en jouant à fond */
+        let par_jour = |pm: u64| 86_400_000.0 / LEGEND_WINDOW_MS * pm as f64 / 1000.0;
+        assert!((par_jour(LEGEND_BASE_PM) - 14.4).abs() < 0.1);
+        assert!(par_jour(LEGEND_MAX_PM) < 45.0);
     }
 
     /* les légendes errantes n'appartiennent à aucun biome : aucun piège ne
@@ -6532,5 +6577,41 @@ mod tests {
         let vus: std::collections::HashSet<usize> =
             (0..500u64).map(|w| (splitmix(w ^ 0xB10) % WILDB as u64) as usize).collect();
         assert_eq!(vus.len(), WILDB, "tous les biomes doivent pouvoir accueillir une légende");
+    }
+
+    /* la silhouette ne dure que sa fenêtre : c'est ce qui récompense la
+       présence plutôt que le passage une fois par jour. */
+    #[test]
+    fn une_silhouette_ne_dure_que_sa_fenetre() {
+        let g = jeu_neuf();
+        let w = 1_000_000u64;
+        assert_eq!(g.legend_left_min(w, w as f64 * LEGEND_WINDOW_MS), 10, "dix minutes en tout");
+        assert_eq!(g.legend_left_min(w, w as f64 * LEGEND_WINDOW_MS + 300_000.0), 5, "cinq à mi-parcours");
+        assert_eq!(g.legend_left_min(w, (w + LEGEND_LINGER) as f64 * LEGEND_WINDOW_MS), 0, "puis elle s'en va");
+    }
+
+    /* le rythme visé, mesuré sur trente jours de tirages : une douzaine de
+       silhouettes par jour sans rien faire, le double en enchaînant les
+       battues. la garde attrape un déréglage des constantes. */
+    #[test]
+    fn le_rythme_des_legendes_reste_dans_sa_fourchette() {
+        let par_jour = |pm: u64| {
+            let w0 = (now_ms() / LEGEND_WINDOW_MS) as u64;
+            let (mut visibles, mut fin) = (0u32, 0u64);
+            for k in 0..144u64 * 30 {
+                let w = w0 + k;
+                if splitmix(w ^ 0x1E9E17D) % 1000 < pm && w >= fin {
+                    visibles += 1;
+                    fin = w + LEGEND_LINGER;
+                }
+            }
+            visibles as f64 / 30.0
+        };
+        let base = par_jour(LEGEND_BASE_PM);
+        let battues = par_jour(LEGEND_BASE_PM + HUNT_BUFF_MAX_PM);
+        let max = par_jour(LEGEND_MAX_PM);
+        assert!((12.0..17.0).contains(&base), "sans rien faire : {:.1} silhouettes par jour", base);
+        assert!(battues > base * 1.6, "les battues doivent peser : {:.1} contre {:.1}", battues, base);
+        assert!((38.0..48.0).contains(&max), "tout à fond : {:.1} silhouettes par jour", max);
     }
 }
