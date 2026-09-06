@@ -442,8 +442,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.17";
-const NEWS: [(&str, &str, &[&str]); 18] = [
+const VERSION: &str = "1.18";
+const NEWS: [(&str, &str, &[&str]); 19] = [
+    (
+        "1.18",
+        "6 septembre 2026",
+        &[
+            "le labo annonçait des effets qu'il n'appliquait pas : la colonne de droite promettait +8% de négoce par niveau au lieu de +5, +15% de chance de shiny au lieu de +10, +0,06 de flair au lieu de +0,08 et 35% de montée de rang à l'enclos au lieu de 25. les descriptions, elles, étaient justes : ce sont bien elles que le jeu applique. merci à Drasaerys pour l'œil.",
+            "la licence de piégeage compte enfin les licences achetées au marchand dans le nombre de pièges autorisés qu'elle affiche.",
+        ],
+    ),
     (
         "1.17",
         "3 septembre 2026",
@@ -4339,18 +4347,18 @@ impl Game {
             let ok = self.s.ecus >= cost;
             let fx = match k {
                 LAB_AFFUTAGE => format!("vitesse des pièges +{}%", lv * 6),
-                LAB_FLAIR => format!("chance +{}", fmt2(lv as f64 * 0.06)),
-                LAB_NEGOCE => format!("prix de vente +{}%", lv * 8),
+                LAB_FLAIR => format!("chance +{}", fmt2(lv as f64 * 0.08)),
+                LAB_NEGOCE => format!("prix de vente +{}%", lv * 5),
                 LAB_HORLOGE => format!("hors-ligne : {} h max", 2 + lv * 2),
-                LAB_ECLAT => format!("chance de shiny +{}%", lv * 15),
+                LAB_ECLAT => format!("chance de shiny +{}%", lv * 10),
                 LAB_AUTOVENTE => if lv > 0 { "filtres débloqués".into() } else { "non débloquée".into() },
                 LAB_CONSERVATION => format!("cagnotte du musée : {} h max", 4 + lv * 2),
                 LAB_AILES => format!("{} salles au musée", 6 + lv),
                 LAB_ENCLOS => format!("{} enclos", 3 + lv),
-                LAB_LIGNEES => format!("montée de rang : {}%", 35 + lv * 5),
+                LAB_LIGNEES => format!("montée de rang : {}%", 25 + lv * 4),
                 LAB_TRAQUEUR => format!("battue toutes les {} s", 300 - lv * 30),
                 LAB_COURTAGE => format!("primes de contrats +{}%", lv * 15),
-                LAB_LICENCE => format!("{} pièges posés autorisés", 2 + lv),
+                LAB_LICENCE => format!("{} pièges posés autorisés", 2 + lv + self.s.licences),
                 LAB_APPEL => format!("légendes : {}% par tirage", fmt2((LEGEND_BASE_PM + lv as u64 * LAB_APPEL_PM) as f64 / 10.0)),
                 _ => format!("approche des légendes +{}%", lv * 5),
             };
@@ -4717,8 +4725,9 @@ impl Game {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
         rows.extend(bullet_rows("· ", &format!(
-            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). 35% de chance de monter d'un rang, shiny ×3. les parents (plus bas rangs de chaque sexe) sont consommés.",
-            (0..5).map(|r| format!("{} {} min", RAR_LABEL[r], PEN_MIN[r] as u64)).collect::<Vec<_>>().join(" · ")), w, C::Dim));
+            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées), shiny ×3. les parents (plus bas rangs de chaque sexe) sont consommés.",
+            (0..5).map(|r| format!("{} {} min", RAR_LABEL[r], PEN_MIN[r] as u64)).collect::<Vec<_>>().join(" · "),
+            (self.pen_rankup() * 100.0).round() as u64), w, C::Dim));
 
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("la migration"));
@@ -6613,5 +6622,35 @@ mod tests {
         assert!((12.0..17.0).contains(&base), "sans rien faire : {:.1} silhouettes par jour", base);
         assert!(battues > base * 1.6, "les battues doivent peser : {:.1} contre {:.1}", battues, base);
         assert!((38.0..48.0).contains(&max), "tout à fond : {:.1} silhouettes par jour", max);
+    }
+
+    /* la colonne d'effet du labo doit sortir des mêmes formules que le jeu :
+       elle annonçait +8% de négoce pour +5% réels, +15% d'éclat pour +10%,
+       +0,06 de flair pour +0,08 et 35% de montée de rang pour 25%. */
+    #[test]
+    fn le_labo_annonce_ses_effets_reels() {
+        let mut g = jeu_neuf();
+        for (k, niveau) in [(LAB_NEGOCE, 4), (LAB_FLAIR, 4), (LAB_ECLAT, 3), (LAB_LIGNEES, 4), (LAB_AFFUTAGE, 3)] {
+            g.s.lab[k] = niveau;
+        }
+        // ce que le jeu applique vraiment
+        assert!((g.sell_mult() - 1.20).abs() < 1e-9, "négoce : +5% par niveau");
+        assert!((g.global_luck() - 0.32).abs() < 1e-9, "flair : +0,08 par niveau");
+        assert!((g.pen_rankup() - 0.41).abs() < 1e-9, "lignées : 25% + 4% par niveau");
+        assert!((g.speed_mult() - 1.18).abs() < 1e-9, "affûtage : +6% par niveau");
+
+        // et ce que le panneau en dit
+        let (_, rows) = g.build_rows(&PanelKind::Lab);
+        let ligne = |nom: &str| -> String {
+            rows.iter()
+                .find(|r| r.segs.first().map(|(t, _)| t.trim_end().starts_with(nom)).unwrap_or(false))
+                .map(|r| r.segs.iter().map(|(t, _)| t.clone()).collect::<String>())
+                .unwrap_or_else(|| panic!("ligne « {} » introuvable au labo", nom))
+        };
+        assert!(ligne("négoce").contains("+20%"), "négoce affiché : {}", ligne("négoce"));
+        assert!(ligne("flair").contains("+0,32"), "flair affiché : {}", ligne("flair"));
+        assert!(ligne("chasse nocturne").contains("+30%"), "éclat affiché : {}", ligne("chasse nocturne"));
+        assert!(ligne("lignées").contains("41%"), "lignées affiché : {}", ligne("lignées"));
+        assert!(ligne("affûtage").contains("+18%"), "affûtage affiché : {}", ligne("affûtage"));
     }
 }
