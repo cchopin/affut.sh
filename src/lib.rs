@@ -86,7 +86,7 @@ const BIOMES: [BiomeDef; 13] = [
     BiomeDef { name: "ruines",   cost: 440000000.0, mult: 20.0, desc: "ce qu'il reste d'avant. dix espèces s'y accrochent, dont certaines depuis trop longtemps." },
     BiomeDef { name: "rivière",  cost: 900.0,       mult: 1.3, desc: "elle descend de la montagne et traverse tout. neuf espèces la remontent, personne ne sait pourquoi." },
     BiomeDef { name: "lac",      cost: 45000.0,     mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
-    BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 1.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
+    BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 10.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
     BiomeDef { name: "légendes",   cost: f64::INFINITY, mult: 18.0, desc: "elles ne vivent nulle part et passent partout. on ne les croise qu'en silhouette, une fois de temps en temps." },
 ];
 
@@ -453,8 +453,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.19";
-const NEWS: [(&str, &str, &[&str]); 20] = [
+const VERSION: &str = "1.20";
+const NEWS: [(&str, &str, &[&str]); 21] = [
+    (
+        "1.20",
+        "8 septembre 2026",
+        &[
+            "les curiosités et les légendes se vendent enfin à la boutique : la liste ne parcourait que les biomes, si bien qu'un doublon restait coincé en réserve sans emploi. la découverte, elle, reste acquise au bestiaire — vendre un doublon ne coûte aucun point au palmarès.",
+            "une curiosité vaut désormais dix fois sa valeur de base au lieu d'une : de quoi rendre un doublon intéressant, sans que le troc rapporte plus qu'il ne coûte.",
+        ],
+    ),
     (
         "1.19",
         "8 septembre 2026",
@@ -4293,7 +4301,10 @@ impl Game {
             ) {
                 rows.push(r);
             }
-            for b in biomes_par_prix() {
+            /* les espèces hors biome se vendent comme les autres : un doublon
+               de curiosité ou de légende n'a aucune raison de rester coincé en
+               réserve, la découverte étant déjà acquise au bestiaire */
+            for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B]) {
                 let mut list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
                 if list.is_empty() {
                     continue;
@@ -6702,5 +6713,38 @@ mod tests {
         assert!(ligne("chasse nocturne").contains("+30%"), "éclat affiché : {}", ligne("chasse nocturne"));
         assert!(ligne("lignées").contains("41%"), "lignées affiché : {}", ligne("lignées"));
         assert!(ligne("affûtage").contains("+18%"), "affûtage affiché : {}", ligne("affûtage"));
+    }
+
+    /* un doublon de curiosité ou de légende doit pouvoir se revendre : la
+       découverte reste acquise au bestiaire, le spécimen n'a plus d'usage. */
+    #[test]
+    fn les_especes_hors_biome_se_vendent() {
+        let mut g = jeu_neuf();
+        let curio = (0..CREATURES.len()).find(|&i| CREATURES[i].b == CURIO_B && CREATURES[i].r == 4).unwrap();
+        let legende = (0..CREATURES.len()).find(|&i| CREATURES[i].b == LEGEND_B).unwrap();
+        g.add_specimen(curio, false, 0);
+        g.add_specimen(legende, false, 0);
+
+        let (_, rows) = g.build_rows(&PanelKind::Shop);
+        let texte: String = rows
+            .iter()
+            .flat_map(|r| r.segs.iter().map(|(t, _)| t.clone()))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(texte.contains(CREATURES[curio].n), "la curiosité doit apparaître à la vente");
+        assert!(texte.contains(CREATURES[legende].n), "la légende doit apparaître à la vente");
+
+        /* et le prix ne doit pas être dérisoire : une curiosité légendaire vaut
+           au moins ce que rapporte une épique du désert */
+        let deserte = (0..CREATURES.len()).find(|&i| BIOMES[CREATURES[i].b].name == "désert" && CREATURES[i].r == 3).unwrap();
+        assert!(
+            g.creature_value(curio, false) > g.creature_value(deserte, false),
+            "curiosité légendaire {} contre épique du désert {}",
+            g.creature_value(curio, false),
+            g.creature_value(deserte, false)
+        );
+        /* mais le troc ne doit pas devenir une planche à billets : la revente
+           reste sous le prix des spécimens qu'il faut donner */
+        assert!(g.creature_value(curio, false) < 2600.0 * 4.0, "une curiosité ne doit pas payer plus qu'elle ne coûte");
     }
 }
