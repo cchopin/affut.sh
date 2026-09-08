@@ -459,7 +459,7 @@ const NEWS: [(&str, &str, &[&str]); 20] = [
         "1.19",
         "8 septembre 2026",
         &[
-            "le troc rapporte enfin au palmarès : chaque curiosité vaut 500 points et chaque légende errante 1000. elles ne se revendent pas et ne comptent pas parmi les espèces, il n'y avait donc aucune raison d'en chercher une deuxième.",
+            "le troc rapporte enfin au palmarès : chaque curiosité vaut 500 points et chaque légende errante 1000. elles ne se revendent pas et ne comptent pas parmi les espèces, il n'y avait donc aucune raison d'en chercher une deuxième. merci à ook pour la remarque.",
             "le classement affiche deux colonnes de plus, curiosités et légendes, avec leur total à atteindre.",
         ],
     ),
