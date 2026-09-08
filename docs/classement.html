@@ -68,6 +68,8 @@
           <th data-k="captures">captures</th>
           <th data-k="shinies">shinies ⋆</th>
           <th data-k="rangs">cote</th>
+          <th data-k="curiosites">curiosités</th>
+          <th data-k="legendes">légendes ✧</th>
           <th data-k="ecus">écus gagnés</th>
           <th data-k="trophees">trophées</th>
           <th data-k="at">vu</th>
@@ -77,7 +79,8 @@
     </table>
   </div>
   <footer>
-    <span class="dim">score = espèces×100 + shinies×300 + cote×40 + trophées×1000 + écus gagnés÷1000.
+    <span class="dim">score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + légendes×1000 + trophées×1000 + écus gagnés÷1000.
+    les curiosités s'obtiennent au troc et les légendes ✧ en approchant une silhouette : aucune ne se capture au piège, aucune n'entre dans le compte des espèces.
     la « cote » additionne le meilleur rang obtenu (C=1 … S=4) sur chaque espèce découverte.</span><br>
     <span class="dim">pour apparaître ici : ouvrez le jeu, cliquez « ⇄ session partagée » et choisissez un pseudo.
     les scores sont déclarés par le navigateur de chaque joueur — c'est un tableau d'honneur entre amis, pas un juge.</span>
@@ -86,6 +89,8 @@
 <script type="module">
 const API = 'https://vps.tely.info:8444/lb';
 const TOTAL_ESPECES = 114;
+const TOTAL_CURIOSITES = 6;
+const TOTAL_LEGENDES = 12;
 let data = [], key = 'score', desc = true;
 
 const fmt = n => {
@@ -131,6 +136,8 @@ function render() {
     cell(tr, fmt(e.captures));
     cell(tr, fmt(e.shinies), 'shiny');
     cell(tr, fmt(e.rangs));
+    cell(tr, Math.floor(e.curiosites || 0) + '/' + TOTAL_CURIOSITES);
+    cell(tr, Math.floor(e.legendes || 0) + '/' + TOTAL_LEGENDES, 'shiny');
     cell(tr, fmt(e.ecus));
     cell(tr, fmt(e.trophees));
     cell(tr, ago(e.at), 'dim');

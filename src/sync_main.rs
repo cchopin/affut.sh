@@ -145,12 +145,12 @@ fn borner_stats(
     prec: Option<&serde_json::Value>,
     now: f64,
 ) -> bool {
-    let brut: Vec<f64> = ["captures", "especes", "rangs", "shinies", "ecus", "migrations", "trophees"]
+    let brut: Vec<f64> = ["captures", "especes", "rangs", "shinies", "ecus", "migrations", "trophees", "curiosites", "legendes"]
         .iter()
         .map(|k| lire_nb(e, k))
         .collect();
-    let (b_capt, b_esp, b_rang, b_shi, b_ecus, b_migr, b_tro) =
-        (brut[0], brut[1], brut[2], brut[3], brut[4], brut[5], brut[6]);
+    let (b_capt, b_esp, b_rang, b_shi, b_ecus, b_migr, b_tro, b_curio, b_leg) =
+        (brut[0], brut[1], brut[2], brut[3], brut[4], brut[5], brut[6], brut[7], brut[8]);
 
     /* âge de la partie, avance comprise */
     let age_s = (((now - premier_at).max(0.0) + AVANCE_MS) / 1000.0).max(1.0);
@@ -207,6 +207,10 @@ fn borner_stats(
     /* à gains totaux donnés, la somme des √ est maximale quand les gains sont
        répartis également entre les migrations, soit √(migrations × gains / 1 M) */
     let trophees = b_tro.min((migrations * ecus / ECUS_PAR_TROPHEE).sqrt().floor());
+    /* espèces hors biome : leur nombre est fini, et une curiosité s'échange
+       contre des doublons — donc contre des captures */
+    let curiosites = b_curio.min(affut::curiosites_max() as f64).min(captures);
+    let legendes = b_leg.min(affut::legendes_max() as f64).min(captures);
 
     if std::env::var("AFFUT_DEBUG_BORNES").is_ok() {
         eprintln!(
@@ -217,18 +221,26 @@ fn borner_stats(
     let borne = [
         (captures, b_capt), (especes, b_esp), (rangs, b_rang), (shinies, b_shi),
         (ecus, b_ecus), (migrations, b_migr), (trophees, b_tro),
+        (curiosites, b_curio), (legendes, b_leg),
     ];
     let suspect = borne.iter().any(|(apres, avant)| apres < avant);
 
     for (k, v) in [
         ("captures", captures), ("especes", especes), ("rangs", rangs),
         ("shinies", shinies), ("ecus", ecus), ("migrations", migrations),
-        ("trophees", trophees),
+        ("trophees", trophees), ("curiosites", curiosites), ("legendes", legendes),
     ] {
         e.insert(k.into(), serde_json::json!(v));
     }
     /* le score n'est jamais celui du client */
-    let score = (especes * 100.0 + shinies * 300.0 + rangs * 40.0 + trophees * 1000.0 + ecus / 1000.0).floor();
+    let score = (especes * 100.0
+        + shinies * 300.0
+        + rangs * 40.0
+        + curiosites * affut::PTS_CURIOSITE
+        + legendes * affut::PTS_LEGENDE
+        + trophees * 1000.0
+        + ecus / 1000.0)
+        .floor();
     e.insert("score".into(), serde_json::json!(score));
     suspect
 }
@@ -490,7 +502,7 @@ fn main() {
                une fois posée, elle ne bouge plus. */
             let premier_at = g("premier_at").and_then(|x| x.as_f64()).filter(|n| n.is_finite()).unwrap_or(now);
             entry.insert("premier_at".into(), serde_json::json!(premier_at));
-            for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "migrations"] {
+            for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "migrations", "curiosites", "legendes"] {
                 let n = v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
                 let n = if n.is_finite() { n.clamp(0.0, 1e15).floor() } else { 0.0 };
                 entry.insert(k.into(), serde_json::json!(n));
@@ -836,5 +848,29 @@ mod tests {
         l["premier_at"] = serde_json::json!(1787340029702.0f64);
         assert!(entree_verifiee(&l).is_none(), "114 espèces le jour même doivent sortir");
     }
-}
 
+    /* les espèces hors biome pèsent au score, mais leur nombre est fini : on
+       ne déclare pas quinze curiosités quand il n'en existe que six. */
+    #[test]
+    fn les_especes_hors_biome_comptent_sans_deborder() {
+        let now = 1_787_339_565_576.0;
+        let mut e = entree(serde_json::json!({
+            "captures": 9000.0, "ecus": 600_000.0, "especes": 56.0, "rangs": 180.0,
+            "shinies": 15.0, "curiosites": 3.0, "legendes": 2.0
+        }));
+        assert!(!borner_stats(&mut e, now - 20.0 * JOUR, None, now), "une déclaration plausible passe");
+        assert_eq!(lire_nb(&e, "curiosites"), 3.0);
+        assert_eq!(lire_nb(&e, "legendes"), 2.0);
+        let attendu = 56.0 * 100.0 + 15.0 * 300.0 + 180.0 * 40.0
+            + 3.0 * affut::PTS_CURIOSITE + 2.0 * affut::PTS_LEGENDE + 600.0;
+        assert_eq!(lire_nb(&e, "score"), attendu, "le score compte les deux lignes");
+
+        let mut trop = entree(serde_json::json!({
+            "captures": 9000.0, "ecus": 600_000.0, "especes": 56.0, "rangs": 180.0,
+            "shinies": 15.0, "curiosites": 40.0, "legendes": 99.0
+        }));
+        assert!(borner_stats(&mut trop, now - 20.0 * JOUR, None, now), "au-delà du possible, l'entrée est suspecte");
+        assert_eq!(lire_nb(&trop, "curiosites"), affut::curiosites_max() as f64);
+        assert_eq!(lire_nb(&trop, "legendes"), affut::legendes_max() as f64);
+    }
+}

@@ -290,6 +290,17 @@ pub fn biomes_par_prix() -> Vec<usize> {
 pub fn especes_hors_biome() -> usize {
     CREATURES.iter().filter(|c| c.b >= WILDB).count()
 }
+pub fn curiosites_max() -> usize {
+    CREATURES.iter().filter(|c| c.b == CURIO_B).count()
+}
+pub fn legendes_max() -> usize {
+    CREATURES.iter().filter(|c| c.b == LEGEND_B).count()
+}
+/* ce que valent au palmarès les espèces qu'aucun piège n'attrape : le troc
+   coûte des doublons et ne se revend pas, l'approche d'une légende se joue en
+   une seule fois. sans ligne au score, les deux ne paieraient jamais. */
+pub const PTS_CURIOSITE: f64 = 500.0;
+pub const PTS_LEGENDE: f64 = 1000.0;
 
 pub fn paliers_bestiaire() -> Vec<(f64, f64)> {
     biomes_par_prix()
@@ -442,8 +453,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.18";
-const NEWS: [(&str, &str, &[&str]); 19] = [
+const VERSION: &str = "1.19";
+const NEWS: [(&str, &str, &[&str]); 20] = [
+    (
+        "1.19",
+        "8 septembre 2026",
+        &[
+            "le troc rapporte enfin au palmarès : chaque curiosité vaut 500 points et chaque légende errante 1000. elles ne se revendent pas et ne comptent pas parmi les espèces, il n'y avait donc aucune raison d'en chercher une deuxième.",
+            "le classement affiche deux colonnes de plus, curiosités et légendes, avec leur total à atteindre.",
+        ],
+    ),
     (
         "1.18",
         "6 septembre 2026",
@@ -1652,6 +1671,10 @@ struct BoardRow {
     rangs: f64,
     #[serde(default)]
     trophees: f64,
+    #[serde(default)]
+    curiosites: f64,
+    #[serde(default)]
+    legendes: f64,
 }
 
 struct Game {
@@ -5036,10 +5059,27 @@ impl Game {
                 C::Dimmer,
             ));
         }
-        rows.push(Row::text(
-            "score = espèces×100 + shinies×300 + cote×40 + trophées×1000 + écus gagnés÷1000.",
+        rows.extend(bullet_rows(
+            "",
+            "score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + légendes×1000 + trophées×1000 + écus gagnés÷1000.",
+            self.panel_w,
             C::Dimmer,
         ));
+        if let Some(moi) = self.board.iter().find(|e| !self.board_me.is_empty() && e.pseudo == self.board_me) {
+            if moi.curiosites > 0.0 || moi.legendes > 0.0 {
+                rows.push(Row::text(
+                    format!(
+                        "vos {} curiosité{} et {} légende{} y pèsent {} points.",
+                        moi.curiosites as u64,
+                        if moi.curiosites > 1.0 { "s" } else { "" },
+                        moi.legendes as u64,
+                        if moi.legendes > 1.0 { "s" } else { "" },
+                        fmt(moi.curiosites * PTS_CURIOSITE + moi.legendes * PTS_LEGENDE)
+                    ),
+                    C::Gold,
+                ));
+            }
+        }
         (title, rows)
     }
 
@@ -5872,10 +5912,14 @@ mod webapp {
         pub fn lb_stats(&self) -> String {
             let s = &self.game.s;
             let especes = wild_species().filter(|&i| s.dex2[i].n > 0).count();
+            let curiosites = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == CURIO_B && s.dex2[i].n > 0).count();
+            let legendes = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == LEGEND_B && s.dex2[i].n > 0).count();
             let rangs: u64 = wild_species().filter(|&i| s.dex2[i].n > 0).map(|i| s.dex2[i].best as u64).sum();
             serde_json::json!({
                 "captures": s.captures,
                 "especes": especes,
+                "curiosites": curiosites,
+                "legendes": legendes,
                 "rangs": rangs,
                 "shinies": s.shinies,
                 "ecus": s.total_earned.floor(),
@@ -6635,7 +6679,13 @@ mod tests {
         }
         // ce que le jeu applique vraiment
         assert!((g.sell_mult() - 1.20).abs() < 1e-9, "négoce : +5% par niveau");
-        assert!((g.global_luck() - 0.32).abs() < 1e-9, "flair : +0,08 par niveau");
+        /* la chance globale dépend aussi du jour de foire et de l'élan : on
+           mesure l'écart dû au flair, pas sa valeur absolue */
+        let luck_avec = g.global_luck();
+        let flair = std::mem::replace(&mut g.s.lab[LAB_FLAIR], 0);
+        let ecart = luck_avec - g.global_luck();
+        g.s.lab[LAB_FLAIR] = flair;
+        assert!((ecart - 0.32).abs() < 1e-9, "flair : +0,08 par niveau");
         assert!((g.pen_rankup() - 0.41).abs() < 1e-9, "lignées : 25% + 4% par niveau");
         assert!((g.speed_mult() - 1.18).abs() < 1e-9, "affûtage : +6% par niveau");
 
