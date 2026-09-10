@@ -453,8 +453,15 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.21";
-const NEWS: [(&str, &str, &[&str]); 22] = [
+const VERSION: &str = "1.22";
+const NEWS: [(&str, &str, &[&str]); 23] = [
+    (
+        "1.22",
+        "10 septembre 2026",
+        &[
+            "une silhouette de légende reste maintenant vingt minutes au lieu de dix. avec un tirage toutes les dix minutes, il y a une légende à chercher sur la carte près de huit heures par jour : une session normale devrait en croiser, sans qu'un passage éclair une fois par jour suffise.",
+        ],
+    ),
     (
         "1.21",
         "10 septembre 2026",
@@ -670,12 +677,12 @@ const RANK_MULT: [f64; 4] = [1.0, 1.5, 2.2, 4.0];
 const LEGEND_SPOTS: [(usize, usize); 11] = [(16, 26), (16, 48), (52, 8), (95, 10), (16, 7), (95, 64), (52, 68), (95, 34), (16, 68), (30, 50), (52, 29)];
 /* les légendes se tirent souvent et faiblement plutôt que rarement et fort :
    un tirage toutes les 10 minutes rend la pression des battues sensible tout
-   de suite, au lieu d'attendre la demi-heure suivante. la silhouette ne reste
-   que le temps de sa fenêtre : il faut être là pour la voir, c'est tout
-   l'intérêt. les chances se comptent pour mille, la finesse du dixième de
+   de suite, au lieu d'attendre la demi-heure suivante. la silhouette tient
+   deux fenêtres, soit vingt minutes : assez pour qu'une session la croise,
+   trop peu pour qu'on la trouve en passant une fois par jour. les chances se comptent pour mille, la finesse du dixième de
    point servant à répartir l'effet des battues et du labo. */
 const LEGEND_WINDOW_MS: f64 = 600_000.0;
-const LEGEND_LINGER: u64 = 1;
+const LEGEND_LINGER: u64 = 2;
 const LEGEND_BASE_PM: u64 = 200;
 const LEGEND_MAX_PM: u64 = 450;
 const LAB_APPEL_PM: u64 = 26;
@@ -3250,8 +3257,9 @@ impl Game {
     fn legend_take_chance(&self) -> f64 {
         0.25 + (self.global_luck() * 0.05).min(0.15) + self.s.lab[LAB_APPROCHE] as f64 * 0.05
     }
-    /* la silhouette du tirage en cours, s'il y en a une : elle ne survit pas à
-       sa fenêtre de dix minutes — on ne la croise qu'en jouant. */
+    /* la silhouette encore présente, s'il y en a une : on remonte les tirages
+       de la vingtaine de minutes écoulée et on retient le plus ancien encore
+       vivant, celui qu'il reste le moins de temps pour rejoindre. */
     fn legend_now(&self) -> Option<(u64, usize, (usize, usize))> {
         let now = now_ms();
         let w = (now / LEGEND_WINDOW_MS) as u64;
@@ -4773,7 +4781,7 @@ impl Game {
         for t in [
             "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo). chaque battue remue le terrain : pendant une heure, chaque tirage de légende gagne +2 points (20% de base), et les battues se cumulent jusqu'à +16.",
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
-            "légende errante : une silhouette ✧ paraît parfois sur la carte — un tirage toutes les 10 min, 20 chances sur 100, et elle ne reste que ces dix minutes-là — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
+            "légende errante : une silhouette ✧ paraît parfois sur la carte — un tirage toutes les 10 min, 20 chances sur 100, et elle reste vingt minutes — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
             "des traces fraîches ∵ apparaissent sur la carte : approchez-vous et faites Entrée pour les suivre. tout se joue immédiatement — trois fois sur cinq une prise offerte du biome, une fois sur sept une cache d'appâts, sinon la piste se perd. une trace ne se suit qu'une fois.",
             "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
@@ -6677,14 +6685,14 @@ mod tests {
         assert_eq!(vus.len(), WILDB, "tous les biomes doivent pouvoir accueillir une légende");
     }
 
-    /* la silhouette ne dure que sa fenêtre : c'est ce qui récompense la
-       présence plutôt que le passage une fois par jour. */
+    /* la silhouette tient deux fenêtres : assez pour qu'une session la croise,
+       pas assez pour qu'un passage quotidien suffise. */
     #[test]
-    fn une_silhouette_ne_dure_que_sa_fenetre() {
+    fn une_silhouette_tient_vingt_minutes() {
         let g = jeu_neuf();
         let w = 1_000_000u64;
-        assert_eq!(g.legend_left_min(w, w as f64 * LEGEND_WINDOW_MS), 10, "dix minutes en tout");
-        assert_eq!(g.legend_left_min(w, w as f64 * LEGEND_WINDOW_MS + 300_000.0), 5, "cinq à mi-parcours");
+        assert_eq!(g.legend_left_min(w, w as f64 * LEGEND_WINDOW_MS), 20, "vingt minutes en tout");
+        assert_eq!(g.legend_left_min(w, (w + 1) as f64 * LEGEND_WINDOW_MS), 10, "dix à la seconde fenêtre");
         assert_eq!(g.legend_left_min(w, (w + LEGEND_LINGER) as f64 * LEGEND_WINDOW_MS), 0, "puis elle s'en va");
     }
 
@@ -6708,9 +6716,15 @@ mod tests {
         let base = par_jour(LEGEND_BASE_PM);
         let battues = par_jour(LEGEND_BASE_PM + HUNT_BUFF_MAX_PM);
         let max = par_jour(LEGEND_MAX_PM);
-        assert!((25.0..33.0).contains(&base), "sans rien faire : {:.1} silhouettes par jour", base);
-        assert!(battues > base * 1.6, "les battues doivent peser : {:.1} contre {:.1}", battues, base);
-        assert!((58.0..72.0).contains(&max), "tout à fond : {:.1} silhouettes par jour", max);
+        /* les silhouettes tenant deux fenêtres, deux tirages voisins se
+           recouvrent : le compte distinct est un peu sous le nombre de tirages */
+        assert!((21.0..29.0).contains(&base), "sans rien faire : {:.1} silhouettes par jour", base);
+        assert!(battues > base * 1.4, "les battues doivent peser : {:.1} contre {:.1}", battues, base);
+        assert!((40.0..55.0).contains(&max), "tout à fond : {:.1} silhouettes par jour", max);
+        /* et une silhouette est visible bien plus longtemps qu'avant : c'est
+           ce qui compte pour qui joue par sessions */
+        let minutes_visibles = base * (LEGEND_LINGER as f64 * LEGEND_WINDOW_MS / 60_000.0);
+        assert!(minutes_visibles > 400.0, "{:.0} minutes de présence par jour", minutes_visibles);
     }
 
     /* la colonne d'effet du labo doit sortir des mêmes formules que le jeu :
