@@ -377,7 +377,7 @@ const LABS: [LabDef; 15] = [
     LabDef { n: "traqueur",        max: 5,  base: 4000.0, mult: 2.2, desc: "meilleure endurance : le repos entre deux battues diminue de 30 s par niveau (5 min de base)." },
     LabDef { n: "courtage",        max: 5,  base: 6000.0, mult: 2.3, desc: "carnet d'adresses : les primes de contrats augmentent de 15% par niveau." },
     LabDef { n: "licence de piégeage", max: 6, base: 3000.0, mult: 2.6, desc: "l'administration est tatillonne : 2 pièges posés autorisés de base, +1 par niveau." },
-    LabDef { n: "appel des légendes", max: 5, base: 25000.0, mult: 2.7, desc: "des appeaux qui portent loin : +1,3 point de chance qu'une légende errante paraisse à chaque tirage (10% de base, et vos battues s'y ajoutent)." },
+    LabDef { n: "appel des légendes", max: 5, base: 25000.0, mult: 2.7, desc: "des appeaux qui portent loin : +2,6 points de chance qu'une légende errante paraisse à chaque tirage (20% de base, et vos battues s'y ajoutent)." },
     LabDef { n: "approche silencieuse", max: 5, base: 35000.0, mult: 2.7, desc: "on apprend à ne plus faire craquer les branches : +5% de réussite face à une légende." },
 ];
 const LAB_AFFUTAGE: usize = 0;
@@ -453,8 +453,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.20";
-const NEWS: [(&str, &str, &[&str]); 21] = [
+const VERSION: &str = "1.21";
+const NEWS: [(&str, &str, &[&str]); 22] = [
+    (
+        "1.21",
+        "10 septembre 2026",
+        &[
+            "les légendes paraissent deux fois plus souvent : 20 chances sur 100 par tirage au lieu de 10, soit une trentaine de silhouettes par jour. les battues pèsent le double elles aussi (+2 points chacune, jusqu'à +16) et l'appel du labo passe à +2,6 points par niveau. en une semaine, le joueur le plus assidu en avait croisé sept espèces sur douze, et le plus gros captureur aucune : elles étaient trop rares pour qui ne guette pas la carte.",
+            "à l'enclos, on choisit le rang des parents. par défaut ce sont toujours les plus bas, mais le petit naissant au meilleur rang de ses parents, sacrifier un couple [A] ou [S] pour viser un beau spécimen — shiny compris — devient possible. suggéré par Drasaerys.",
+        ],
+    ),
     (
         "1.20",
         "8 septembre 2026",
@@ -668,14 +676,14 @@ const LEGEND_SPOTS: [(usize, usize); 11] = [(16, 26), (16, 48), (52, 8), (95, 10
    point servant à répartir l'effet des battues et du labo. */
 const LEGEND_WINDOW_MS: f64 = 600_000.0;
 const LEGEND_LINGER: u64 = 1;
-const LEGEND_BASE_PM: u64 = 100;
-const LEGEND_MAX_PM: u64 = 300;
-const LAB_APPEL_PM: u64 = 13;
+const LEGEND_BASE_PM: u64 = 200;
+const LEGEND_MAX_PM: u64 = 450;
+const LAB_APPEL_PM: u64 = 26;
 /* une battue attire les légendes une heure durant, et l'effet se cumule
    jusqu'à huit battues — de quoi presque doubler la chance de base. */
 const HUNT_BUFF_MS: f64 = 3_600_000.0;
-const HUNT_BUFF_PM: u64 = 10;
-const HUNT_BUFF_MAX_PM: u64 = 80;
+const HUNT_BUFF_PM: u64 = 20;
+const HUNT_BUFF_MAX_PM: u64 = 160;
 /* durée de couvaison à l'enclos, par rareté (minutes) */
 const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
@@ -1440,7 +1448,7 @@ enum Action {
     MuseumCollect,
     MuseumAuto,
     ToggleMuseumAuto,
-    PenStart(usize, usize),
+    PenStart(usize, usize, Option<usize>),
     PenCollect(usize),
     Trade(usize),
     MerchBuy(usize),
@@ -2822,12 +2830,23 @@ impl Game {
                 self.toast(format!("troc : {}", CREATURES[give].n));
                 self.check_achievements();
             }
-            Action::PenStart(slot, ci) => {
+            Action::PenStart(slot, ci, rang) => {
                 let iv = &self.s.inv2[ci];
-                if slot < self.pen_slots() && self.s.pens[slot].is_none() && iv.tm() >= 1 && iv.tf() >= 1 {
-                    // consomme le mâle et la femelle de plus bas rang
-                    let rm = (0..4).find(|&r| self.s.inv2[ci].m[r] > 0).unwrap();
-                    let rf = (0..4).find(|&r| self.s.inv2[ci].f[r] > 0).unwrap();
+                let dispo = match rang {
+                    Some(r) => iv.m[r] >= 1 && iv.f[r] >= 1,
+                    None => iv.tm() >= 1 && iv.tf() >= 1,
+                };
+                if slot < self.pen_slots() && self.s.pens[slot].is_none() && dispo {
+                    /* par défaut on consomme les plus bas rangs — mais le petit
+                       naît au meilleur rang de ses parents, alors le joueur peut
+                       vouloir sacrifier du beau pour viser un S, shiny compris */
+                    let (rm, rf) = match rang {
+                        Some(r) => (r, r),
+                        None => (
+                            (0..4).find(|&r| self.s.inv2[ci].m[r] > 0).unwrap(),
+                            (0..4).find(|&r| self.s.inv2[ci].f[r] > 0).unwrap(),
+                        ),
+                    };
                     self.s.inv2[ci].m[rm] -= 1;
                     self.s.inv2[ci].f[rf] -= 1;
                     let dur = PEN_MIN[CREATURES[ci].r] * 60_000.0;
@@ -3628,7 +3647,7 @@ impl Game {
         let mut rows = vec![
             Row::text("un couple (♂ + ♀) d'une même espèce donne une naissance après un temps", C::Dim),
             Row::text("de couvaison. le petit peut monter en rang, et shiny ×3.", C::Dim),
-            Row::text("les parents (les plus bas rangs de chaque sexe) sont consommés.", C::Dimmer),
+            Row::text("les parents sont consommés : par défaut les plus bas rangs, ou le rang de votre choix.", C::Dimmer),
             Row::text("", C::Dim),
         ];
         for slot in 0..self.pen_slots() {
@@ -3675,6 +3694,7 @@ impl Game {
         let mut rows = vec![
             Row::text("il faut un couple : au moins un mâle et une femelle de l'espèce.", C::Dimmer),
             Row::text("les shinies ne se reproduisent pas (trop précieux, trop susceptibles).", C::Dimmer),
+            Row::text("le petit naît au meilleur rang de ses parents : « plus bas rangs » préserve vos beaux spécimens, un rang choisi les sacrifie pour viser plus haut.", C::Dimmer),
             Row::text("", C::Dim),
         ];
         let mut any = false;
@@ -3695,7 +3715,21 @@ impl Game {
                     (pad(&format!("♂{} ♀{}", iv.tm(), iv.tf()), 9), if ok { C::Green } else { C::Red }),
                     (if ok { format!("couvaison {} min", PEN_MIN[c.r] as u64) } else { format!("il manque un{}", if iv.tm() == 0 { " ♂" } else { "e ♀" }) }, C::Dimmer),
                 ],
-                btns: vec![("installer".into(), if ok { C::Green } else { C::Dimmer }, if ok { Action::PenStart(slot, ci) } else { Action::Nothing })],
+                btns: {
+                    let mut b = vec![(
+                        if ok { "plus bas rangs".into() } else { "installer".to_string() },
+                        if ok { C::Green } else { C::Dimmer },
+                        if ok { Action::PenStart(slot, ci, None) } else { Action::Nothing },
+                    )];
+                    /* le petit naît au meilleur rang de ses parents : proposer
+                       chaque rang dont on a le couple, pour viser plus haut */
+                    for r in 0..4 {
+                        if iv.m[r] >= 1 && iv.f[r] >= 1 {
+                            b.push((format!("[{}]", RANK_NAMES[r]), C::Blue, Action::PenStart(slot, ci, Some(r))));
+                        }
+                    }
+                    b
+                },
                 act: None,
                 indent: 0,
             });
@@ -4737,9 +4771,9 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("sur le terrain"));
         for t in [
-            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo). chaque battue remue le terrain : pendant une heure, chaque tirage de légende gagne +1 point (10% de base), et les battues se cumulent jusqu'à +8.",
+            "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo). chaque battue remue le terrain : pendant une heure, chaque tirage de légende gagne +2 points (20% de base), et les battues se cumulent jusqu'à +16.",
             "appâts : consommés à chaque tentative du piège équipé ; effets décrits à la boutique.",
-            "légende errante : une silhouette ✧ paraît parfois sur la carte — un tirage toutes les 10 min, 10 chances sur 100, et elle ne reste que ces dix minutes-là — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
+            "légende errante : une silhouette ✧ paraît parfois sur la carte — un tirage toutes les 10 min, 20 chances sur 100, et elle ne reste que ces dix minutes-là — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
             "des traces fraîches ∵ apparaissent sur la carte : approchez-vous et faites Entrée pour les suivre. tout se joue immédiatement — trois fois sur cinq une prise offerte du biome, une fois sur sept une cache d'appâts, sinon la piste se perd. une trace ne se suit qu'une fois.",
             "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
@@ -4759,7 +4793,7 @@ impl Game {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
         rows.extend(bullet_rows("· ", &format!(
-            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées), shiny ×3. les parents (plus bas rangs de chaque sexe) sont consommés.",
+            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées), shiny ×3. le petit naît au meilleur rang de ses parents, qui sont consommés : par défaut les plus bas rangs de chaque sexe, ou un rang que vous choisissez pour viser plus haut.",
             (0..5).map(|r| format!("{} {} min", RAR_LABEL[r], PEN_MIN[r] as u64)).collect::<Vec<_>>().join(" · "),
             (self.pen_rankup() * 100.0).round() as u64), w, C::Dim));
 
@@ -6608,11 +6642,11 @@ mod tests {
         );
         assert!(g.legend_chance(t) <= LEGEND_MAX_PM, "la chance reste bornée");
 
-        /* le rythme visé : une quinzaine de silhouettes par jour sans rien
-           faire, une quarantaine en jouant à fond */
+        /* le rythme visé : une trentaine de silhouettes par jour sans rien
+           faire, le double en jouant à fond */
         let par_jour = |pm: u64| 86_400_000.0 / LEGEND_WINDOW_MS * pm as f64 / 1000.0;
-        assert!((par_jour(LEGEND_BASE_PM) - 14.4).abs() < 0.1);
-        assert!(par_jour(LEGEND_MAX_PM) < 45.0);
+        assert!((par_jour(LEGEND_BASE_PM) - 28.8).abs() < 0.1);
+        assert!(par_jour(LEGEND_MAX_PM) < 70.0);
     }
 
     /* les légendes errantes n'appartiennent à aucun biome : aucun piège ne
@@ -6674,9 +6708,9 @@ mod tests {
         let base = par_jour(LEGEND_BASE_PM);
         let battues = par_jour(LEGEND_BASE_PM + HUNT_BUFF_MAX_PM);
         let max = par_jour(LEGEND_MAX_PM);
-        assert!((12.0..17.0).contains(&base), "sans rien faire : {:.1} silhouettes par jour", base);
+        assert!((25.0..33.0).contains(&base), "sans rien faire : {:.1} silhouettes par jour", base);
         assert!(battues > base * 1.6, "les battues doivent peser : {:.1} contre {:.1}", battues, base);
-        assert!((38.0..48.0).contains(&max), "tout à fond : {:.1} silhouettes par jour", max);
+        assert!((58.0..72.0).contains(&max), "tout à fond : {:.1} silhouettes par jour", max);
     }
 
     /* la colonne d'effet du labo doit sortir des mêmes formules que le jeu :
@@ -6746,5 +6780,47 @@ mod tests {
         /* mais le troc ne doit pas devenir une planche à billets : la revente
            reste sous le prix des spécimens qu'il faut donner */
         assert!(g.creature_value(curio, false) < 2600.0 * 4.0, "une curiosité ne doit pas payer plus qu'elle ne coûte");
+    }
+
+    /* l'enclos consomme les plus bas rangs par défaut, mais le petit naît au
+       meilleur rang de ses parents : viser un S doit rester possible. */
+    #[test]
+    fn l_enclos_laisse_choisir_le_rang_des_parents() {
+        let mut g = jeu_neuf();
+        let ci = 0;
+        // un couple médiocre et un couple de rang S
+        g.s.inv2[ci].m[0] = 1;
+        g.s.inv2[ci].f[0] = 1;
+        g.s.inv2[ci].m[3] = 1;
+        g.s.inv2[ci].f[3] = 1;
+
+        // le sélecteur propose le défaut et les rangs dont on a le couple
+        let (_, rows) = g.build_rows(&PanelKind::PenPick(0));
+        let ligne = rows.iter().find(|r| r.segs.first().map(|(t, _)| t.contains(CREATURES[ci].n)).unwrap_or(false)).unwrap();
+        /* les boutons débordent la largeur du panneau et se poursuivent sur
+           les lignes sans texte qui suivent : on les rassemble */
+        let debut = rows.iter().position(|r| std::ptr::eq(r, ligne)).unwrap();
+        let libelles: Vec<String> = rows[debut..]
+            .iter()
+            .take_while(|r| std::ptr::eq(*r, ligne) || r.segs.is_empty())
+            .flat_map(|r| r.btns.iter().map(|(t, _, _)| t.clone()))
+            .collect();
+        assert!(libelles.iter().any(|t| t == "plus bas rangs"), "boutons : {:?}", libelles);
+        assert!(libelles.iter().any(|t| t == "[C]"), "boutons : {:?}", libelles);
+        assert!(libelles.iter().any(|t| t == "[S]"), "boutons : {:?}", libelles);
+        assert!(!libelles.iter().any(|t| t == "[B]"), "sans couple de rang B, pas de bouton");
+
+        // le défaut prend bien les plus bas et laisse les S en réserve
+        g.apply(Action::PenStart(0, ci, None));
+        assert_eq!(g.s.inv2[ci].m[0], 0);
+        assert_eq!(g.s.inv2[ci].m[3], 1, "le S ne doit pas partir tout seul");
+        assert_eq!(g.s.pens[0].as_ref().unwrap().r1, 0);
+
+        // et le rang choisi consomme ce rang-là
+        g.s.pens[0] = None;
+        g.apply(Action::PenStart(0, ci, Some(3)));
+        assert_eq!(g.s.inv2[ci].m[3], 0, "le couple S choisi est consommé");
+        let pen = g.s.pens[0].as_ref().unwrap();
+        assert_eq!((pen.r1, pen.r2), (3, 3));
     }
 }
