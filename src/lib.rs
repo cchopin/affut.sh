@@ -466,8 +466,15 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.24";
-const NEWS: [(&str, &str, &[&str]); 25] = [
+const VERSION: &str = "1.25";
+const NEWS: [(&str, &str, &[&str]); 26] = [
+    (
+        "1.25",
+        "23 septembre 2026",
+        &[
+            "le puits rassasié ne luit plus : la lueur rouge annonce désormais une offrande possible, et pas seulement une heure de la nuit.",
+        ],
+    ),
     (
         "1.24",
         "23 septembre 2026",
@@ -3665,6 +3672,10 @@ impl Game {
     fn well_used_tonight(&self) -> bool {
         self.s.well_night == jour_reel(now_ms())
     }
+    /* la margelle ne bat que s'il reste quelque chose à donner */
+    fn puits_luit(&self, ms: f64) -> bool {
+        puits_assoiffe(ms) && self.s.well_night != jour_reel(ms)
+    }
     fn rows_puits(&self) -> (String, Vec<Row>) {
         let mut rows = wrap_rows(
             "le puits luit d'une lueur rouge. l'eau a reculé, la margelle est tiède. il semble avoir soif — soif de sang.",
@@ -5580,7 +5591,9 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
     /* la soif du puits se voit de loin : la margelle bat d'une lueur rouge,
        c'est le seul indice donné au joueur */
     let maintenant = now_ms();
-    if puits_assoiffe(maintenant) {
+    /* rassasié, il ne luit plus : la lueur annonce une offrande possible, pas
+       seulement une heure de la nuit */
+    if game.puits_luit(maintenant) {
         let pulse = (maintenant / 600.0) as u64 % 2 == 0;
         for (i, line) in ["╭─╮", "╰─╯"].iter().enumerate() {
             for (j, ch) in line.chars().enumerate() {
@@ -7165,9 +7178,21 @@ mod tests {
             "le puits doit proposer une offrande"
         );
 
-        // une fois servi, il ne prend plus rien de la journée
+        // une fois servi, il ne prend plus rien de la journée et cesse de luire
         g.s.well_night = jour_reel(now_ms());
         assert!(g.well_used_tonight(), "le jour doit être marqué");
+        assert!(!g.puits_luit(now_ms()), "rassasié, le puits ne doit plus luire");
+        /* une fenêtre de soif prise dans la journée réelle en cours : elles
+           reviennent douze fois par jour, il y en a forcément une */
+        let debut = jour_reel(now_ms()) * 86_400_000.0;
+        let t_soif = (0..1440)
+            .map(|k| debut + k as f64 * 60_000.0)
+            .find(|&t| puits_assoiffe(t))
+            .expect("le puits a soif douze fois par jour");
+        assert!(!g.puits_luit(t_soif), "même assoiffé, il ne luit pas s'il a déjà bu");
+        g.s.well_night = -1.0;
+        assert!(g.puits_luit(t_soif), "à jeun et assoiffé, la margelle bat");
+        g.s.well_night = jour_reel(now_ms());
         let (_, rows) = g.build_rows(&PanelKind::Puits);
         let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
         assert!(texte.contains("son compte"), "{}", texte);
