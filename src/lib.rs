@@ -254,6 +254,9 @@ const CREATURES: [CreatureDef; 133] = [
 /* espèces qui comptent dans le bestiaire : les curiosités en sont exclues,
    pour que le pourcentage et « bestiaire complet » gardent leur sens. */
 /* jour de foire : une journée sur quatre, le village s'anime */
+fn un_couple() -> u32 {
+    1
+}
 fn fair_day() -> bool {
     ((now_ms() / 86_400_000.0) as u64) % 4 == 0
 }
@@ -466,8 +469,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.26";
-const NEWS: [(&str, &str, &[&str]); 27] = [
+const VERSION: &str = "1.27";
+const NEWS: [(&str, &str, &[&str]); 28] = [
+    (
+        "1.27",
+        "23 septembre 2026",
+        &[
+            "l'enclos conseille : le sélecteur est trié par intérêt et non plus par ordre interne, chaque ligne dit le rang du petit et ce que porte déjà le registre, une flèche ↑ marque les couples qui feraient progresser le bestiaire, et un bouton « meilleur couple » installe directement le plus utile.",
+            "l'auto-vente épargne autant de couples que vous voulez, jusqu'à quatre par espèce, au lieu d'un seul. un couple unique ne permettait qu'une reproduction, les parents étant consommés : l'enclos manquait de stock.",
+        ],
+    ),
     (
         "1.26",
         "23 septembre 2026",
@@ -881,6 +892,10 @@ struct State {
     news_seen: String,
     lab: Vec<u32>,
     autosell: Vec<bool>,
+    /* combien de couples ♂♀ la vente épargne par espèce : l'enclos a besoin
+       de stock, et un seul couple ne permet qu'une reproduction */
+    #[serde(default = "un_couple")]
+    autokeep: u32,
     /* le musée se garnit tout seul avec les spécimens les plus rentables */
     #[serde(default)]
     museum_auto: bool,
@@ -936,6 +951,7 @@ impl Default for State {
             news_seen: String::new(),
             lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
+            autokeep: 1,
             museum_auto: false,
             ach: vec![false; ACHS.len()],
             last_seen: now_ms(),
@@ -951,6 +967,7 @@ impl State {
         }
         self.lab.resize(LABS.len(), 0);
         self.autosell.resize(5, false);
+        self.autokeep = self.autokeep.clamp(1, 4);
         self.ach.resize(ACHS.len(), false);
         self.inv2.resize(CREATURES.len(), InvE::default());
         self.dex2.resize(CREATURES.len(), DexE::default());
@@ -1511,6 +1528,7 @@ enum Action {
     BuySlot(usize),
     Place(usize, usize, usize),
     SetBait(usize, usize, Option<usize>),
+    SetAutokeep(u32),
     Remove(usize, usize),
     Sell(usize, bool, SellQty),
     SellDupes,
@@ -2147,7 +2165,7 @@ impl Game {
         // l'auto-vente garde le meilleur couple ♂♀ ET ce que demandent les commandes
         // en cours (sinon les contrats deviendraient inlivrables) ; jamais les shinies
         if self.s.lab[LAB_AUTOVENTE] >= 1 && self.s.autosell[r] && !shiny {
-            let keep = 2 + self.contract_need(ci);
+            let keep = self.seuil_garde(ci);
             if self.s.inv2[ci].tn() > keep {
                 let (_, v) = self.sell_surplus(ci);
                 sold = (v * if bait == Some(BAIT_NECTAR) { 1.3 } else { 1.0 }).floor();
@@ -2701,7 +2719,7 @@ impl Game {
                 let mut total = 0.0;
                 let mut n = 0u64;
                 for ci in 0..CREATURES.len() {
-                    if self.s.inv2[ci].tn() > 2 + self.contract_need(ci) {
+                    if self.s.inv2[ci].tn() > self.seuil_garde(ci) {
                         let (q, v) = self.sell_surplus(ci);
                         total += v;
                         n += q;
@@ -2717,6 +2735,7 @@ impl Game {
                 }
             }
             Action::ToggleAutosell(r) => self.s.autosell[r] = !self.s.autosell[r],
+            Action::SetAutokeep(n) => self.s.autokeep = n.clamp(1, 4),
             Action::Migrate => {
                 let g = self.trophy_gain();
                 let cost = self.migration_cost();
@@ -3149,17 +3168,26 @@ impl Game {
     /* vend le surplus au-delà du meilleur couple ♂♀ ET des commandes en cours */
     fn sell_surplus(&mut self, ci: usize) -> (u64, f64) {
         let need = self.contract_need(ci);
-        let bm = self.take_best_sex(ci, false, 0);
-        let bf = self.take_best_sex(ci, false, 1);
+        /* on met de côté les meilleurs couples avant de solder le reste, puis
+           on les remet : c'est le stock de l'enclos */
+        let mut mis: Vec<(u8, usize)> = vec![];
+        for sexe in 0..2u8 {
+            for _ in 0..self.s.autokeep.max(1) {
+                if let Some(r) = self.take_best_sex(ci, false, sexe) {
+                    mis.push((sexe, r));
+                }
+            }
+        }
         let q = self.s.inv2[ci].tn().saturating_sub(need);
         let v = self.take_lowest(ci, false, q);
-        if let Some(r) = bm {
-            self.give_back(ci, false, 0, r);
-        }
-        if let Some(r) = bf {
-            self.give_back(ci, false, 1, r);
+        for (sexe, r) in mis {
+            self.give_back(ci, false, sexe, r);
         }
         (q, v)
+    }
+    /* le seuil au-delà duquel une espèce a du surplus */
+    fn seuil_garde(&self, ci: usize) -> u64 {
+        2 * self.s.autokeep.max(1) as u64 + self.contract_need(ci)
     }
     /* les commandes sont générées au début de chaque créneau de 2 h et figées en
        sauvegarde : trois espèces DISTINCTES, choisies parmi celles que le joueur
@@ -3986,14 +4014,70 @@ impl Game {
         ("enclos".into(), rows)
     }
 
+    /* ce qu'un couple donnerait : le rang du petit, et s'il ferait progresser
+       le registre. c'est ce qui sert à trier le sélecteur. */
+    fn interet_couple(&self, ci: usize, rang: usize) -> (bool, usize) {
+        let vise = (rang + 1).min(3); // avec la montée de rang
+        let record = self.s.dex2[ci].best as usize; // 0 = jamais vue, sinon rang+1
+        (record == 0 || vise + 1 > record, rang)
+    }
+    /* le meilleur couple disponible : d'abord ce qui ferait progresser le
+       registre, puis le rang, puis la rareté. */
+    fn meilleur_couple(&self) -> Option<(usize, usize)> {
+        let mut best: Option<(bool, usize, usize, usize, usize)> = None;
+        for ci in 0..CREATURES.len() {
+            let iv = &self.s.inv2[ci];
+            for r in (0..4).rev() {
+                if iv.m[r] >= 1 && iv.f[r] >= 1 {
+                    let (progres, rang) = self.interet_couple(ci, r);
+                    let cle = (progres, rang, CREATURES[ci].r, usize::MAX - ci, ci);
+                    if best.map(|b| cle > (b.0, b.1, b.2, b.3, b.4)).unwrap_or(true) {
+                        best = Some(cle);
+                    }
+                    break; // le plus haut rang de l'espèce suffit
+                }
+            }
+        }
+        best.map(|b| (b.4, b.1))
+    }
+
     fn rows_pen_pick(&self, slot: usize) -> (String, Vec<Row>) {
         let mut rows = vec![
             Row::text("il faut un couple : au moins un mâle et une femelle de l'espèce.", C::Dimmer),
             Row::text("les shinies ne se reproduisent pas (trop précieux, trop susceptibles).", C::Dimmer),
-            Row::text("le petit naît au meilleur rang de ses parents : « plus bas rangs » préserve vos beaux spécimens, un rang choisi les sacrifie pour viser plus haut.", C::Dimmer),
+            Row::text("le petit naît au meilleur rang de ses parents, qui sont consommés. « ↑ » marque un couple qui ferait progresser le registre.", C::Dimmer),
             Row::text("", C::Dim),
         ];
-        let mut any = false;
+        let montee = (self.pen_rankup() * 100.0).round() as u64;
+        /* le conseil : une ligne, un bouton, le meilleur couple du moment */
+        if let Some((ci, rang)) = self.meilleur_couple() {
+            let c = &CREATURES[ci];
+            let vise = (rang + 1).min(3);
+            rows.push(Row {
+                segs: vec![
+                    ("conseil : ".into(), C::Dimmer),
+                    (format!("{} {} ", c.g, c.n), rarity_color(c.r)),
+                    (
+                        format!(
+                            "♂[{}] ♀[{}] → petit [{}]{}",
+                            RANK_NAMES[rang],
+                            RANK_NAMES[rang],
+                            RANK_NAMES[rang],
+                            if rang < 3 { format!(", [{}] dans {}% des cas", RANK_NAMES[vise], montee) } else { String::new() }
+                        ),
+                        C::Text,
+                    ),
+                ],
+                btns: vec![("meilleur couple".into(), C::Gold, Action::PenStart(slot, ci, Some(rang)))],
+                act: None,
+                indent: 0,
+            });
+            rows.push(Row::text("", C::Dim));
+        }
+
+        /* le sélecteur trié par intérêt : ce qui fait progresser le registre
+           d'abord, puis le rang du couple, puis la rareté */
+        let mut liste: Vec<(bool, usize, usize, usize)> = vec![];
         for ci in 0..CREATURES.len() {
             let iv = &self.s.inv2[ci];
             if iv.tn() == 0 {
@@ -4003,13 +4087,35 @@ impl Game {
             if iv.tn() < 2 && !ok {
                 continue;
             }
-            any = true;
+            let rang = (0..4).rev().find(|&r| iv.m[r] >= 1 && iv.f[r] >= 1);
+            let (progres, r) = match rang {
+                Some(r) => self.interet_couple(ci, r),
+                None => (false, 0),
+            };
+            liste.push((progres && ok, r, CREATURES[ci].r, ci));
+        }
+        liste.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(b.2.cmp(&a.2)).then(a.3.cmp(&b.3)));
+
+        let any = !liste.is_empty();
+        for (progres, rang_couple, _, ci) in liste {
+            let iv = &self.s.inv2[ci];
+            let ok = iv.tm() >= 1 && iv.tf() >= 1;
             let c = &CREATURES[ci];
+            let record = self.s.dex2[ci].best as usize;
+            let petit = if ok {
+                let base = (0..4).find(|&r| iv.m[r] > 0).unwrap_or(0).max((0..4).find(|&r| iv.f[r] > 0).unwrap_or(0));
+                format!("petit [{}]", RANK_NAMES[base.max(rang_couple)])
+            } else {
+                format!("il manque un{}", if iv.tm() == 0 { " ♂" } else { "e ♀" })
+            };
             rows.push(Row {
                 segs: vec![
-                    (pad(&format!("{} {}", c.g, c.n), 26), rarity_color(c.r)),
-                    (pad(&format!("♂{} ♀{}", iv.tm(), iv.tf()), 9), if ok { C::Green } else { C::Red }),
-                    (if ok { format!("couvaison {} min", PEN_MIN[c.r] as u64) } else { format!("il manque un{}", if iv.tm() == 0 { " ♂" } else { "e ♀" }) }, C::Dimmer),
+                    (if progres { "↑ ".to_string() } else { "  ".to_string() }, C::Gold),
+                    (pad(&format!("{} {}", c.g, c.n), 24), rarity_color(c.r)),
+                    (pad(&format!("♂{} ♀{}", iv.tm(), iv.tf()), 8), if ok { C::Green } else { C::Red }),
+                    (pad(&format!("registre [{}]", if record == 0 { "—".to_string() } else { RANK_NAMES[record - 1].to_string() }), 14), C::Dimmer),
+                    (pad(&petit, 14), if progres { C::Gold } else { C::Dimmer }),
+                    (format!("{} min", PEN_MIN[c.r] as u64), C::Dimmer),
                 ],
                 btns: {
                     let mut b = vec![(
@@ -4017,8 +4123,6 @@ impl Game {
                         if ok { C::Green } else { C::Dimmer },
                         if ok { Action::PenStart(slot, ci, None) } else { Action::Nothing },
                     )];
-                    /* le petit naît au meilleur rang de ses parents : proposer
-                       chaque rang dont on a le couple, pour viser plus haut */
                     for r in 0..4 {
                         if iv.m[r] >= 1 && iv.f[r] >= 1 {
                             b.push((format!("[{}]", RANK_NAMES[r]), C::Blue, Action::PenStart(slot, ci, Some(r))));
@@ -4633,7 +4737,7 @@ impl Game {
             rows.push(Row::text("réserve vide. les pièges y remédieront.", C::Dim));
         } else {
             for r in wrap_rows(
-                "« vendre tous les doublons » garde le meilleur couple ♂♀ de chaque espèce, met de côté ce qu'exigent les commandes du comptoir et les demandes du troc, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
+                "« vendre tous les doublons » garde vos meilleurs couples ♂♀ de chaque espèce (un par défaut, jusqu'à quatre au réglage ci-dessous), met de côté ce qu'exigent les commandes du comptoir et les demandes du troc, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
                 self.panel_w, C::Dimmer,
             ) {
                 rows.push(r);
@@ -4690,7 +4794,7 @@ impl Game {
         }
         if self.s.lab[LAB_AUTOVENTE] >= 1 {
             rows.push(Row::text("", C::Dim));
-            rows.push(Row::header("auto-vente — garde le couple ♂♀, les commandes du comptoir et les demandes du troc"));
+            rows.push(Row::header("auto-vente — garde vos couples, les commandes du comptoir et les demandes du troc"));
             rows.push(Row {
                 segs: vec![],
                 btns: (0..5)
@@ -4699,6 +4803,31 @@ impl Game {
                             format!("{} {}", if self.s.autosell[r] { "■" } else { "□" }, RAR_LABEL[r]),
                             if self.s.autosell[r] { C::Green } else { C::Dim },
                             Action::ToggleAutosell(r),
+                        )
+                    })
+                    .collect(),
+                act: None,
+                indent: 0,
+            });
+            /* l'enclos consomme les parents : un seul couple épargné ne permet
+               qu'une reproduction, après quoi l'espèce repart de zéro */
+            rows.push(Row {
+                segs: vec![(
+                    format!(
+                        "couples épargnés par espèce : {} (soit {} bêtes gardées, de quoi tenir {} reproduction{})",
+                        self.s.autokeep,
+                        self.s.autokeep * 2,
+                        self.s.autokeep,
+                        if self.s.autokeep > 1 { "s" } else { "" }
+                    ),
+                    C::Text,
+                )],
+                btns: (1..=4)
+                    .map(|n| {
+                        (
+                            format!("{} {}", if self.s.autokeep == n { "■" } else { "□" }, n),
+                            if self.s.autokeep == n { C::Green } else { C::Dim },
+                            Action::SetAutokeep(n),
                         )
                     })
                     .collect(),
@@ -7170,14 +7299,23 @@ mod tests {
 
         // le sélecteur propose le défaut et les rangs dont on a le couple
         let (_, rows) = g.build_rows(&PanelKind::PenPick(0));
-        let ligne = rows.iter().find(|r| r.segs.first().map(|(t, _)| t.contains(CREATURES[ci].n)).unwrap_or(false)).unwrap();
-        /* les boutons débordent la largeur du panneau et se poursuivent sur
-           les lignes sans texte qui suivent : on les rassemble */
-        let debut = rows.iter().position(|r| std::ptr::eq(r, ligne)).unwrap();
+        /* la ligne de l'espèce, pas celle du conseil : c'est celle qui porte
+           le bouton du couple par défaut */
+        /* la ligne de l'espèce, pas celle du conseil, qui n'a pas de bouton de
+           rang. les boutons débordent la largeur du panneau et se poursuivent
+           sur les lignes sans texte qui suivent : on les rassemble. */
+        let debut = rows
+            .iter()
+            .position(|r| {
+                r.segs.iter().any(|(t, _)| t.contains(CREATURES[ci].n))
+                    && !r.segs.iter().any(|(t, _)| t.contains("conseil"))
+            })
+            .expect("l'espèce doit être listée");
         let libelles: Vec<String> = rows[debut..]
             .iter()
-            .take_while(|r| std::ptr::eq(*r, ligne) || r.segs.is_empty())
-            .flat_map(|r| r.btns.iter().map(|(t, _, _)| t.clone()))
+            .enumerate()
+            .take_while(|(i, r)| *i == 0 || r.segs.is_empty())
+            .flat_map(|(_, r)| r.btns.iter().map(|(t, _, _)| t.clone()))
             .collect();
         assert!(libelles.iter().any(|t| t == "plus bas rangs"), "boutons : {:?}", libelles);
         assert!(libelles.iter().any(|t| t == "[C]"), "boutons : {:?}", libelles);
@@ -7306,5 +7444,60 @@ mod tests {
         /* et la colonne des prises garde bien les plus récentes en tête */
         g.log_prise(vec![("glacier → mirage".into(), C::Text)]);
         assert!(g.logs.iter().find(|l| l.prise).unwrap().segs[0].0.contains("glacier"));
+    }
+
+    /* la vente doit laisser de quoi reproduire : autant de couples que réglé,
+       et les meilleurs, jamais les rebuts. */
+    #[test]
+    fn la_vente_epargne_les_couples_demandes() {
+        let mut g = jeu_neuf();
+        let ci = 0;
+        g.s.lab[LAB_NEGOCE] = 0;
+        // huit mâles et huit femelles, rangs mélangés
+        for r in 0..4 {
+            g.s.inv2[ci].m[r] = 2;
+            g.s.inv2[ci].f[r] = 2;
+        }
+        g.s.autokeep = 3;
+        let (vendus, _) = g.sell_surplus(ci);
+        assert_eq!(vendus, 16 - 6, "trois couples restent en réserve");
+        assert_eq!(g.s.inv2[ci].tn(), 6);
+        // et ce sont les meilleurs rangs qui restent
+        assert_eq!(g.s.inv2[ci].m[3], 2, "les deux mâles [S] restent");
+        assert_eq!(g.s.inv2[ci].f[3], 2, "les deux femelles [S] restent");
+        assert_eq!(g.s.inv2[ci].m[0] + g.s.inv2[ci].f[0], 0, "les [C] sont partis");
+
+        // le seuil de surplus suit le réglage
+        g.s.autokeep = 1;
+        assert_eq!(g.seuil_garde(ci), 2);
+        g.s.autokeep = 4;
+        assert_eq!(g.seuil_garde(ci), 8);
+    }
+
+    /* le sélecteur de l'enclos doit conseiller le couple le plus utile :
+       celui qui ferait progresser le registre, au meilleur rang disponible. */
+    #[test]
+    fn l_enclos_conseille_le_couple_le_plus_utile() {
+        let mut g = jeu_neuf();
+        // une espèce déjà au record, avec un beau couple
+        g.s.inv2[1].m[3] = 1;
+        g.s.inv2[1].f[3] = 1;
+        g.s.dex2[1].best = 4; // déjà [S] au registre
+        // une autre, moins bien lotie, mais qui ferait progresser le registre
+        g.s.inv2[2].m[2] = 1;
+        g.s.inv2[2].f[2] = 1;
+        g.s.dex2[2].best = 1; // [C] au registre
+
+        let (ci, rang) = g.meilleur_couple().expect("un couple doit être conseillé");
+        assert_eq!(ci, 2, "le conseil doit viser ce qui fait progresser le registre");
+        assert_eq!(rang, 2);
+
+        let (_, rows) = g.build_rows(&PanelKind::PenPick(0));
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(texte.contains("conseil : "), "le panneau doit porter le conseil");
+        assert!(texte.contains("↑"), "les couples qui font progresser sont marqués");
+        // la ligne conseillée passe devant celle qui n'apporte rien
+        let pos = |ci: usize| texte.find(CREATURES[ci].n).unwrap_or(usize::MAX);
+        assert!(pos(2) < pos(1), "l'espèce utile doit être listée avant l'autre");
     }
 }
