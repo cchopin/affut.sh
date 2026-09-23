@@ -62,6 +62,8 @@ const CURIO_B: usize = 11;
 /* les légendes errantes n'appartiennent à aucun biome : elles traversent le
    monde entier, y compris les terres qu'on n'a pas encore les moyens d'ouvrir. */
 const LEGEND_B: usize = 12;
+/* ce qui vit au fond du puits : une seule espèce, qu'aucune autre voie ne donne */
+const PUITS_B: usize = 13;
 /* les prix du désert aux ruines suivent le revenu des pièges, bien plus élevé
    depuis que chaque palier double au lieu d'ajouter 40% : sans cela la partie
    durerait trois fois moins longtemps. la forêt, la rivière, le marais, la
@@ -74,7 +76,7 @@ const LEGEND_B: usize = 12;
    80% de la partie après le volcan contre 64% à l'origine. avec cette courbe,
    69% — la longueur totale est la même, mais elle n'est plus concentrée dans un
    seul mur final. */
-const BIOMES: [BiomeDef; 13] = [
+const BIOMES: [BiomeDef; 14] = [
     BiomeDef { name: "forêt",    cost: 0.0,         mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
     BiomeDef { name: "marais",   cost: 2500.0,      mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
     BiomeDef { name: "montagne", cost: 20000.0,     mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
@@ -88,6 +90,7 @@ const BIOMES: [BiomeDef; 13] = [
     BiomeDef { name: "lac",      cost: 45000.0,     mult: 3.2, desc: "là où la rivière s'arrête et réfléchit. sept espèces y tournent en rond depuis des siècles." },
     BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 10.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
     BiomeDef { name: "légendes",   cost: f64::INFINITY, mult: 18.0, desc: "elles ne vivent nulle part et passent partout. on ne les croise qu'en silhouette, une fois de temps en temps." },
+    BiomeDef { name: "le puits",   cost: f64::INFINITY, mult: 22.0, desc: "sous la place, l'eau descend plus bas que les fondations. quelque chose y attend d'être appelé." },
 ];
 
 struct CreatureDef {
@@ -97,7 +100,7 @@ struct CreatureDef {
     n: &'static str,
     lore: &'static str,
 }
-const CREATURES: [CreatureDef; 132] = [
+const CREATURES: [CreatureDef; 133] = [
     // ---- forêt (13)
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
@@ -244,6 +247,8 @@ const CREATURES: [CreatureDef; 132] = [
     CreatureDef { b: 12, r: 4, g: "}*{",  n: "ombre-lierre",  lore: "elle pousse sur les traces des autres légendes. là où elle est, une autre est passée." },
     CreatureDef { b: 12, r: 4, g: "<*>",  n: "porte-écailles", lore: "chaque écaille vient d'une espèce différente. aucune ne manque à personne." },
     CreatureDef { b: 12, r: 4, g: "*@*",  n: "premier piégé", lore: "la toute première prise du tout premier traqueur. elle s'est échappée depuis, et n'a pas vieilli." },
+    /* le puits : elle ne se capture pas, elle accepte de remonter */
+    CreatureDef { b: 13, r: 4, g: "(0)",  n: "puisard", lore: "on l'a descendu au bout d'une corde, il y a très longtemps, et on a remis la margelle. il remonte quand ça lui chante, et seulement si on lui a donné quelque chose." },
 ];
 
 /* espèces qui comptent dans le bestiaire : les curiosités en sont exclues,
@@ -294,7 +299,7 @@ pub fn curiosites_max() -> usize {
     CREATURES.iter().filter(|c| c.b == CURIO_B).count()
 }
 pub fn legendes_max() -> usize {
-    CREATURES.iter().filter(|c| c.b == LEGEND_B).count()
+    CREATURES.iter().filter(|c| c.b >= LEGEND_B).count()
 }
 /* ce que valent au palmarès les espèces qu'aucun piège n'attrape : le troc
    coûte des doublons et ne se revend pas, l'approche d'une légende se joue en
@@ -461,8 +466,17 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.23";
-const NEWS: [(&str, &str, &[&str]); 24] = [
+const VERSION: &str = "1.24";
+const NEWS: [(&str, &str, &[&str]); 25] = [
+    (
+        "1.24",
+        "23 septembre 2026",
+        &[
+            "le village a son horloge : une journée y dure deux heures réelles, soit douze jours pendant que vous en vivez un. le jour, la nuit, les saisons et la lune suivent ce cycle, plus votre fuseau horaire — les vingt espèces nocturnes ◦ sont enfin accessibles à qui ne joue jamais après 21 h. les pièges, les contrats, le troc et les légendes restent au temps réel : rien de ce qui produit n'a été accéléré.",
+            "la barre du bas et le tableau de bord affichent l'heure qu'il est au village.",
+            "quelque chose dort au fond du puits, et il arrive qu'une offrande le réveille. c'est la seule façon de le rencontrer.",
+        ],
+    ),
     (
         "1.23",
         "23 septembre 2026",
@@ -955,54 +969,42 @@ fn splitmix(mut x: u64) -> u64 {
     x = (x ^ (x >> 27)).wrapping_mul(0x94D049BB133111EB);
     x ^ (x >> 31)
 }
-#[cfg(not(target_arch = "wasm32"))]
+/* ── l'horloge du village ────────────────────────────────────────────────
+   une journée au village dure deux heures réelles : une journée de travail en
+   couvre quatre, et la nuit ne dépend plus du fuseau horaire du joueur. seuls
+   les cycles d'ambiance la suivent — jour, nuit, saisons, lune. tout ce qui
+   produit (pièges, contrats, troc, légendes, hors-ligne) reste au temps réel,
+   sinon l'économie entière serait multipliée par douze. */
+const JOUR_JEU_MS: f64 = 2.0 * 3_600_000.0;
+/* l'heure qu'il est au village, de 0 à 24 */
+fn heure_jeu(ms: f64) -> f64 {
+    (ms.rem_euclid(JOUR_JEU_MS)) / JOUR_JEU_MS * 24.0
+}
 fn is_night_at(ms: f64) -> bool {
-    use chrono::{Timelike, TimeZone};
-    match chrono::Local.timestamp_millis_opt(ms as i64).single() {
-        Some(d) => {
-            let h = d.hour();
-            h >= 21 || h < 7
-        }
-        None => false,
-    }
+    let h = heure_jeu(ms);
+    h >= 21.0 || h < 7.0
 }
-#[cfg(target_arch = "wasm32")]
-fn is_night_at(ms: f64) -> bool {
-    let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ms));
-    let h = d.get_hours();
-    h >= 21 || h < 7
-}
-/* heure et minute locales : la soif du puits tient dans 42 minutes */
-#[cfg(not(target_arch = "wasm32"))]
-fn local_hm(ms: f64) -> (u32, u32) {
-    use chrono::{TimeZone, Timelike};
-    match chrono::Local.timestamp_millis_opt(ms as i64).single() {
-        Some(d) => (d.hour(), d.minute()),
-        None => (12, 0),
-    }
-}
-#[cfg(target_arch = "wasm32")]
-fn local_hm(ms: f64) -> (u32, u32) {
-    let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ms));
-    (d.get_hours(), d.get_minutes())
-}
-
-/* la nuit en cours, comptée de 7 h à 7 h : une offrande par nuit, et la
-   pleine lune ne change pas de numéro à minuit pile */
+/* la nuit en cours, comptée de 7 h à 7 h : la pleine lune ne change pas de
+   numéro à minuit pile */
 fn nuit_index(ms: f64) -> f64 {
-    ((ms - 7.0 * 3_600_000.0) / 86_400_000.0).floor()
+    ((ms - 7.0 / 24.0 * JOUR_JEU_MS) / JOUR_JEU_MS).floor()
 }
 fn pleine_lune(ms: f64) -> bool {
     (nuit_index(ms) as i64).rem_euclid(8) == 3
 }
-/* le puits a soif de minuit à minuit 42 — et toute la nuit de pleine lune */
+/* le puits a soif des deux premières heures du jour — dix minutes réelles,
+   douze fois par jour — et toute la nuit de pleine lune */
 fn puits_assoiffe(ms: f64) -> bool {
-    let (h, m) = local_hm(ms);
-    (h == 0 && m < 42) || (pleine_lune(ms) && is_night_at(ms))
+    heure_jeu(ms) < 2.0 || (pleine_lune(ms) && is_night_at(ms))
+}
+/* le jour réel : ce qui limite les offrandes, pour que douze nuits par jour ne
+   multiplient pas d'autant ce que le puits rend */
+fn jour_reel(ms: f64) -> f64 {
+    (ms / 86_400_000.0).floor()
 }
 
 fn season_at(ms: f64) -> usize {
-    ((ms / 86_400_000.0) as u64 % 4) as usize
+    ((ms / JOUR_JEU_MS) as u64 % 4) as usize
 }
 /* météo déterministe par créneau de 20 min — la simulation hors-ligne la rejoue à l'identique */
 fn weather_at(ms: f64) -> usize {
@@ -2837,7 +2839,7 @@ impl Game {
                 /* on donne son plus bas rang, jamais un shiny : le puits ne
                    veut pas de ce qui brille */
                 let Some((rang, _)) = self.take_lowest_one(ci) else { return };
-                self.s.well_night = nuit_index(now_ms());
+                self.s.well_night = jour_reel(now_ms());
                 self.s.sacrifices += 1;
                 let c = &CREATURES[ci];
                 self.log(vec![
@@ -3658,10 +3660,10 @@ impl Game {
         ("contrats".into(), rows)
     }
 
-    /* le puits : une offrande par nuit, et ce qu'il rend tient à la rareté de
+    /* le puits : une offrande par jour réel, et ce qu'il rend tient à la rareté de
        ce qu'on lui donne. le bestiaire, lui, garde la découverte. */
     fn well_used_tonight(&self) -> bool {
-        self.s.well_night == nuit_index(now_ms())
+        self.s.well_night == jour_reel(now_ms())
     }
     fn rows_puits(&self) -> (String, Vec<Row>) {
         let mut rows = wrap_rows(
@@ -3671,7 +3673,7 @@ impl Game {
         );
         rows.push(Row::text("", C::Dim));
         if self.well_used_tonight() {
-            rows.push(Row::text("la lueur faiblit : il a eu son compte pour cette nuit.", C::Dimmer));
+            rows.push(Row::text("la lueur faiblit : il a eu son compte pour aujourd'hui.", C::Dimmer));
             rows.push(Row::text("", C::Dim));
             rows.push(Row {
                 segs: vec![],
@@ -3681,7 +3683,7 @@ impl Game {
             });
             return ("le puits".into(), rows);
         }
-        rows.push(Row::text("une offrande par nuit. le plus bas rang de l'espèce part, jamais un shiny.", C::Dimmer));
+        rows.push(Row::text("une offrande par jour. le plus bas rang de l'espèce part, jamais un shiny.", C::Dimmer));
         rows.push(Row::text("plus la bête est rare, plus ce qui remonte a de la valeur.", C::Dimmer));
         rows.push(Row::text("", C::Dim));
         let mut any = false;
@@ -3715,6 +3717,28 @@ impl Game {
        sans devenir une source d'écus. */
     fn recompense_du_puits(&mut self, ci: usize, rang: usize) {
         let r = CREATURES[ci].r;
+        /* ce qui dort au fond remonte rarement, et d'autant plus volontiers
+           que l'offrande était belle. il prend alors toute la place : c'est la
+           seule façon de l'obtenir. */
+        let chance_puisard = match r {
+            4 => 0.08,
+            3 => 0.03,
+            2 => 0.01,
+            _ => 0.003,
+        };
+        if rand::thread_rng().gen::<f64>() < chance_puisard {
+            let ci_puits = (0..CREATURES.len()).find(|&i| CREATURES[i].b == PUITS_B).unwrap();
+            let rank = self.roll_rank(self.global_luck() + 0.5).max(2);
+            let shiny = rand::thread_rng().gen::<f64>() < (SHINY_BASE * 8.0).min(0.05);
+            self.add_specimen(ci_puits, shiny, rank);
+            self.log(vec![
+                ("la corde se tend toute seule. ce qui remonte n'est pas ce que vous avez donné : ".into(), C::Red),
+                (format!("{}{} [{}]", CREATURES[ci_puits].n, if shiny { " ⋆" } else { "" }, RANK_NAMES[rank]),
+                 if shiny { C::Shiny } else { C::Gold }),
+            ]);
+            self.toast("quelque chose est remonté");
+            return;
+        }
         let mut tir = rand::thread_rng().gen::<f64>() + rang as f64 * 0.08;
         tir = tir.min(0.999);
         let valeur = self.creature_value_r(ci, false, rang);
@@ -4037,7 +4061,14 @@ impl Game {
             segs: vec![
                 (format!("{} · ", SAISONS[sea]), C::Green),
                 (format!("{} · ", METEOS[w]), C::Ice),
-                (if is_night_at(now) { "nuit ◦ (espèces nocturnes de sortie)".into() } else { "jour".to_string() }, C::Text),
+                (
+                    if is_night_at(now) {
+                        format!("{} h au village ◦ (espèces nocturnes de sortie)", heure_jeu(now) as u32)
+                    } else {
+                        format!("{} h au village", heure_jeu(now) as u32)
+                    },
+                    C::Text,
+                ),
             ],
             btns: vec![],
             act: None,
@@ -4581,7 +4612,7 @@ impl Game {
             /* les espèces hors biome se vendent comme les autres : un doublon
                de curiosité ou de légende n'a aucune raison de rester coincé en
                réserve, la découverte étant déjà acquise au bestiaire */
-            for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B]) {
+            for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B, PUITS_B]) {
                 let mut list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
                 if list.is_empty() {
                     continue;
@@ -4775,7 +4806,7 @@ impl Game {
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
             Row::text("colonnes : rareté · ×captures · ⋆shinies · [rang] · sexes vus · réserve", C::Dimmer),
         ];
-        for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B]) {
+        for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B, PUITS_B]) {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
             rows.push(Row::text("", C::Dim));
             rows.push(Row::header(&format!("{} — {}/{}{}", BIOMES[b].name, found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" })));
@@ -5019,7 +5050,7 @@ impl Game {
             noct_names.push(if self.s.dex2[ci].n > 0 { CREATURES[ci].n.to_string() } else { "???".into() });
         }
         rows.extend(bullet_rows("· ", &format!(
-            "la nuit (21 h – 7 h), vingt espèces nocturnes ◦ sortent, introuvables le jour : {}.",
+            "une journée au village dure deux heures réelles : le soleil y tourne douze fois par jour, saisons comprises. la nuit (21 h – 7 h à l'horloge du village, soit cinquante minutes réelles) fait sortir vingt espèces nocturnes ◦, introuvables le jour : {}.",
             noct_names.join(", ")), w, C::Dim));
 
         rows.push(Row::text("", C::Dim));
@@ -5676,7 +5707,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         " {} · {} · {}{} ",
         SAISONS[season_at(nowc)],
         METEOS[weather_at(nowc)],
-        if is_night_at(nowc) { "nuit ◦" } else { "jour" },
+        &if is_night_at(nowc) { format!("{} h ◦", heure_jeu(nowc) as u32) } else { format!("{} h", heure_jeu(nowc) as u32) },
         if fair_day() { " · foire ✧" } else { "" }
     );
     draw_str(buf, area, cols - cond.chars().count() as i32 - 3, sep_y, &cond, theme.style(C::Ice, false));
@@ -6228,7 +6259,7 @@ mod webapp {
             let s = &self.game.s;
             let especes = wild_species().filter(|&i| s.dex2[i].n > 0).count();
             let curiosites = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == CURIO_B && s.dex2[i].n > 0).count();
-            let legendes = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == LEGEND_B && s.dex2[i].n > 0).count();
+            let legendes = (0..CREATURES.len()).filter(|&i| CREATURES[i].b >= LEGEND_B && s.dex2[i].n > 0).count();
             let rangs: u64 = wild_species().filter(|&i| s.dex2[i].n > 0).map(|i| s.dex2[i].best as u64).sum();
             serde_json::json!({
                 "captures": s.captures,
@@ -6539,12 +6570,14 @@ mod tests {
         }
         let curios = CREATURES.iter().filter(|c| c.b == CURIO_B).count();
         let legendes = CREATURES.iter().filter(|c| c.b == LEGEND_B).count();
+        let puits = CREATURES.iter().filter(|c| c.b == PUITS_B).count();
         assert_eq!(curios, 6, "six curiosités au troc");
         assert_eq!(legendes, 12, "douze légendes errantes");
+        assert_eq!(puits, 1, "une seule chose au fond du puits");
         assert_eq!(
-            wild_total() + curios + legendes,
+            wild_total() + curios + legendes + puits,
             CREATURES.len(),
-            "curiosités et légendes restent hors du bestiaire sauvage"
+            "tout ce qui vit hors des biomes reste hors du bestiaire sauvage"
         );
     }
 
@@ -7100,9 +7133,9 @@ mod tests {
         assert_eq!((pen.r1, pen.r2), (3, 3));
     }
 
-    /* le puits : une offrande par nuit, dans sa fenêtre, et jamais un shiny. */
+    /* le puits : une offrande par jour, dans sa fenêtre, et jamais un shiny. */
     #[test]
-    fn le_puits_ne_boit_qu_une_fois_par_nuit() {
+    fn le_puits_ne_boit_qu_une_fois_par_jour() {
         let mut g = jeu_neuf();
         let ci = 0;
         g.s.inv2[ci].m[0] = 2;
@@ -7124,32 +7157,50 @@ mod tests {
         assert_eq!(g.s.inv2[ci].tn(), avant - 1);
         assert_eq!(g.s.inv2[ci].ts(), 1, "le shiny reste en réserve");
 
-        g.s.well_night = nuit_index(now_ms());
-        assert!(g.well_used_tonight(), "la nuit doit être marquée");
-        // et le panneau dit alors que la lueur faiblit, sans proposer d'offrande
-        let (_, rows) = g.build_rows(&PanelKind::Puits);
-        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
-        assert!(texte.contains("son compte pour cette nuit"), "{}", texte);
-        assert!(!rows.iter().any(|r| r.btns.iter().any(|(t, _, _)| t == "sacrifier")));
-        // tant qu'il a soif, chaque espèce en réserve peut être offerte
+        // tant qu'il n'a pas bu, chaque espèce en réserve peut être offerte
         g.s.well_night = -1.0;
         let (_, rows) = g.build_rows(&PanelKind::Puits);
-        assert!(rows.iter().any(|r| r.btns.iter().any(|(t, _, _)| t == "sacrifier")), "le puits doit proposer une offrande");
+        assert!(
+            rows.iter().any(|r| r.btns.iter().any(|(t, _, _)| t == "sacrifier")),
+            "le puits doit proposer une offrande"
+        );
+
+        // une fois servi, il ne prend plus rien de la journée
+        g.s.well_night = jour_reel(now_ms());
+        assert!(g.well_used_tonight(), "le jour doit être marqué");
+        let (_, rows) = g.build_rows(&PanelKind::Puits);
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(texte.contains("son compte"), "{}", texte);
+        assert!(!rows.iter().any(|r| r.btns.iter().any(|(t, _, _)| t == "sacrifier")));
         let apres = g.s.inv2[ci].tn();
         g.apply(Action::Sacrifice(ci));
-        assert_eq!(g.s.inv2[ci].tn(), apres, "une seule offrande par nuit");
+        assert_eq!(g.s.inv2[ci].tn(), apres, "une seule offrande par jour");
     }
 
-    /* la fenêtre de soif : minuit à minuit 42, et toute la nuit de pleine lune */
+    /* l'horloge du village : une journée en deux heures réelles, et la soif du
+       puits qui suit ce cycle plutôt que la montre du joueur. */
     #[test]
-    fn la_soif_du_puits_suit_la_lune() {
-        // une nuit de pleine lune : le numéro de nuit ne change pas à minuit
+    fn la_soif_du_puits_suit_l_horloge_du_village() {
         let base = 1_790_000_000_000.0;
+        // le numéro de nuit ne change pas d'une heure de village à l'autre
         let n0 = nuit_index(base);
-        assert_eq!(nuit_index(base + 3_600_000.0), n0, "une heure plus tard, même nuit");
+        assert_eq!(nuit_index(base + JOUR_JEU_MS / 24.0), n0, "une heure de village plus tard, même nuit");
         // une nuit sur huit
-        let lunes = (0..80).filter(|k| pleine_lune(base + *k as f64 * 86_400_000.0)).count();
-        assert!((9..=11).contains(&lunes), "{} pleines lunes sur 80 jours", lunes);
+        let lunes = (0..80).filter(|k| pleine_lune(base + *k as f64 * JOUR_JEU_MS)).count();
+        assert!((9..=11).contains(&lunes), "{} pleines lunes sur 80 nuits", lunes);
+
+        /* la proportion de nuit est celle d'une vraie journée — 21 h à 7 h —
+           mais répartie sur deux heures réelles, donc accessible à tous */
+        let pas = 60_000.0;
+        let n = (JOUR_JEU_MS / pas) as i64;
+        let nuits = (0..n).filter(|k| is_night_at(base + *k as f64 * pas)).count() as f64 / n as f64;
+        assert!((nuits - 10.0 / 24.0).abs() < 0.02, "part de nuit : {:.2}", nuits);
+
+        /* le puits a soif deux heures de village par jour, plus la nuit de
+           pleine lune : sur huit nuits, un huitième du temps environ */
+        let m = (JOUR_JEU_MS * 8.0 / pas) as i64;
+        let soif = (0..m).filter(|k| puits_assoiffe(base + *k as f64 * pas)).count() as f64 / m as f64;
+        assert!((0.10..0.16).contains(&soif), "part de soif sur huit nuits : {:.3}", soif);
         // et les quatre trophées scellés restent muets tant qu'ils dorment
         let g = jeu_neuf();
         let (_, rows) = g.build_rows(&PanelKind::Achs);
