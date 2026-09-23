@@ -512,8 +512,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.28";
-const NEWS: [(&str, &str, &[&str]); 29] = [
+const VERSION: &str = "1.29";
+const NEWS: [(&str, &str, &[&str]); 30] = [
+    (
+        "1.29",
+        "23 septembre 2026",
+        &[
+            "l'élevage s'apprend : chaque naissance affermit la lignée de l'espèce élevée, jusqu'à dix. chaque point ajoute deux points de chance de monter d'un rang et raccourcit la couvaison de 3%, pour cette espèce seulement. de quoi se spécialiser, et retrouver une raison d'élever une espèce déjà au record.",
+            "un croisement retient la plus faible des deux lignées : marier une espèce bien tenue à une inconnue ne transmet pas le savoir-faire.",
+        ],
+    ),
     (
         "1.28",
         "23 septembre 2026",
@@ -903,6 +911,10 @@ struct State {
     merchant_done: Vec<u64>,
     #[serde(default)]
     charms: u32,
+    /* ce que l'élevage a appris, espèce par espèce : chaque naissance affermit
+       la lignée, jusqu'à dix */
+    #[serde(default)]
+    lignees: Vec<u32>,
     /* le puits : offrandes consenties, et la nuit de la dernière */
     #[serde(default)]
     sacrifices: u32,
@@ -986,6 +998,7 @@ impl Default for State {
             trades_made: 0,
             merchant_done: vec![],
             charms: 0,
+            lignees: vec![0; CREATURES.len()],
             sacrifices: 0,
             well_night: -1.0,
             licences: 0,
@@ -1026,6 +1039,7 @@ impl State {
         self.ach.resize(ACHS.len(), false);
         self.inv2.resize(CREATURES.len(), InvE::default());
         self.dex2.resize(CREATURES.len(), DexE::default());
+        self.lignees.resize(CREATURES.len(), 0);
         self.contracts_done.resize(3, false);
         self.museum.resize(12, None);
         self.pens.resize(6, None);
@@ -2481,6 +2495,31 @@ impl Game {
     fn pen_slots(&self) -> usize {
         3 + self.s.lab[LAB_ENCLOS] as usize
     }
+    /* la lignée d'une espèce : plafonnée à dix, elle ajoute deux points de
+       montée de rang et raccourcit la couvaison de 3% par point */
+    const LIGNEE_MAX: u32 = 10;
+    fn lignee(&self, ci: usize) -> u32 {
+        self.s.lignees.get(ci).copied().unwrap_or(0).min(Self::LIGNEE_MAX)
+    }
+    fn pen_rankup_espece(&self, a: usize, b: Option<usize>) -> f64 {
+        let l = match b {
+            Some(b2) => self.lignee(a).min(self.lignee(b2)),
+            None => self.lignee(a),
+        };
+        (self.pen_rankup() + l as f64 * 0.02).min(0.9)
+    }
+    fn pen_duree(&self, a: usize, b: Option<usize>) -> f64 {
+        let rarete = match b {
+            Some(b2) => CREATURES[a].r.max(CREATURES[b2].r),
+            None => CREATURES[a].r,
+        };
+        let l = match b {
+            Some(b2) => self.lignee(a).min(self.lignee(b2)),
+            None => self.lignee(a),
+        };
+        let croise = if b.is_some() { 1.5 } else { 1.0 };
+        PEN_MIN[rarete] * 60_000.0 * croise * (1.0 - l as f64 * 0.03)
+    }
     fn pen_rankup(&self) -> f64 {
         0.25 + self.s.lab[LAB_LIGNEES] as f64 * 0.04
     }    fn hunt_cooldown_ms(&self) -> f64 {
@@ -3061,7 +3100,7 @@ impl Game {
                     };
                     self.s.inv2[ci].m[rm] -= 1;
                     self.s.inv2[ci].f[rf] -= 1;
-                    let dur = PEN_MIN[CREATURES[ci].r] * 60_000.0;
+                    let dur = self.pen_duree(ci, None);
                     self.s.pens[slot] = Some(Pen { ci, r1: rm, r2: rf, ready_at: now_ms() + dur, ci2: None });
                     self.log(vec![(format!("enclos : un couple de {} (♂[{}] ♀[{}]) s'installe.", CREATURES[ci].n, RANK_NAMES[rm], RANK_NAMES[rf]), C::Green)]);
                     self.panels.pop();
@@ -3078,7 +3117,7 @@ impl Game {
                     let rf = (0..4).find(|&r| self.s.inv2[b].f[r] > 0).unwrap();
                     self.s.inv2[a].m[rm] -= 1;
                     self.s.inv2[b].f[rf] -= 1;
-                    let dur = PEN_MIN[CREATURES[a].r.max(CREATURES[b].r)] * 60_000.0 * 1.5;
+                    let dur = self.pen_duree(a, Some(b));
                     self.s.pens[slot] = Some(Pen { ci: a, r1: rm, r2: rf, ready_at: now_ms() + dur, ci2: Some(b) });
                     self.log(vec![(
                         format!(
@@ -3107,9 +3146,9 @@ impl Game {
                                 if rand::thread_rng().gen::<bool>() {
                                     espece = b;
                                 }
-                                (pen.r1.min(pen.r2), (self.pen_rankup() * 2.0).min(0.9))
+                                (pen.r1.min(pen.r2), (self.pen_rankup_espece(pen.ci, Some(b)) * 2.0).min(0.9))
                             }
-                            None => (pen.r1.max(pen.r2), self.pen_rankup()),
+                            None => (pen.r1.max(pen.r2), self.pen_rankup_espece(pen.ci, None)),
                         };
                         let mut hybride = false;
                         if let Some(h) = croise.and_then(|b| Self::recette(pen.ci, b)) {
@@ -3126,6 +3165,15 @@ impl Game {
                         let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now) * shiny_mult;
                         let (is_new, _, sex) = self.add_specimen(espece, shiny, rank);
                         self.s.pen_born += 1;
+                        /* la lignée s'affermit sur les espèces élevées, pas sur
+                           le petit : c'est le savoir-faire de l'éleveur */
+                        for ci in [Some(pen.ci), pen.ci2].into_iter().flatten() {
+                            if let Some(l) = self.s.lignees.get_mut(ci) {
+                                if *l < Self::LIGNEE_MAX {
+                                    *l += 1;
+                                }
+                            }
+                        }
                         /* la naissance se raconte : d'où vient le petit et ce
                            qu'il vaut par rapport à ses parents */
                         let mieux = rank > pen.r1.max(pen.r2);
@@ -4196,9 +4244,10 @@ impl Game {
             Row::text("il faut un couple : au moins un mâle et une femelle de l'espèce.", C::Dimmer),
             Row::text("les shinies ne se reproduisent pas (trop précieux, trop susceptibles).", C::Dimmer),
             Row::text("le petit naît au meilleur rang de ses parents, qui sont consommés. « ↑ » marque un couple qui ferait progresser le registre.", C::Dimmer),
+            Row::text("chaque naissance affermit la lignée de l'espèce : +2 points de montée de rang et 3% de couvaison en moins par naissance, jusqu'à dix.", C::Dimmer),
             Row::text("", C::Dim),
         ];
-        let montee = (self.pen_rankup() * 100.0).round() as u64;
+        let montee_base = (self.pen_rankup() * 100.0).round() as u64;
         /* le conseil : une ligne, un bouton, le meilleur couple du moment */
         if let Some((ci, rang)) = self.meilleur_couple() {
             let c = &CREATURES[ci];
@@ -4213,7 +4262,11 @@ impl Game {
                             RANK_NAMES[rang],
                             RANK_NAMES[rang],
                             RANK_NAMES[rang],
-                            if rang < 3 { format!(", [{}] dans {}% des cas", RANK_NAMES[vise], montee) } else { String::new() }
+                            if rang < 3 {
+                                format!(", [{}] dans {}% des cas", RANK_NAMES[vise], (self.pen_rankup_espece(ci, None) * 100.0).round() as u64)
+                            } else {
+                                String::new()
+                            }
                         ),
                         C::Text,
                     ),
@@ -4265,7 +4318,14 @@ impl Game {
                     (pad(&format!("♂{} ♀{}", iv.tm(), iv.tf()), 8), if ok { C::Green } else { C::Red }),
                     (pad(&format!("registre [{}]", if record == 0 { "—".to_string() } else { RANK_NAMES[record - 1].to_string() }), 14), C::Dimmer),
                     (pad(&petit, 14), if progres { C::Gold } else { C::Dimmer }),
-                    (format!("{} min", PEN_MIN[c.r] as u64), C::Dimmer),
+                    (
+                        format!(
+                            "{} min{}",
+                            (self.pen_duree(ci, None) / 60_000.0).round() as u64,
+                            if self.lignee(ci) > 0 { format!(" · lignée {}", self.lignee(ci)) } else { String::new() }
+                        ),
+                        if self.lignee(ci) > 0 { C::Green } else { C::Dimmer },
+                    ),
                 ],
                 btns: {
                     let mut b = vec![(
@@ -4324,7 +4384,7 @@ impl Game {
                         if connue {
                             format!("donne {}", CREATURES[Self::recette(a, b).unwrap()].n)
                         } else {
-                            format!("petit [{}] · {} min", RANK_NAMES[rm.min(rf)], (PEN_MIN[ca.r.max(cb.r)] * 1.5) as u64)
+                            format!("petit [{}] · {} min", RANK_NAMES[rm.min(rf)], (self.pen_duree(a, Some(b)) / 60_000.0).round() as u64)
                         },
                         if connue { C::Gold } else { C::Dimmer },
                     ),
@@ -5450,7 +5510,7 @@ impl Game {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
         rows.extend(bullet_rows("· ", &format!(
-            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées), shiny ×3. le petit naît au meilleur rang de ses parents, qui sont consommés : par défaut les plus bas rangs de chaque sexe, ou un rang que vous choisissez pour viser plus haut. on peut aussi croiser deux espèces d'un même biome, à un cran de rareté près : le petit tient alors de l'un ou de l'autre, naît au plus bas rang des deux mais double sa chance de monter, et la couvaison dure moitié plus longtemps. certains couples, dit-on, donnent tout autre chose.",
+            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées au labo, +2 par naissance déjà obtenue dans l'espèce), shiny ×3. le petit naît au meilleur rang de ses parents, qui sont consommés : par défaut les plus bas rangs de chaque sexe, ou un rang que vous choisissez pour viser plus haut. on peut aussi croiser deux espèces d'un même biome, à un cran de rareté près : le petit tient alors de l'un ou de l'autre, naît au plus bas rang des deux mais double sa chance de monter, et la couvaison dure moitié plus longtemps. certains couples, dit-on, donnent tout autre chose.",
             (0..5).map(|r| format!("{} {} min", RAR_LABEL[r], PEN_MIN[r] as u64)).collect::<Vec<_>>().join(" · "),
             (self.pen_rankup() * 100.0).round() as u64), w, C::Dim));
 
@@ -7786,5 +7846,38 @@ mod tests {
             let debut: String = e.chars().take(20).collect();
             assert!(texte.contains(&debut), "la devinette « {} » doit figurer au bestiaire", debut);
         }
+    }
+
+    /* la lignée : chaque naissance rend l'espèce plus sûre et plus rapide,
+       jusqu'à un plafond. */
+    #[test]
+    fn la_lignee_s_affermit_a_chaque_naissance() {
+        let mut g = jeu_neuf();
+        let ci = 0;
+        let base_rankup = g.pen_rankup_espece(ci, None);
+        let base_duree = g.pen_duree(ci, None);
+        assert_eq!(base_rankup, g.pen_rankup(), "sans lignée, la chance du labo seule");
+
+        // une naissance affermit l'espèce élevée
+        g.s.inv2[ci].m[0] = 1;
+        g.s.inv2[ci].f[0] = 1;
+        g.apply(Action::PenStart(0, ci, None));
+        g.s.pens[0].as_mut().unwrap().ready_at = now_ms() - 1.0;
+        g.apply(Action::PenCollect(0));
+        assert_eq!(g.lignee(ci), 1, "la lignée doit avoir progressé");
+        assert!((g.pen_rankup_espece(ci, None) - base_rankup - 0.02).abs() < 1e-9);
+        assert!(g.pen_duree(ci, None) < base_duree, "la couvaison doit raccourcir");
+
+        // le plafond tient
+        g.s.lignees[ci] = 50;
+        assert_eq!(g.lignee(ci), Game::LIGNEE_MAX);
+        assert!(g.pen_rankup_espece(ci, None) <= 0.9);
+        assert!(g.pen_duree(ci, None) >= PEN_MIN[CREATURES[ci].r] * 60_000.0 * 0.7);
+
+        // un croisement retient la plus faible des deux lignées
+        let (a, b, _) = RECETTES[0];
+        g.s.lignees[a] = 6;
+        g.s.lignees[b] = 2;
+        assert!((g.pen_rankup_espece(a, Some(b)) - (g.pen_rankup() + 0.04)).abs() < 1e-9);
     }
 }
