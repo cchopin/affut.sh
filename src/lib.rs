@@ -399,7 +399,7 @@ const MERCH_ITEMS: usize = 5;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
 const ACH_666: usize = 27;
-const ACHS: [AchDef; 29] = [
+const ACHS: [AchDef; 33] = [
     AchDef { n: "première prise",         d: "capturer une créature",                r: 50.0 },
     AchDef { n: "braconnier du dimanche", d: "capturer 100 créatures",               r: 500.0 },
     AchDef { n: "main verte",             d: "capturer 1 000 créatures",             r: 5000.0 },
@@ -429,7 +429,15 @@ const ACHS: [AchDef; 29] = [
     AchDef { n: "assidu",                 d: "chasser 7 jours d'affilée",            r: 2000.0 },
     AchDef { n: "le compte est bon",     d: "capturer 666 créatures",               r: 666.0 },
     AchDef { n: "panthéon",               d: "capturer les 12 légendes errantes",    r: 120000.0 },
+    /* scellés : ni le nom ni la condition ne s'affichent avant de les gagner */
+    AchDef { n: "sympathy for the devil",  d: "avoir donné une bête au puits",        r: 666.0 },
+    AchDef { n: "bad is good",             d: "six offrandes au puits",               r: 6666.0 },
+    AchDef { n: "it is a good day to die", d: "soixante-six offrandes au puits",      r: 66666.0 },
+    AchDef { n: "unleash the beast",       d: "six cent soixante-six offrandes",      r: 666666.0 },
 ];
+/* les trophées que rien n'annonce : le panneau les tait tant qu'ils dorment */
+const ACH_SCELLES: [usize; 4] = [29, 30, 31, 32];
+const ACH_BETE: usize = 32;
 
 const SHINY_BASE: f64 = 1.0 / 512.0;
 
@@ -453,8 +461,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.22";
-const NEWS: [(&str, &str, &[&str]); 23] = [
+const VERSION: &str = "1.23";
+const NEWS: [(&str, &str, &[&str]); 24] = [
+    (
+        "1.23",
+        "23 septembre 2026",
+        &[
+            "la fontaine du village n'a pas toujours été une fontaine. certaines nuits, très tard, l'eau recule et la margelle bat d'une lueur rouge. approchez-vous, vous verrez bien.",
+            "quatre trophées de plus au tableau. ils n'ont pas de nom tant qu'ils ne sont pas gagnés, et personne n'en parle. idée de ook.",
+        ],
+    ),
     (
         "1.22",
         "10 septembre 2026",
@@ -792,6 +808,11 @@ struct State {
     merchant_done: Vec<u64>,
     #[serde(default)]
     charms: u32,
+    /* le puits : offrandes consenties, et la nuit de la dernière */
+    #[serde(default)]
+    sacrifices: u32,
+    #[serde(default)]
+    well_night: f64,
     #[serde(default)]
     licences: u32,
     #[serde(default)]
@@ -866,6 +887,8 @@ impl Default for State {
             trades_made: 0,
             merchant_done: vec![],
             charms: 0,
+            sacrifices: 0,
+            well_night: -1.0,
             licences: 0,
             museum: vec![None; 12],
             museum_at: 0.0,
@@ -949,6 +972,35 @@ fn is_night_at(ms: f64) -> bool {
     let h = d.get_hours();
     h >= 21 || h < 7
 }
+/* heure et minute locales : la soif du puits tient dans 42 minutes */
+#[cfg(not(target_arch = "wasm32"))]
+fn local_hm(ms: f64) -> (u32, u32) {
+    use chrono::{TimeZone, Timelike};
+    match chrono::Local.timestamp_millis_opt(ms as i64).single() {
+        Some(d) => (d.hour(), d.minute()),
+        None => (12, 0),
+    }
+}
+#[cfg(target_arch = "wasm32")]
+fn local_hm(ms: f64) -> (u32, u32) {
+    let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ms));
+    (d.get_hours(), d.get_minutes())
+}
+
+/* la nuit en cours, comptée de 7 h à 7 h : une offrande par nuit, et la
+   pleine lune ne change pas de numéro à minuit pile */
+fn nuit_index(ms: f64) -> f64 {
+    ((ms - 7.0 * 3_600_000.0) / 86_400_000.0).floor()
+}
+fn pleine_lune(ms: f64) -> bool {
+    (nuit_index(ms) as i64).rem_euclid(8) == 3
+}
+/* le puits a soif de minuit à minuit 42 — et toute la nuit de pleine lune */
+fn puits_assoiffe(ms: f64) -> bool {
+    let (h, m) = local_hm(ms);
+    (h == 0 && m < 42) || (pleine_lune(ms) && is_night_at(ms))
+}
+
 fn season_at(ms: f64) -> usize {
     ((ms / 86_400_000.0) as u64 % 4) as usize
 }
@@ -1459,6 +1511,7 @@ enum Action {
     PenCollect(usize),
     Trade(usize),
     MerchBuy(usize),
+    Sacrifice(usize),
     LegendTry(usize, u64, Option<usize>),
     TraceFollow(u64, usize),
     Nothing,
@@ -1508,6 +1561,7 @@ enum PanelKind {
     News,
     Trade,
     Merchant,
+    Puits,
     Offline(OfflineSummary),
     ResetConfirm,
 }
@@ -1900,6 +1954,21 @@ impl Game {
         (q, v)
     }
     /* retire le meilleur spécimen tous sexes confondus ; renvoie (rang, sexe) */
+    /* retire le spécimen non-shiny de plus bas rang */
+    fn take_lowest_one(&mut self, ci: usize) -> Option<(usize, u8)> {
+        for r in 0..4 {
+            let iv = &mut self.s.inv2[ci];
+            if iv.m[r] > 0 {
+                iv.m[r] -= 1;
+                return Some((r, 0));
+            }
+            if iv.f[r] > 0 {
+                iv.f[r] -= 1;
+                return Some((r, 1));
+            }
+        }
+        None
+    }
     fn take_best(&mut self, ci: usize, shiny: bool) -> Option<(usize, u8)> {
         for r in (0..4).rev() {
             let iv = &mut self.s.inv2[ci];
@@ -2438,6 +2507,10 @@ impl Game {
             26 => s.streak >= 7,
             27 => s.captures >= 666,
             28 => (0..CREATURES.len()).filter(|&i| CREATURES[i].b == LEGEND_B).all(|i| s.dex2[i].n > 0),
+            29 => s.sacrifices >= 1,
+            30 => s.sacrifices >= 6,
+            31 => s.sacrifices >= 66,
+            32 => s.sacrifices >= 666,
             _ => false,
         }
     }    fn check_achievements(&mut self) {
@@ -2446,6 +2519,14 @@ impl Game {
                 self.s.ach[i] = true;
                 if ACHS[i].r > 0.0 {
                     self.gain(ACHS[i].r);
+                }
+                if i == ACH_BETE {
+                    self.pentacle_until = now_ms() + 12_000.0;
+                    self.log(vec![(
+                        "le puits déborde. le cercle s'ouvre de lui-même, et quelque chose remonte avec l'eau.".into(),
+                        C::Red,
+                    )]);
+                    self.toast("666 offrandes…");
                 }
                 if i == ACH_666 {
                     self.pentacle_until = now_ms() + 12_000.0;
@@ -2747,6 +2828,25 @@ impl Game {
                     self.museum_optimize();
                     self.check_achievements();
                 }
+            }
+            Action::Sacrifice(ci) => {
+                if self.well_used_tonight() || !puits_assoiffe(now_ms()) || self.s.inv2[ci].tn() == 0 {
+                    self.panels.pop();
+                    return;
+                }
+                /* on donne son plus bas rang, jamais un shiny : le puits ne
+                   veut pas de ce qui brille */
+                let Some((rang, _)) = self.take_lowest_one(ci) else { return };
+                self.s.well_night = nuit_index(now_ms());
+                self.s.sacrifices += 1;
+                let c = &CREATURES[ci];
+                self.log(vec![
+                    (format!("vous laissez {} [{}] glisser dans le puits. ", c.n, RANK_NAMES[rang]), C::Red),
+                    ("l'eau se referme sans un bruit.".into(), C::Dimmer),
+                ]);
+                self.recompense_du_puits(ci, rang);
+                self.check_achievements();
+                self.panels.pop();
             }
             Action::MuseumCollect => {
                 self.museum_accrue(now_ms());
@@ -3302,6 +3402,19 @@ impl Game {
             }
         }
         {
+            /* la fontaine occupe x 53-55, y 38-39 : on l'aborde par la place */
+            let (fx, fy) = (54_i32, 38_i32);
+            if (fx - self.px).abs() <= 2 && (fy - self.py).abs() <= 2 {
+                if puits_assoiffe(now_ms()) {
+                    self.panels.push(Panel::new(PanelKind::Puits));
+                } else {
+                    self.log(vec![("l'eau du puits est noire et immobile. rien ne s'y reflète.".into(), C::Dimmer)]);
+                    self.toast("le puits dort");
+                }
+                return;
+            }
+        }
+        {
             let (mx, my) = Self::MERCHANT_POS;
             if (mx as i32 - self.px).abs() <= 6 && (my as i32 - self.py).abs() <= 1 {
                 self.panels.push(Panel::new(PanelKind::Merchant));
@@ -3403,6 +3516,7 @@ impl Game {
             PanelKind::Journal => self.rows_journal(),
             PanelKind::Board => self.rows_board(),
             PanelKind::News => self.rows_news(),
+            PanelKind::Puits => self.rows_puits(),
             PanelKind::Trade => self.rows_trade(),
             PanelKind::Merchant => self.rows_merchant(),
             PanelKind::Offline(sum) => self.rows_offline(sum),
@@ -3542,6 +3656,127 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::text(format!("contrats livrés au total : {}", self.s.contracts_delivered), C::Dimmer));
         ("contrats".into(), rows)
+    }
+
+    /* le puits : une offrande par nuit, et ce qu'il rend tient à la rareté de
+       ce qu'on lui donne. le bestiaire, lui, garde la découverte. */
+    fn well_used_tonight(&self) -> bool {
+        self.s.well_night == nuit_index(now_ms())
+    }
+    fn rows_puits(&self) -> (String, Vec<Row>) {
+        let mut rows = wrap_rows(
+            "le puits luit d'une lueur rouge. l'eau a reculé, la margelle est tiède. il semble avoir soif — soif de sang.",
+            self.panel_w,
+            C::Red,
+        );
+        rows.push(Row::text("", C::Dim));
+        if self.well_used_tonight() {
+            rows.push(Row::text("la lueur faiblit : il a eu son compte pour cette nuit.", C::Dimmer));
+            rows.push(Row::text("", C::Dim));
+            rows.push(Row {
+                segs: vec![],
+                btns: vec![("s'éloigner".into(), C::Dim, Action::Close)],
+                act: None,
+                indent: 0,
+            });
+            return ("le puits".into(), rows);
+        }
+        rows.push(Row::text("une offrande par nuit. le plus bas rang de l'espèce part, jamais un shiny.", C::Dimmer));
+        rows.push(Row::text("plus la bête est rare, plus ce qui remonte a de la valeur.", C::Dimmer));
+        rows.push(Row::text("", C::Dim));
+        let mut any = false;
+        for ci in 0..CREATURES.len() {
+            if self.s.inv2[ci].tn() == 0 {
+                continue;
+            }
+            any = true;
+            let c = &CREATURES[ci];
+            let rang = (0..4).find(|&r| self.s.inv2[ci].m[r] + self.s.inv2[ci].f[r] > 0).unwrap_or(0);
+            rows.push(Row {
+                segs: vec![
+                    (pad(&format!("{} {}", c.g, c.n), 26), rarity_color(c.r)),
+                    (pad(&format!("[{}] ×{}", RANK_NAMES[rang], fmt(self.s.inv2[ci].tn() as f64)), 12), C::Dimmer),
+                    (pad(RAR_LABEL[c.r], 12), C::Dimmer),
+                ],
+                btns: vec![("sacrifier".into(), C::Red, Action::Sacrifice(ci))],
+                act: None,
+                indent: 0,
+            });
+        }
+        if !any {
+            rows.push(Row::text("votre réserve est vide. le puits attendra.", C::Dim));
+        }
+        ("le puits".into(), rows)
+    }
+
+    /* ce que le puits rend. l'échelle suit la rareté de l'offrande, et le rang
+       pousse un peu le tirage : une bête commune paie en appâts, une légendaire
+       en breloque. une seule offrande par nuit, donc la main peut être large
+       sans devenir une source d'écus. */
+    fn recompense_du_puits(&mut self, ci: usize, rang: usize) {
+        let r = CREATURES[ci].r;
+        let mut tir = rand::thread_rng().gen::<f64>() + rang as f64 * 0.08;
+        tir = tir.min(0.999);
+        let valeur = self.creature_value_r(ci, false, rang);
+        match r {
+            0 | 1 => {
+                if tir < 0.35 {
+                    self.log(vec![("rien ne remonte. l'eau reste noire.".into(), C::Dimmer)]);
+                    self.toast("le puits garde tout");
+                } else if tir < 0.85 {
+                    let bt = if r == 0 { 0 } else { BAIT_VIANDE };
+                    let n = 2 + (tir * 4.0) as u64;
+                    self.s.baits[bt] += n;
+                    self.log(vec![(format!("{} {} remontent, encore humides.", n, BAITS[bt].n), C::Green)]);
+                    self.toast("le puits rend des appâts");
+                } else {
+                    let g = (valeur * 12.0).floor().max(50.0);
+                    self.gain(g);
+                    self.log(vec![("de la monnaie ancienne flotte à la surface : ".into(), C::Gold), (format!("+{} écus", fmt(g)), C::GoldDark)]);
+                    self.toast("le puits rend de la monnaie");
+                }
+            }
+            2 => {
+                if tir < 0.55 {
+                    let g = (valeur * 18.0).floor().max(500.0);
+                    self.gain(g);
+                    self.log(vec![("une bourse noircie remonte : ".into(), C::Gold), (format!("+{} écus", fmt(g)), C::GoldDark)]);
+                    self.toast("le puits paie");
+                } else {
+                    let bt = BAIT_TRUFFE;
+                    self.s.baits[bt] += 3;
+                    self.log(vec![(format!("3 {} reposent sur la margelle, sans explication.", BAITS[bt].n), C::Green)]);
+                    self.toast("le puits rend des appâts rares");
+                }
+            }
+            3 => {
+                if tir < 0.30 {
+                    self.s.charms += 1;
+                    self.log(vec![("une breloque tiède remonte au bout de la corde. elle bat, faiblement.".into(), C::Gold)]);
+                    self.toast("breloque de chance");
+                } else if tir < 0.75 {
+                    let g = (valeur * 20.0).floor();
+                    self.gain(g);
+                    self.log(vec![("le puits rend bien plus qu'il n'a pris : ".into(), C::Gold), (format!("+{} écus", fmt(g)), C::GoldDark)]);
+                    self.toast("le puits paie gros");
+                } else {
+                    self.s.baits[BAIT_ESSENCE] += 2;
+                    self.log(vec![(format!("2 {} flottent, intactes.", BAITS[BAIT_ESSENCE].n), C::Blue)]);
+                    self.toast("le puits rend de l'essence");
+                }
+            }
+            _ => {
+                if tir < 0.22 {
+                    self.s.licences += 1;
+                    self.log(vec![("un parchemin sec remonte, scellé d'un cachet que personne ne reconnaît : une licence de piégeage.".into(), C::Gold)]);
+                    self.toast("licence de piégeage");
+                } else {
+                    self.s.charms += 1;
+                    self.log(vec![("une breloque remonte, lourde comme une dent. le puits a apprécié.".into(), C::Gold)]);
+                    self.toast("breloque de chance");
+                }
+            }
+        }
     }
 
     fn rows_museum(&self) -> (String, Vec<Row>) {
@@ -4647,10 +4882,21 @@ impl Game {
         let mut rows = vec![Row::text(format!("{}/{} débloqués", done, ACHS.len()), C::Dim), Row::text("", C::Dim)];
         for i in 0..ACHS.len() {
             let ok = self.s.ach[i];
+            let scelle = !ok && ACH_SCELLES.contains(&i);
             rows.push(Row {
                 segs: vec![
-                    (format!("{} {}", if ok { "■" } else { "□" }, pad(ACHS[i].n, 26)), if ok { C::Green } else { C::Dimmer }),
-                    (format!("{}{}", ACHS[i].d, if ACHS[i].r > 0.0 { format!(" (+{} écus)", fmt(ACHS[i].r)) } else { String::new() }), C::Dimmer),
+                    (
+                        format!("{} {}", if ok { "■" } else { "□" }, pad(if scelle { "? ? ?" } else { ACHS[i].n }, 26)),
+                        if ok { C::Green } else { C::Dimmer },
+                    ),
+                    (
+                        if scelle {
+                            "personne n'en parle.".to_string()
+                        } else {
+                            format!("{}{}", ACHS[i].d, if ACHS[i].r > 0.0 { format!(" (+{} écus)", fmt(ACHS[i].r)) } else { String::new() })
+                        },
+                        C::Dimmer,
+                    ),
                 ],
                 btns: vec![],
                 act: None,
@@ -5297,6 +5543,22 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
             let cell = game.world.cells[wy as usize][wx as usize];
             if cell.ch != ' ' {
                 draw_str(buf, area, 1 + sx, vy0 + sy, &cell.ch.to_string(), theme.style(cell.c, false));
+            }
+        }
+    }
+    /* la soif du puits se voit de loin : la margelle bat d'une lueur rouge,
+       c'est le seul indice donné au joueur */
+    let maintenant = now_ms();
+    if puits_assoiffe(maintenant) {
+        let pulse = (maintenant / 600.0) as u64 % 2 == 0;
+        for (i, line) in ["╭─╮", "╰─╯"].iter().enumerate() {
+            for (j, ch) in line.chars().enumerate() {
+                let sx = 1 + 53 + j as i32 - cam_x + off_x;
+                let sy = vy0 + 38 + i as i32 - cam_y + off_y;
+                if sy < vy0 || sy > vy1 {
+                    continue;
+                }
+                draw_str(buf, area, sx, sy, &ch.to_string(), theme.style(if pulse { C::Red } else { C::GoldDark }, false));
             }
         }
     }
@@ -6836,5 +7098,65 @@ mod tests {
         assert_eq!(g.s.inv2[ci].m[3], 0, "le couple S choisi est consommé");
         let pen = g.s.pens[0].as_ref().unwrap();
         assert_eq!((pen.r1, pen.r2), (3, 3));
+    }
+
+    /* le puits : une offrande par nuit, dans sa fenêtre, et jamais un shiny. */
+    #[test]
+    fn le_puits_ne_boit_qu_une_fois_par_nuit() {
+        let mut g = jeu_neuf();
+        let ci = 0;
+        g.s.inv2[ci].m[0] = 2;
+        g.s.inv2[ci].sm[0] = 1; // un shiny, qui ne doit jamais partir
+
+        // hors fenêtre, rien ne se passe
+        g.s.well_night = -1.0;
+        let avant = g.s.inv2[ci].tn();
+        if !puits_assoiffe(now_ms()) {
+            g.apply(Action::Sacrifice(ci));
+            assert_eq!(g.s.inv2[ci].tn(), avant, "le puits endormi ne prend rien");
+            assert_eq!(g.s.sacrifices, 0);
+        }
+
+        /* on force la nuit en cours pour tester la suite sans dépendre de
+           l'heure qu'il est : take_lowest_one et le verrou de nuit */
+        let (rang, _) = g.take_lowest_one(ci).expect("un spécimen doit partir");
+        assert_eq!(rang, 0, "c'est le plus bas rang qui part");
+        assert_eq!(g.s.inv2[ci].tn(), avant - 1);
+        assert_eq!(g.s.inv2[ci].ts(), 1, "le shiny reste en réserve");
+
+        g.s.well_night = nuit_index(now_ms());
+        assert!(g.well_used_tonight(), "la nuit doit être marquée");
+        // et le panneau dit alors que la lueur faiblit, sans proposer d'offrande
+        let (_, rows) = g.build_rows(&PanelKind::Puits);
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(texte.contains("son compte pour cette nuit"), "{}", texte);
+        assert!(!rows.iter().any(|r| r.btns.iter().any(|(t, _, _)| t == "sacrifier")));
+        // tant qu'il a soif, chaque espèce en réserve peut être offerte
+        g.s.well_night = -1.0;
+        let (_, rows) = g.build_rows(&PanelKind::Puits);
+        assert!(rows.iter().any(|r| r.btns.iter().any(|(t, _, _)| t == "sacrifier")), "le puits doit proposer une offrande");
+        let apres = g.s.inv2[ci].tn();
+        g.apply(Action::Sacrifice(ci));
+        assert_eq!(g.s.inv2[ci].tn(), apres, "une seule offrande par nuit");
+    }
+
+    /* la fenêtre de soif : minuit à minuit 42, et toute la nuit de pleine lune */
+    #[test]
+    fn la_soif_du_puits_suit_la_lune() {
+        // une nuit de pleine lune : le numéro de nuit ne change pas à minuit
+        let base = 1_790_000_000_000.0;
+        let n0 = nuit_index(base);
+        assert_eq!(nuit_index(base + 3_600_000.0), n0, "une heure plus tard, même nuit");
+        // une nuit sur huit
+        let lunes = (0..80).filter(|k| pleine_lune(base + *k as f64 * 86_400_000.0)).count();
+        assert!((9..=11).contains(&lunes), "{} pleines lunes sur 80 jours", lunes);
+        // et les quatre trophées scellés restent muets tant qu'ils dorment
+        let g = jeu_neuf();
+        let (_, rows) = g.build_rows(&PanelKind::Achs);
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        for &i in ACH_SCELLES.iter() {
+            assert!(!texte.contains(ACHS[i].n), "« {} » ne doit pas s'afficher avant d'être gagné", ACHS[i].n);
+        }
+        assert!(texte.contains("? ? ?"), "les trophées scellés doivent apparaître masqués");
     }
 }
