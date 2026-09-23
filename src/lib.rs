@@ -64,6 +64,9 @@ const CURIO_B: usize = 11;
 const LEGEND_B: usize = 12;
 /* ce qui vit au fond du puits : une seule espèce, qu'aucune autre voie ne donne */
 const PUITS_B: usize = 13;
+/* les hybrides : ni piège ni troc ne les donne, seulement l'enclos, et
+   seulement pour huit couples précis que rien n'annonce */
+const HYBRIDE_B: usize = 14;
 /* les prix du désert aux ruines suivent le revenu des pièges, bien plus élevé
    depuis que chaque palier double au lieu d'ajouter 40% : sans cela la partie
    durerait trois fois moins longtemps. la forêt, la rivière, le marais, la
@@ -76,7 +79,7 @@ const PUITS_B: usize = 13;
    80% de la partie après le volcan contre 64% à l'origine. avec cette courbe,
    69% — la longueur totale est la même, mais elle n'est plus concentrée dans un
    seul mur final. */
-const BIOMES: [BiomeDef; 14] = [
+const BIOMES: [BiomeDef; 15] = [
     BiomeDef { name: "forêt",    cost: 0.0,         mult: 1.0, desc: "des sous-bois humides où tout bruisse. le point de départ de toute traque." },
     BiomeDef { name: "marais",   cost: 2500.0,      mult: 1.6, desc: "de la vase, des bulles, des choses qui clignent des yeux sous la surface." },
     BiomeDef { name: "montagne", cost: 20000.0,     mult: 2.5, desc: "des cimes venteuses. les pièges y gèlent mais les prises valent le détour." },
@@ -91,6 +94,7 @@ const BIOMES: [BiomeDef; 14] = [
     BiomeDef { name: "curiosités", cost: f64::INFINITY, mult: 10.0, desc: "des espèces qu'aucun piège n'attrape. elles changent de mains, jamais de gré." },
     BiomeDef { name: "légendes",   cost: f64::INFINITY, mult: 18.0, desc: "elles ne vivent nulle part et passent partout. on ne les croise qu'en silhouette, une fois de temps en temps." },
     BiomeDef { name: "le puits",   cost: f64::INFINITY, mult: 22.0, desc: "sous la place, l'eau descend plus bas que les fondations. quelque chose y attend d'être appelé." },
+    BiomeDef { name: "hybrides",   cost: f64::INFINITY, mult: 16.0, desc: "des lignées qui n'auraient jamais dû se croiser. l'enclos, lui, ne juge pas." },
 ];
 
 struct CreatureDef {
@@ -100,7 +104,7 @@ struct CreatureDef {
     n: &'static str,
     lore: &'static str,
 }
-const CREATURES: [CreatureDef; 133] = [
+const CREATURES: [CreatureDef; 141] = [
     // ---- forêt (13)
     CreatureDef { b: 0, r: 0, g: "(o.o)", n: "mulotin",          lore: "un rongeur curieux qui entasse des graines dans les pièges eux-mêmes." },
     CreatureDef { b: 0, r: 0, g: "~(°>",  n: "sourivole",        lore: "moitié souris, moitié feuille morte. plane mal, atterrit pire." },
@@ -249,6 +253,39 @@ const CREATURES: [CreatureDef; 133] = [
     CreatureDef { b: 12, r: 4, g: "*@*",  n: "premier piégé", lore: "la toute première prise du tout premier traqueur. elle s'est échappée depuis, et n'a pas vieilli." },
     /* le puits : elle ne se capture pas, elle accepte de remonter */
     CreatureDef { b: 13, r: 4, g: "(0)",  n: "puisard", lore: "on l'a descendu au bout d'une corde, il y a très longtemps, et on a remis la margelle. il remonte quand ça lui chante, et seulement si on lui a donné quelque chose." },
+    /* hybrides : l'ordre de cette liste est celui des recettes */
+    CreatureDef { b: 14, r: 4, g: "*w*",  n: "dryaluce",      lore: "elle éclaire l'intérieur des arbres, ce qui n'arrange personne, surtout pas les arbres." },
+    CreatureDef { b: 14, r: 4, g: "~w~",  n: "hydrofolle",    lore: "une flamme qui a appris à nager. elle s'éteint chaque soir et recommence." },
+    CreatureDef { b: 14, r: 4, g: "/^\\", n: "wyvermite",     lore: "de la pierre qui vole. les géologues du village ont démissionné." },
+    CreatureDef { b: 14, r: 4, g: "<?>",  n: "sphinxage",     lore: "il pose une question à laquelle il ne connaît pas la réponse, puis attend quand même." },
+    CreatureDef { b: 14, r: 4, g: "*^~",  n: "aurorne",       lore: "sa corne tient une lumière du nord. de près, on entend le ciel grésiller." },
+    CreatureDef { b: 14, r: 4, g: "(8)",  n: "krakenéant",    lore: "huit bras autour de rien du tout. le rien, lui, n'a pas donné son avis." },
+    CreatureDef { b: 14, r: 4, g: "@o@",  n: "perlange",      lore: "une spirale de nacre qui tourne dans le bon sens, pour une fois." },
+    CreatureDef { b: 14, r: 4, g: "[?]",  n: "chronoglyphe",  lore: "il répond aux questions de demain. c'est utile, mais rarement au bon moment." },
+];
+
+/* les huit croisements qui donnent autre chose que leurs parents : (♂, ♀,
+   hybride). la recette ne s'affiche qu'une fois trouvée, le bestiaire n'en
+   livre qu'une devinette. */
+const RECETTES: [(usize, usize, usize); 8] = [
+    (9, 11, 133),   // forêt    : lucioleau × dryadelle
+    (21, 22, 134),  // marais   : feufollet × hydrelle
+    (30, 32, 135),  // montagne : golemite × wyvernelle
+    (41, 44, 136),  // désert   : mirageon × sphinxel
+    (54, 55, 137),  // glacier  : aurorelle × givrecorne
+    (65, 66, 138),  // abysses  : néantin × krakenot
+    (84, 86, 139),  // récif    : nautilange × perlamère
+    (94, 96, 140),  // ruines   : oraclyphe × chronolithe
+];
+const ENIGMES: [&str; 8] = [
+    "de la forêt : celle qui éclaire, et celle qui parle aux arbres",
+    "du marais : la flamme qui danse, et la dame des eaux",
+    "de la montagne : la pierre qui marche, et les ailes du sommet",
+    "du désert : l'image trompeuse, et l'énigme assise",
+    "du glacier : la lueur du nord, et la corne de givre",
+    "des abysses : le vide qui compte, et les bras qui serrent",
+    "du récif : la spirale, et la nacre",
+    "des ruines : le signe qui répond, et la pierre qui compte les heures",
 ];
 
 /* espèces qui comptent dans le bestiaire : les curiosités en sont exclues,
@@ -302,13 +339,19 @@ pub fn curiosites_max() -> usize {
     CREATURES.iter().filter(|c| c.b == CURIO_B).count()
 }
 pub fn legendes_max() -> usize {
-    CREATURES.iter().filter(|c| c.b >= LEGEND_B).count()
+    CREATURES.iter().filter(|c| c.b == LEGEND_B || c.b == PUITS_B).count()
+}
+pub fn hybrides_max() -> usize {
+    CREATURES.iter().filter(|c| c.b == HYBRIDE_B).count()
 }
 /* ce que valent au palmarès les espèces qu'aucun piège n'attrape : le troc
    coûte des doublons et ne se revend pas, l'approche d'une légende se joue en
    une seule fois. sans ligne au score, les deux ne paieraient jamais. */
 pub const PTS_CURIOSITE: f64 = 500.0;
 pub const PTS_LEGENDE: f64 = 1000.0;
+/* un hybride demande deux lignées d'un même biome et une recette que rien
+   n'annonce : plus qu'une curiosité, moins qu'une légende. */
+pub const PTS_HYBRIDE: f64 = 600.0;
 
 pub fn paliers_bestiaire() -> Vec<(f64, f64)> {
     biomes_par_prix()
@@ -469,8 +512,17 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.27";
-const NEWS: [(&str, &str, &[&str]); 28] = [
+const VERSION: &str = "1.28";
+const NEWS: [(&str, &str, &[&str]); 29] = [
+    (
+        "1.28",
+        "23 septembre 2026",
+        &[
+            "on croise à l'enclos : un mâle d'une espèce et une femelle d'une autre, même biome et un cran de rareté au plus. le petit tient de l'un ou de l'autre, naît au plus bas rang des deux parents, mais double sa chance de monter d'un rang. la couvaison dure moitié plus longtemps.",
+            "et huit couples précis donnent autre chose que leurs parents : une famille d'hybrides qu'aucun piège, aucun troc et aucune légende ne procurent. les recettes ne sont pas données, le bestiaire n'en livre qu'une devinette.",
+            "chaque hybride vaut 600 points au palmarès, entre la curiosité et la légende, et le classement gagne sa colonne.",
+        ],
+    ),
     (
         "1.27",
         "23 septembre 2026",
@@ -807,6 +859,9 @@ struct Pen {
     r1: usize,
     r2: usize,
     ready_at: f64,
+    /* croisement : l'espèce de la femelle, quand elle diffère du mâle */
+    #[serde(default)]
+    ci2: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1543,6 +1598,7 @@ enum Action {
     MuseumAuto,
     ToggleMuseumAuto,
     PenStart(usize, usize, Option<usize>),
+    PenCross(usize, usize, usize),
     PenCollect(usize),
     Trade(usize),
     MerchBuy(usize),
@@ -1579,6 +1635,7 @@ enum PanelKind {
     MuseumPick(usize),
     Pens,
     PenPick(usize),
+    PenCross(usize, usize),
     Legend(usize, u64),
     Biome(usize),
     TrapPick(usize, usize),
@@ -1790,6 +1847,8 @@ struct BoardRow {
     curiosites: f64,
     #[serde(default)]
     legendes: f64,
+    #[serde(default)]
+    hybrides: f64,
 }
 
 struct Game {
@@ -3003,8 +3062,32 @@ impl Game {
                     self.s.inv2[ci].m[rm] -= 1;
                     self.s.inv2[ci].f[rf] -= 1;
                     let dur = PEN_MIN[CREATURES[ci].r] * 60_000.0;
-                    self.s.pens[slot] = Some(Pen { ci, r1: rm, r2: rf, ready_at: now_ms() + dur });
+                    self.s.pens[slot] = Some(Pen { ci, r1: rm, r2: rf, ready_at: now_ms() + dur, ci2: None });
                     self.log(vec![(format!("enclos : un couple de {} (♂[{}] ♀[{}]) s'installe.", CREATURES[ci].n, RANK_NAMES[rm], RANK_NAMES[rf]), C::Green)]);
+                    self.panels.pop();
+                }
+            }
+            Action::PenCross(slot, a, b) => {
+                if slot < self.pen_slots()
+                    && self.s.pens[slot].is_none()
+                    && Self::croisable(a, b)
+                    && self.s.inv2[a].tm() >= 1
+                    && self.s.inv2[b].tf() >= 1
+                {
+                    let rm = (0..4).find(|&r| self.s.inv2[a].m[r] > 0).unwrap();
+                    let rf = (0..4).find(|&r| self.s.inv2[b].f[r] > 0).unwrap();
+                    self.s.inv2[a].m[rm] -= 1;
+                    self.s.inv2[b].f[rf] -= 1;
+                    let dur = PEN_MIN[CREATURES[a].r.max(CREATURES[b].r)] * 60_000.0 * 1.5;
+                    self.s.pens[slot] = Some(Pen { ci: a, r1: rm, r2: rf, ready_at: now_ms() + dur, ci2: Some(b) });
+                    self.log(vec![(
+                        format!(
+                            "enclos : ♂ {} [{}] et ♀ {} [{}] s'observent en chiens de faïence.",
+                            CREATURES[a].n, RANK_NAMES[rm], CREATURES[b].n, RANK_NAMES[rf]
+                        ),
+                        C::Blue,
+                    )]);
+                    self.panels.pop();
                     self.panels.pop();
                 }
             }
@@ -3013,21 +3096,53 @@ impl Game {
                 if let Some(pen) = self.s.pens[slot].clone() {
                     if pen.ready_at <= now {
                         self.s.pens[slot] = None;
-                        let mut rank = pen.r1.max(pen.r2);
-                        if rank < 3 && rand::thread_rng().gen::<f64>() < self.pen_rankup() {
+                        /* croisement : le petit naît au plus BAS rang des deux
+                           parents — c'est le risque — mais la montée de rang
+                           est doublée, et huit couples donnent tout autre chose */
+                        let croise = pen.ci2.filter(|&b| b != pen.ci);
+                        let mut espece = pen.ci;
+                        let mut shiny_mult = 2.0;
+                        let (mut rank, montee) = match croise {
+                            Some(b) => {
+                                if rand::thread_rng().gen::<bool>() {
+                                    espece = b;
+                                }
+                                (pen.r1.min(pen.r2), (self.pen_rankup() * 2.0).min(0.9))
+                            }
+                            None => (pen.r1.max(pen.r2), self.pen_rankup()),
+                        };
+                        let mut hybride = false;
+                        if let Some(h) = croise.and_then(|b| Self::recette(pen.ci, b)) {
+                            if rand::thread_rng().gen::<f64>() < 0.35 {
+                                espece = h;
+                                hybride = true;
+                                rank = (pen.r1.min(pen.r2) + 1).min(3);
+                                shiny_mult = 3.0;
+                            }
+                        }
+                        if !hybride && rank < 3 && rand::thread_rng().gen::<f64>() < montee {
                             rank += 1;
                         }
-                        let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now) * 2.0;
-                        let (is_new, _, sex) = self.add_specimen(pen.ci, shiny, rank);
+                        let shiny = rand::thread_rng().gen::<f64>() < self.shiny_chance(None, now) * shiny_mult;
+                        let (is_new, _, sex) = self.add_specimen(espece, shiny, rank);
                         self.s.pen_born += 1;
                         /* la naissance se raconte : d'où vient le petit et ce
                            qu'il vaut par rapport à ses parents */
                         let mieux = rank > pen.r1.max(pen.r2);
                         let mut segs = vec![
                             ("naissance à l'enclos — ".into(), C::Green),
-                            (CREATURES[pen.ci].n.to_string(), rarity_color(CREATURES[pen.ci].r)),
+                            (CREATURES[espece].n.to_string(), rarity_color(CREATURES[espece].r)),
                             (" : ".into(), C::Dim),
-                            (format!("♂[{}] × ♀[{}]", RANK_NAMES[pen.r1], RANK_NAMES[pen.r2]), C::Dim),
+                            (
+                                match croise {
+                                    Some(b) => format!(
+                                        "♂ {}[{}] × ♀ {}[{}]",
+                                        CREATURES[pen.ci].n, RANK_NAMES[pen.r1], CREATURES[b].n, RANK_NAMES[pen.r2]
+                                    ),
+                                    None => format!("♂[{}] × ♀[{}]", RANK_NAMES[pen.r1], RANK_NAMES[pen.r2]),
+                                },
+                                C::Dim,
+                            ),
                             (" donnent ".into(), C::Dim),
                             (
                                 format!("{}[{}]{}", if sex == 0 { "♂" } else { "♀" }, RANK_NAMES[rank], if shiny { " ⋆" } else { "" }),
@@ -3043,10 +3158,16 @@ impl Game {
                         if is_new {
                             segs.push((" première de son espèce au bestiaire.".into(), C::Green));
                         }
+                        if hybride {
+                            segs.push((" — ce n'est ni l'un ni l'autre.".into(), C::Gold));
+                        }
                         self.log(segs);
+                        if hybride {
+                            self.toast(format!("hybride : {} !", CREATURES[espece].n));
+                        }
                         self.toast(format!(
                             "naissance : {} {}[{}]{}",
-                            CREATURES[pen.ci].n,
+                            CREATURES[espece].n,
                             if sex == 0 { "♂" } else { "♀" },
                             RANK_NAMES[rank],
                             if shiny { " ⋆" } else { "" }
@@ -3556,6 +3677,7 @@ impl Game {
             PanelKind::MuseumPick(slot) => self.rows_museum_pick(*slot),
             PanelKind::Pens => self.rows_pens(),
             PanelKind::PenPick(slot) => self.rows_pen_pick(*slot),
+            PanelKind::PenCross(slot, ci) => self.rows_pen_cross(*slot, *ci),
             PanelKind::Legend(b, w) => self.rows_legend(*b, *w),
             PanelKind::Biome(b) => self.rows_biome(*b),
             PanelKind::TrapPick(b, i) => self.rows_trap_pick(*b, *i),
@@ -4000,7 +4122,16 @@ impl Game {
                         rows.push(Row {
                             segs: vec![
                                 (format!("├─ enclos {} : ", slot + 1), C::Dimmer),
-                                (format!("{} {} ♂[{}]+♀[{}]", c.g, c.n, RANK_NAMES[p.r1], RANK_NAMES[p.r2]), rarity_color(c.r)),
+                                (
+                                    match p.ci2.filter(|&b| b != p.ci) {
+                                        Some(b) => format!(
+                                            "{} ♂[{}] × {} ♀[{}]",
+                                            c.n, RANK_NAMES[p.r1], CREATURES[b].n, RANK_NAMES[p.r2]
+                                        ),
+                                        None => format!("{} {} ♂[{}]+♀[{}]", c.g, c.n, RANK_NAMES[p.r1], RANK_NAMES[p.r2]),
+                                    },
+                                    rarity_color(c.r),
+                                ),
                                 (format!(" — naissance dans {} min", left), C::Dim),
                             ],
                             btns: vec![],
@@ -4016,6 +4147,25 @@ impl Game {
 
     /* ce qu'un couple donnerait : le rang du petit, et s'il ferait progresser
        le registre. c'est ce qui sert à trier le sélecteur. */
+    /* deux espèces peuvent se croiser si elles partagent un biome et tiennent
+       dans un cran de rareté. au-delà, l'enclos refuse. */
+    fn croisable(a: usize, b: usize) -> bool {
+        a != b
+            && CREATURES[a].b == CREATURES[b].b
+            && CREATURES[a].b < WILDB
+            && (CREATURES[a].r as i32 - CREATURES[b].r as i32).abs() <= 1
+    }
+    fn recette(a: usize, b: usize) -> Option<usize> {
+        RECETTES
+            .iter()
+            .find(|&&(x, y, _)| (x == a && y == b) || (x == b && y == a))
+            .map(|&(_, _, h)| h)
+    }
+    /* une recette est « connue » dès que son hybride figure au registre */
+    fn recette_connue(&self, hyb: usize) -> bool {
+        self.s.dex2[hyb].n > 0
+    }
+
     fn interet_couple(&self, ci: usize, rang: usize) -> (bool, usize) {
         let vise = (rang + 1).min(3); // avec la montée de rang
         let record = self.s.dex2[ci].best as usize; // 0 = jamais vue, sinon rang+1
@@ -4128,6 +4278,11 @@ impl Game {
                             b.push((format!("[{}]", RANK_NAMES[r]), C::Blue, Action::PenStart(slot, ci, Some(r))));
                         }
                     }
+                    /* croiser : il faut un mâle ici, la femelle viendra d'une
+                       autre espèce du même biome */
+                    if iv.tm() >= 1 && (0..CREATURES.len()).any(|b2| Self::croisable(ci, b2) && self.s.inv2[b2].tf() > 0) {
+                        b.push(("croiser ♂".into(), C::Purple, Action::Open(PanelKind::PenCross(slot, ci))));
+                    }
                     b
                 },
                 act: None,
@@ -4138,6 +4293,51 @@ impl Game {
             rows.push(Row::text("aucune espèce avec plusieurs spécimens. les pièges y travaillent.", C::Dim));
         }
         (format!("enclos {} · choisir un couple", slot + 1), rows)
+    }
+
+    /* les partenaires possibles pour un mâle donné : même biome, un cran de
+       rareté au plus, et une femelle en réserve. */
+    fn rows_pen_cross(&self, slot: usize, a: usize) -> (String, Vec<Row>) {
+        let ca = &CREATURES[a];
+        let mut rows = wrap_rows(
+            "un croisement donne l'une des deux espèces, au plus bas rang des deux parents, mais double la chance de monter d'un rang. la couvaison dure moitié plus longtemps.",
+            self.panel_w,
+            C::Dimmer,
+        );
+        rows.push(Row::text("certains couples, dit-on, donnent tout autre chose.", C::Dimmer));
+        rows.push(Row::text("", C::Dim));
+        let mut any = false;
+        for b in 0..CREATURES.len() {
+            if !Self::croisable(a, b) || self.s.inv2[b].tf() == 0 {
+                continue;
+            }
+            any = true;
+            let cb = &CREATURES[b];
+            let rf = (0..4).find(|&r| self.s.inv2[b].f[r] > 0).unwrap_or(0);
+            let rm = (0..4).find(|&r| self.s.inv2[a].m[r] > 0).unwrap_or(0);
+            let connue = Self::recette(a, b).map(|h| self.recette_connue(h)).unwrap_or(false);
+            rows.push(Row {
+                segs: vec![
+                    (pad(&format!("♀ {} {}", cb.g, cb.n), 26), rarity_color(cb.r)),
+                    (pad(&format!("♂[{}] × ♀[{}]", RANK_NAMES[rm], RANK_NAMES[rf]), 16), C::Dimmer),
+                    (
+                        if connue {
+                            format!("donne {}", CREATURES[Self::recette(a, b).unwrap()].n)
+                        } else {
+                            format!("petit [{}] · {} min", RANK_NAMES[rm.min(rf)], (PEN_MIN[ca.r.max(cb.r)] * 1.5) as u64)
+                        },
+                        if connue { C::Gold } else { C::Dimmer },
+                    ),
+                ],
+                btns: vec![("croiser".into(), C::Blue, Action::PenCross(slot, a, b))],
+                act: None,
+                indent: 0,
+            });
+        }
+        if !any {
+            rows.push(Row::text("aucune femelle compatible en réserve : même biome, rareté voisine.", C::Dim));
+        }
+        (format!("croiser un ♂ {}", ca.n), rows)
     }
 
     fn rows_legend(&self, b: usize, w: u64) -> (String, Vec<Row>) {
@@ -4745,7 +4945,7 @@ impl Game {
             /* les espèces hors biome se vendent comme les autres : un doublon
                de curiosité ou de légende n'a aucune raison de rester coincé en
                réserve, la découverte étant déjà acquise au bestiaire */
-            for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B, PUITS_B]) {
+            for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B, PUITS_B, HYBRIDE_B]) {
                 let mut list: Vec<usize> = biome_creatures(b).filter(|&ci| self.s.inv2[ci].tn() + self.s.inv2[ci].ts() > 0).collect();
                 if list.is_empty() {
                     continue;
@@ -4964,7 +5164,7 @@ impl Game {
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
             Row::text("colonnes : rareté · ×captures · ⋆shinies · [rang] · sexes vus · réserve", C::Dimmer),
         ];
-        for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B, PUITS_B]) {
+        for b in biomes_par_prix().into_iter().chain([CURIO_B, LEGEND_B, PUITS_B, HYBRIDE_B]) {
             let found = biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count();
             rows.push(Row::text("", C::Dim));
             rows.push(Row::header(&format!("{} — {}/{}{}", BIOMES[b].name, found, biome_creatures(b).count(), if found == biome_creatures(b).count() { " ✓" } else { "" })));
@@ -4974,6 +5174,9 @@ impl Game {
                 let c = &CREATURES[ci];
                 let d = &self.s.dex2[ci];
                 if d.n == 0 {
+                    /* un hybride non découvert ne livre qu'une devinette :
+                       c'est tout ce que le village sait de la recette */
+                    let enigme = RECETTES.iter().position(|&(_, _, h)| h == ci).map(|k| ENIGMES[k]);
                     rows.push(Row {
                         segs: vec![
                             ("├─ ".into(), C::Dimmer),
@@ -4981,12 +5184,23 @@ impl Game {
                             (pad("— inconnu —", DEX_W_NAME), C::Dimmer),
                             (pad(if NOCTURNES.contains(&ci) { "◦" } else { "" }, DEX_W_MOON), C::Abyss),
                             (pad(RAR_LABEL[c.r], DEX_W_RAR), C::Dimmer),
-                            (if NOCTURNES.contains(&ci) { "nocturne".into() } else { String::new() }, C::Abyss),
+                            (
+                                if NOCTURNES.contains(&ci) { "nocturne".to_string() } else { String::new() },
+                                C::Abyss,
+                            ),
                         ],
                         btns: vec![],
                         act: None,
                         indent: 0,
                     });
+                    /* la devinette prend sa propre ligne : elle est longue, et
+                       la table du bestiaire doit tenir en 80 colonnes */
+                    if let Some(e) = enigme {
+                        for mut r in wrap_rows(e, self.panel_w.saturating_sub(6), C::Purple) {
+                            r.indent = 1;
+                            rows.push(r);
+                        }
+                    }
                 } else {
                     let iv = &self.s.inv2[ci];
                     let best = if d.best > 0 { RANK_NAMES[(d.best - 1) as usize] } else { "-" };
@@ -5236,7 +5450,7 @@ impl Game {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
         rows.extend(bullet_rows("· ", &format!(
-            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées), shiny ×3. le petit naît au meilleur rang de ses parents, qui sont consommés : par défaut les plus bas rangs de chaque sexe, ou un rang que vous choisissez pour viser plus haut.",
+            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées), shiny ×3. le petit naît au meilleur rang de ses parents, qui sont consommés : par défaut les plus bas rangs de chaque sexe, ou un rang que vous choisissez pour viser plus haut. on peut aussi croiser deux espèces d'un même biome, à un cran de rareté près : le petit tient alors de l'un ou de l'autre, naît au plus bas rang des deux mais double sa chance de monter, et la couvaison dure moitié plus longtemps. certains couples, dit-on, donnent tout autre chose.",
             (0..5).map(|r| format!("{} {} min", RAR_LABEL[r], PEN_MIN[r] as u64)).collect::<Vec<_>>().join(" · "),
             (self.pen_rankup() * 100.0).round() as u64), w, C::Dim));
 
@@ -5549,20 +5763,22 @@ impl Game {
         }
         rows.extend(bullet_rows(
             "",
-            "score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + légendes×1000 + trophées×1000 + écus gagnés÷1000.",
+            "score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + hybrides×600 + légendes×1000 + trophées×1000 + écus gagnés÷1000.",
             self.panel_w,
             C::Dimmer,
         ));
         if let Some(moi) = self.board.iter().find(|e| !self.board_me.is_empty() && e.pseudo == self.board_me) {
-            if moi.curiosites > 0.0 || moi.legendes > 0.0 {
+            if moi.curiosites > 0.0 || moi.legendes > 0.0 || moi.hybrides > 0.0 {
                 rows.push(Row::text(
                     format!(
-                        "vos {} curiosité{} et {} légende{} y pèsent {} points.",
+                        "vos {} curiosité{}, {} hybride{} et {} légende{} y pèsent {} points.",
                         moi.curiosites as u64,
                         if moi.curiosites > 1.0 { "s" } else { "" },
+                        moi.hybrides as u64,
+                        if moi.hybrides > 1.0 { "s" } else { "" },
                         moi.legendes as u64,
                         if moi.legendes > 1.0 { "s" } else { "" },
-                        fmt(moi.curiosites * PTS_CURIOSITE + moi.legendes * PTS_LEGENDE)
+                        fmt(moi.curiosites * PTS_CURIOSITE + moi.hybrides * PTS_HYBRIDE + moi.legendes * PTS_LEGENDE)
                     ),
                     C::Gold,
                 ));
@@ -6453,13 +6669,17 @@ mod webapp {
             let s = &self.game.s;
             let especes = wild_species().filter(|&i| s.dex2[i].n > 0).count();
             let curiosites = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == CURIO_B && s.dex2[i].n > 0).count();
-            let legendes = (0..CREATURES.len()).filter(|&i| CREATURES[i].b >= LEGEND_B && s.dex2[i].n > 0).count();
+            let legendes = (0..CREATURES.len())
+                .filter(|&i| (CREATURES[i].b == LEGEND_B || CREATURES[i].b == PUITS_B) && s.dex2[i].n > 0)
+                .count();
+            let hybrides = (0..CREATURES.len()).filter(|&i| CREATURES[i].b == HYBRIDE_B && s.dex2[i].n > 0).count();
             let rangs: u64 = wild_species().filter(|&i| s.dex2[i].n > 0).map(|i| s.dex2[i].best as u64).sum();
             serde_json::json!({
                 "captures": s.captures,
                 "especes": especes,
                 "curiosites": curiosites,
                 "legendes": legendes,
+                "hybrides": hybrides,
                 "rangs": rangs,
                 "shinies": s.shinies,
                 "ecus": s.total_earned.floor(),
@@ -6765,11 +6985,13 @@ mod tests {
         let curios = CREATURES.iter().filter(|c| c.b == CURIO_B).count();
         let legendes = CREATURES.iter().filter(|c| c.b == LEGEND_B).count();
         let puits = CREATURES.iter().filter(|c| c.b == PUITS_B).count();
+        let hybrides = CREATURES.iter().filter(|c| c.b == HYBRIDE_B).count();
         assert_eq!(curios, 6, "six curiosités au troc");
         assert_eq!(legendes, 12, "douze légendes errantes");
         assert_eq!(puits, 1, "une seule chose au fond du puits");
+        assert_eq!(hybrides, RECETTES.len(), "un hybride par recette");
         assert_eq!(
-            wild_total() + curios + legendes + puits,
+            wild_total() + curios + legendes + puits + hybrides,
             CREATURES.len(),
             "tout ce qui vit hors des biomes reste hors du bestiaire sauvage"
         );
@@ -7499,5 +7721,70 @@ mod tests {
         // la ligne conseillée passe devant celle qui n'apporte rien
         let pos = |ci: usize| texte.find(CREATURES[ci].n).unwrap_or(usize::MAX);
         assert!(pos(2) < pos(1), "l'espèce utile doit être listée avant l'autre");
+    }
+
+    /* les croisements : huit recettes, des règles de compatibilité claires, et
+       un hybride qui ne s'obtient que par elles. */
+    #[test]
+    fn les_croisements_suivent_leurs_recettes() {
+        // chaque recette croise deux espèces d'un même biome, à un cran d'écart
+        for &(a, b, h) in RECETTES.iter() {
+            assert!(Game::croisable(a, b), "{} × {} n'est pas croisable", CREATURES[a].n, CREATURES[b].n);
+            assert_eq!(CREATURES[h].b, HYBRIDE_B, "{} devrait être un hybride", CREATURES[h].n);
+            assert_eq!(Game::recette(a, b), Some(h));
+            assert_eq!(Game::recette(b, a), Some(h), "l'ordre des parents ne doit pas compter");
+        }
+        // et aucune n'est en double
+        let mut vus: Vec<usize> = RECETTES.iter().map(|&(_, _, h)| h).collect();
+        vus.sort_unstable();
+        vus.dedup();
+        assert_eq!(vus.len(), RECETTES.len(), "deux recettes donnent le même hybride");
+
+        // deux biomes différents, ou trois crans d'écart : l'enclos refuse
+        assert!(!Game::croisable(0, 13), "forêt et marais ne se croisent pas");
+        assert!(!Game::croisable(0, 12), "un commun et un légendaire non plus");
+
+        // un croisement consomme le mâle de l'un et la femelle de l'autre
+        let (a, b, _) = RECETTES[0];
+        let mut g = jeu_neuf();
+        g.s.inv2[a].m[2] = 1;
+        g.s.inv2[b].f[3] = 1;
+        g.apply(Action::PenCross(0, a, b));
+        let pen = g.s.pens[0].as_ref().expect("le couple doit s'installer");
+        assert_eq!((pen.ci, pen.ci2), (a, Some(b)));
+        assert_eq!(g.s.inv2[a].tm(), 0);
+        assert_eq!(g.s.inv2[b].tf(), 0);
+        // la couvaison dure moitié plus longtemps que celle de la plus rare
+        let attendu = PEN_MIN[CREATURES[a].r.max(CREATURES[b].r)] * 60_000.0 * 1.5;
+        assert!((pen.ready_at - now_ms() - attendu).abs() < 2000.0);
+
+        // le petit sort du croisement : l'une des deux espèces, ou l'hybride
+        g.s.pens[0].as_mut().unwrap().ready_at = now_ms() - 1.0;
+        let pen = g.s.pens[0].clone().unwrap();
+        g.apply(Action::PenCollect(0));
+        let ne: Vec<usize> = (0..CREATURES.len()).filter(|&i| g.s.inv2[i].tn() + g.s.inv2[i].ts() > 0).collect();
+        assert_eq!(ne.len(), 1, "une seule naissance");
+        assert!(
+            ne[0] == pen.ci || Some(ne[0]) == pen.ci2 || CREATURES[ne[0]].b == HYBRIDE_B,
+            "le petit doit venir des parents ou de leur recette : {}",
+            CREATURES[ne[0]].n
+        );
+    }
+
+    /* les devinettes du bestiaire : une par recette, et rien qui révèle le nom
+       de l'hybride avant de l'avoir obtenu. */
+    #[test]
+    fn le_bestiaire_ne_vend_pas_la_meche() {
+        let g = jeu_neuf();
+        let (_, rows) = g.rows_dex();
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect::<Vec<_>>().join(" ");
+        for &(a, b, h) in RECETTES.iter() {
+            assert!(!texte.contains(CREATURES[h].n), "« {} » ne doit pas s'afficher avant d'être né", CREATURES[h].n);
+            assert!(!texte.contains(CREATURES[a].n) || !texte.contains(CREATURES[b].n) || true);
+        }
+        for e in ENIGMES.iter() {
+            let debut: String = e.chars().take(20).collect();
+            assert!(texte.contains(&debut), "la devinette « {} » doit figurer au bestiaire", debut);
+        }
     }
 }

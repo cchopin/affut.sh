@@ -145,12 +145,12 @@ fn borner_stats(
     prec: Option<&serde_json::Value>,
     now: f64,
 ) -> bool {
-    let brut: Vec<f64> = ["captures", "especes", "rangs", "shinies", "ecus", "migrations", "trophees", "curiosites", "legendes"]
+    let brut: Vec<f64> = ["captures", "especes", "rangs", "shinies", "ecus", "migrations", "trophees", "curiosites", "legendes", "hybrides"]
         .iter()
         .map(|k| lire_nb(e, k))
         .collect();
-    let (b_capt, b_esp, b_rang, b_shi, b_ecus, b_migr, b_tro, b_curio, b_leg) =
-        (brut[0], brut[1], brut[2], brut[3], brut[4], brut[5], brut[6], brut[7], brut[8]);
+    let (b_capt, b_esp, b_rang, b_shi, b_ecus, b_migr, b_tro, b_curio, b_leg, b_hyb) =
+        (brut[0], brut[1], brut[2], brut[3], brut[4], brut[5], brut[6], brut[7], brut[8], brut[9]);
 
     /* âge de la partie, avance comprise */
     let age_s = (((now - premier_at).max(0.0) + AVANCE_MS) / 1000.0).max(1.0);
@@ -211,6 +211,7 @@ fn borner_stats(
        contre des doublons — donc contre des captures */
     let curiosites = b_curio.min(affut::curiosites_max() as f64).min(captures);
     let legendes = b_leg.min(affut::legendes_max() as f64).min(captures);
+    let hybrides = b_hyb.min(affut::hybrides_max() as f64).min(captures);
 
     if std::env::var("AFFUT_DEBUG_BORNES").is_ok() {
         eprintln!(
@@ -221,7 +222,7 @@ fn borner_stats(
     let borne = [
         (captures, b_capt), (especes, b_esp), (rangs, b_rang), (shinies, b_shi),
         (ecus, b_ecus), (migrations, b_migr), (trophees, b_tro),
-        (curiosites, b_curio), (legendes, b_leg),
+        (curiosites, b_curio), (legendes, b_leg), (hybrides, b_hyb),
     ];
     let suspect = borne.iter().any(|(apres, avant)| apres < avant);
 
@@ -229,6 +230,7 @@ fn borner_stats(
         ("captures", captures), ("especes", especes), ("rangs", rangs),
         ("shinies", shinies), ("ecus", ecus), ("migrations", migrations),
         ("trophees", trophees), ("curiosites", curiosites), ("legendes", legendes),
+        ("hybrides", hybrides),
     ] {
         e.insert(k.into(), serde_json::json!(v));
     }
@@ -238,6 +240,7 @@ fn borner_stats(
         + rangs * 40.0
         + curiosites * affut::PTS_CURIOSITE
         + legendes * affut::PTS_LEGENDE
+        + hybrides * affut::PTS_HYBRIDE
         + trophees * 1000.0
         + ecus / 1000.0)
         .floor();
@@ -502,7 +505,7 @@ fn main() {
                une fois posée, elle ne bouge plus. */
             let premier_at = g("premier_at").and_then(|x| x.as_f64()).filter(|n| n.is_finite()).unwrap_or(now);
             entry.insert("premier_at".into(), serde_json::json!(premier_at));
-            for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "migrations", "curiosites", "legendes"] {
+            for k in ["captures", "especes", "shinies", "ecus", "trophees", "rangs", "migrations", "curiosites", "legendes", "hybrides"] {
                 let n = v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
                 let n = if n.is_finite() { n.clamp(0.0, 1e15).floor() } else { 0.0 };
                 entry.insert(k.into(), serde_json::json!(n));
