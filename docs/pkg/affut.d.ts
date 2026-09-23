@@ -4,6 +4,7 @@
 export class Web {
     free(): void;
     [Symbol.dispose](): void;
+    alerte(): string;
     key(k: string, ctrl: boolean): boolean;
     lb_stats(): string;
     constructor();
@@ -19,6 +20,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_web_free: (a: number, b: number) => void;
+    readonly web_alerte: (a: number, b: number) => void;
     readonly web_key: (a: number, b: number, c: number, d: number) => number;
     readonly web_lb_stats: (a: number, b: number) => void;
     readonly web_new: () => number;

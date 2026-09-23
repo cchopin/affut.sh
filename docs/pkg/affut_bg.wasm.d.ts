@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const __wbg_web_free: (a: number, b: number) => void;
+export const web_alerte: (a: number, b: number) => void;
 export const web_key: (a: number, b: number, c: number, d: number) => number;
 export const web_lb_stats: (a: number, b: number) => void;
 export const web_new: () => number;

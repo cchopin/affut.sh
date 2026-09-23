@@ -189,7 +189,7 @@
   <button data-k="ArrowLeft">←</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
 </div>
 <script type="module">
-const V = '20260821bf'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
+const V = '20260821bg'; // incrémenté à chaque déploiement : force le navigateur à recharger le jeu
 const mod = await import(`./pkg/affut.js?v=${V}`);
 await mod.default({ module_or_path: `./pkg/affut_bg.wasm?v=${V}` });
 if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -337,6 +337,44 @@ window.addEventListener('resize', () => { resize(); render(); });
 
 setInterval(() => { if (!paused) { w.tick(); render(); } }, 500);
 setInterval(() => { if (!paused) w.save(); }, 10000);
+
+/* ── l'onglet fait signe ────────────────────────────────────────────────
+   une légende ne reste que vingt minutes et le puits n'a soif que dix : la
+   favicon clignote pour qu'on le voie depuis un autre onglet. */
+const TITRE = document.title;
+const icone = (glyphe, couleur) => 'data:image/svg+xml,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+  + '<rect width="32" height="32" rx="7" fill="#101318"/>'
+  + '<rect x="1" y="1" width="30" height="30" rx="6" fill="none" stroke="#2b3240" stroke-width="1"/>'
+  + '<text x="16" y="23" font-size="22" text-anchor="middle" fill="' + couleur + '">' + glyphe + '</text>'
+  + '</svg>');
+const ALERTES = {
+  legende: { icone: icone('✧', '#ffc45c'), titre: '✧ légende — ' },
+  puits:   { icone: icone('✦', '#e06c75'), titre: '✦ le puits — ' },
+};
+let alerteEtat = '', alertePhase = false;
+function poserFavicon(href) {
+  // certains navigateurs ignorent un simple changement de href : on remplace le nœud
+  const vieux = document.querySelector('link[rel="icon"]');
+  const neuf = document.createElement('link');
+  neuf.rel = 'icon';
+  neuf.type = 'image/svg+xml';
+  neuf.href = href;
+  if (vieux) vieux.remove();
+  document.head.appendChild(neuf);
+}
+setInterval(() => {
+  let etat = '';
+  try { etat = paused ? '' : (w.alerte() || ''); } catch (e) { etat = ''; }
+  const a = ALERTES[etat];
+  if (!a) {
+    if (alerteEtat) { alerteEtat = ''; alertePhase = false; poserFavicon('./favicon.svg'); document.title = TITRE; }
+    return;
+  }
+  if (etat !== alerteEtat) { alerteEtat = etat; document.title = a.titre + TITRE; }
+  alertePhase = !alertePhase;
+  poserFavicon(alertePhase ? a.icone : './favicon.svg');
+}, 900);
 
 function syncUi() {
   document.getElementById('syncbtn').textContent = '⇄ session partagée · ' + syncState;

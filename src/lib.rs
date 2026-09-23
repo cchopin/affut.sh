@@ -466,8 +466,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.25";
-const NEWS: [(&str, &str, &[&str]); 26] = [
+const VERSION: &str = "1.26";
+const NEWS: [(&str, &str, &[&str]); 27] = [
+    (
+        "1.26",
+        "23 septembre 2026",
+        &[
+            "le journal se lit en deux colonnes : les prises à gauche, tout le reste à droite. une éclosion, une légende, une battue ou une offrande au puits ne se font plus chasser par trois captures automatiques.",
+            "et sur la version navigateur, la favicon clignote tant qu'une légende rôde ou que le puits a soif, avec un rappel dans le titre de l'onglet. de quoi jouer dans un autre onglet sans rien rater.",
+        ],
+    ),
     (
         "1.25",
         "23 septembre 2026",
@@ -1736,6 +1744,9 @@ fn pad(s: &str, w: usize) -> String {
 struct LogLine {
     t: String,
     segs: Vec<(String, C)>,
+    /* les prises tombent en continu : elles ont leur colonne, pour ne pas
+       chasser du journal une éclosion ou une légende */
+    prise: bool,
 }
 
 /* une ligne du classement, telle que la sert /lb (version navigateur) */
@@ -1821,9 +1832,16 @@ impl Game {
     }
 
     fn log(&mut self, segs: Vec<(String, C)>) {
+        self.log_ligne(segs, false);
+    }
+    /* le flot des captures : même colonne, même mémoire, autre file */
+    fn log_prise(&mut self, segs: Vec<(String, C)>) {
+        self.log_ligne(segs, true);
+    }
+    fn log_ligne(&mut self, segs: Vec<(String, C)>, prise: bool) {
         let t = clock_hms();
-        self.logs.push_front(LogLine { t, segs });
-        self.logs.truncate(80);
+        self.logs.push_front(LogLine { t, segs, prise });
+        self.logs.truncate(120);
     }
     fn toast(&mut self, msg: impl Into<String>) {
         self.toasts.push((msg.into(), now_ms()));
@@ -2165,7 +2183,7 @@ impl Game {
         if sold > 0.0 {
             segs.push((format!(" · auto-vente +{} écus", fmt(sold)), C::GoldDark));
         }
-        self.log(segs);
+        self.log_prise(segs);
         if is_new {
             self.log(vec![
                 ("nouvelle espèce découverte : ".into(), C::Green),
@@ -5731,23 +5749,44 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         draw_str(buf, area, lx, sep_y, &lg, theme.style(C::Gold, false));
     }
 
-    // ---- journal ----
-    for i in 0..3usize {
-        if let Some(l) = game.logs.get(i) {
-            let y = rows_n - 4 + i as i32;
-            let mut x = 2;
-            draw_str(buf, area, x, y, &format!("[{}] ", l.t), theme.style(C::Dimmer, false));
-            x += 11;
-            for (txt, c) in &l.segs {
-                if x >= cols - 2 {
-                    break;
+    /* ---- journal ----
+       deux colonnes : les prises à gauche, tout le reste à droite. une éclosion
+       ou une légende ne doit pas être chassée par le flot des captures. */
+    {
+        let mi = cols / 2; // la cloison
+        let colonnes: [(i32, i32, bool); 2] = [(2, mi - 1, true), (mi + 2, cols - 2, false)];
+        for (x0, x1, prises) in colonnes {
+            let mut i = 0usize;
+            for l in game.logs.iter().filter(|l| l.prise == prises).take(3) {
+                let y = rows_n - 4 + i as i32;
+                i += 1;
+                let mut x = x0;
+                draw_str(buf, area, x, y, &format!("[{}] ", l.t), theme.style(C::Dimmer, false));
+                x += 11;
+                for (txt, c) in &l.segs {
+                    if x >= x1 {
+                        break;
+                    }
+                    let t: String = txt.chars().take((x1 - x) as usize).collect();
+                    draw_str(buf, area, x, y, &t, theme.style(*c, false));
+                    x += t.chars().count() as i32;
                 }
-                let avail = (cols - 2 - x) as usize;
-                let t: String = txt.chars().take(avail).collect();
-                draw_str(buf, area, x, y, &t, theme.style(*c, false));
-                x += t.chars().count() as i32;
+            }
+            if i == 0 {
+                draw_str(
+                    buf,
+                    area,
+                    x0,
+                    rows_n - 4,
+                    if prises { "aucune prise pour l'instant." } else { "rien à signaler." },
+                    theme.style(C::Dimmer, false),
+                );
             }
         }
+        for y in rows_n - 4..rows_n - 1 {
+            draw_str(buf, area, mi, y, "│", theme.style(C::Dim, false));
+        }
+        draw_str(buf, area, mi, sep_y, "┬", theme.style(C::Dim, false));
     }
 
     // ---- cadre ----
@@ -6268,6 +6307,19 @@ mod webapp {
            (celles qu'on peut capturer dans un biome payé). compter en plus
            les curiosités du troc, qui ne vivent dans aucun biome, faisait
            passer un joueur honnête pour un tricheur. */
+        /* ce qui mérite d'attirer l'œil hors de l'onglet : le navigateur en
+           fait clignoter la favicon. vide quand il n'y a rien à courir. */
+        pub fn alerte(&self) -> String {
+            let now = now_ms();
+            if self.game.legend_now().is_some() {
+                return "legende".into();
+            }
+            if self.game.puits_luit(now) {
+                return "puits".into();
+            }
+            String::new()
+        }
+
         pub fn lb_stats(&self) -> String {
             let s = &self.game.s;
             let especes = wild_species().filter(|&i| s.dex2[i].n > 0).count();
@@ -7234,5 +7286,25 @@ mod tests {
             assert!(!texte.contains(ACHS[i].n), "« {} » ne doit pas s'afficher avant d'être gagné", ACHS[i].n);
         }
         assert!(texte.contains("? ? ?"), "les trophées scellés doivent apparaître masqués");
+    }
+
+    /* le journal tient deux files : les prises d'un côté, le reste de l'autre.
+       une éclosion ne doit pas être chassée par trois captures. */
+    #[test]
+    fn le_journal_separe_les_prises_du_reste() {
+        let mut g = jeu_neuf();
+        g.log(vec![("une naissance à l'enclos".into(), C::Green)]);
+        for _ in 0..10 {
+            g.log_prise(vec![("forêt → mulotin".into(), C::Text)]);
+        }
+        let prises: Vec<&LogLine> = g.logs.iter().filter(|l| l.prise).collect();
+        let reste: Vec<&LogLine> = g.logs.iter().filter(|l| !l.prise).collect();
+        assert_eq!(prises.len(), 10);
+        assert_eq!(reste.len(), 1, "la naissance doit survivre au flot des captures");
+        assert!(reste[0].segs[0].0.contains("naissance"));
+
+        /* et la colonne des prises garde bien les plus récentes en tête */
+        g.log_prise(vec![("glacier → mirage".into(), C::Text)]);
+        assert!(g.logs.iter().find(|l| l.prise).unwrap().segs[0].0.contains("glacier"));
     }
 }
