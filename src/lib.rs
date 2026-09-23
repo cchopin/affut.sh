@@ -472,7 +472,7 @@ const NEWS: [(&str, &str, &[&str]); 25] = [
         "1.24",
         "23 septembre 2026",
         &[
-            "le village a son horloge : une journée y dure deux heures réelles, soit douze jours pendant que vous en vivez un. le jour, la nuit, les saisons et la lune suivent ce cycle, plus votre fuseau horaire — les vingt espèces nocturnes ◦ sont enfin accessibles à qui ne joue jamais après 21 h. les pièges, les contrats, le troc et les légendes restent au temps réel : rien de ce qui produit n'a été accéléré.",
+            "le village a son horloge : une journée y dure deux heures réelles, soit douze jours pendant que vous en vivez un. le jour, la nuit, les saisons et la lune suivent cette horloge et non plus celle de votre ordinateur : les vingt espèces nocturnes ◦ sortent cinquante minutes toutes les deux heures, donc elles deviennent accessibles à qui ne joue jamais après 21 h. les pièges, les contrats, le troc et les légendes restent au temps réel : rien de ce qui produit n'a été accéléré.",
             "la barre du bas et le tableau de bord affichent l'heure qu'il est au village.",
             "quelque chose dort au fond du puits, et il arrive qu'une offrande le réveille. c'est la seule façon de le rencontrer.",
         ],
