@@ -512,8 +512,15 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.29";
-const NEWS: [(&str, &str, &[&str]); 30] = [
+const VERSION: &str = "1.30";
+const NEWS: [(&str, &str, &[&str]); 31] = [
+    (
+        "1.30",
+        "26 septembre 2026",
+        &[
+            "les shinies s'entassaient par centaines puisque rien ne les vendait jamais. la boutique laisse désormais fixer combien en garder par espèce, 3, 5, 10 ou 20 : au-delà, les plus bas rangs partent à la vente comme le reste. le réglage vaut « tout garder » par défaut et l'ancienne garantie tient tant que vous n'y touchez pas — et même réglé, le dernier shiny d'une espèce ne part jamais.",
+        ],
+    ),
     (
         "1.29",
         "23 septembre 2026",
@@ -963,6 +970,10 @@ struct State {
        de stock, et un seul couple ne permet qu'une reproduction */
     #[serde(default = "un_couple")]
     autokeep: u32,
+    /* shinies gardés par espèce, 0 = on ne vend jamais un shiny. le réglage
+       existe parce qu'on finit par en stocker des centaines. */
+    #[serde(default)]
+    keepshiny: u32,
     /* le musée se garnit tout seul avec les spécimens les plus rentables */
     #[serde(default)]
     museum_auto: bool,
@@ -1020,6 +1031,7 @@ impl Default for State {
             lab: vec![0; LABS.len()],
             autosell: vec![false; 5],
             autokeep: 1,
+            keepshiny: 0,
             museum_auto: false,
             ach: vec![false; ACHS.len()],
             last_seen: now_ms(),
@@ -1036,6 +1048,9 @@ impl State {
         self.lab.resize(LABS.len(), 0);
         self.autosell.resize(5, false);
         self.autokeep = self.autokeep.clamp(1, 4);
+        if self.keepshiny > 20 {
+            self.keepshiny = 20;
+        }
         self.ach.resize(ACHS.len(), false);
         self.inv2.resize(CREATURES.len(), InvE::default());
         self.dex2.resize(CREATURES.len(), DexE::default());
@@ -1598,6 +1613,7 @@ enum Action {
     Place(usize, usize, usize),
     SetBait(usize, usize, Option<usize>),
     SetAutokeep(u32),
+    SetKeepshiny(u32),
     Remove(usize, usize),
     Sell(usize, bool, SellQty),
     SellDupes,
@@ -2245,6 +2261,14 @@ impl Game {
                 self.gain(sold);
             }
         }
+        /* les shinies ont leur propre règle, indépendante des raretés cochées :
+           tant que le réglage vaut 0, aucun ne part jamais */
+        if self.s.lab[LAB_AUTOVENTE] >= 1 && shiny && self.s.keepshiny > 0 && self.s.inv2[ci].ts() > self.s.keepshiny as u64 {
+            let (_, v) = self.sell_surplus_shiny(ci);
+            let g = (v * if bait == Some(BAIT_NECTAR) { 1.3 } else { 1.0 }).floor();
+            sold += g;
+            self.gain(g);
+        }
         Some((ci, shiny, is_new, new_shiny, sold, rank + sex as usize * 10))
     }    /* battue sans piège : une tentative à mains nues */
     fn bare_attempt(&mut self, biome: usize, at: f64) -> Option<(usize, bool, bool, bool, f64, usize)> {
@@ -2822,6 +2846,11 @@ impl Game {
                         total += v;
                         n += q;
                     }
+                    if self.s.keepshiny > 0 && self.s.inv2[ci].ts() > self.s.keepshiny as u64 {
+                        let (q, v) = self.sell_surplus_shiny(ci);
+                        total += v;
+                        n += q;
+                    }
                 }
                 if n > 0 {
                     total = total.floor();
@@ -2834,6 +2863,7 @@ impl Game {
             }
             Action::ToggleAutosell(r) => self.s.autosell[r] = !self.s.autosell[r],
             Action::SetAutokeep(n) => self.s.autokeep = n.clamp(1, 4),
+            Action::SetKeepshiny(n) => self.s.keepshiny = n.min(20),
             Action::Migrate => {
                 let g = self.trophy_gain();
                 let cost = self.migration_cost();
@@ -3351,6 +3381,26 @@ impl Game {
         let v = self.take_lowest(ci, false, q);
         for (sexe, r) in mis {
             self.give_back(ci, false, sexe, r);
+        }
+        (q, v)
+    }
+    /* le surplus de shinies : on met de côté les plus beaux, on solde le reste
+       par les plus bas rangs. jamais appelé tant que le réglage vaut 0. */
+    fn sell_surplus_shiny(&mut self, ci: usize) -> (u64, f64) {
+        let garde = self.s.keepshiny;
+        if garde == 0 {
+            return (0, 0.0);
+        }
+        let mut mis: Vec<(u8, usize)> = vec![];
+        for _ in 0..garde {
+            if let Some((r, sexe)) = self.take_best(ci, true) {
+                mis.push((sexe, r));
+            }
+        }
+        let q = self.s.inv2[ci].ts();
+        let v = self.take_lowest(ci, true, q);
+        for (sexe, r) in mis {
+            self.give_back(ci, true, sexe, r);
         }
         (q, v)
     }
@@ -4997,7 +5047,7 @@ impl Game {
             rows.push(Row::text("réserve vide. les pièges y remédieront.", C::Dim));
         } else {
             for r in wrap_rows(
-                "« vendre tous les doublons » garde vos meilleurs couples ♂♀ de chaque espèce (un par défaut, jusqu'à quatre au réglage ci-dessous), met de côté ce qu'exigent les commandes du comptoir et les demandes du troc, jamais les shinies. la vente écoule d'abord les rangs les plus bas.",
+                "« vendre tous les doublons » garde vos meilleurs couples ♂♀ de chaque espèce (un par défaut, jusqu'à quatre au réglage ci-dessous), met de côté ce qu'exigent les commandes du comptoir et les demandes du troc, jamais les shinies, sauf si vous réglez vous-même combien en garder ci-dessous. la vente écoule d'abord les rangs les plus bas.",
                 self.panel_w, C::Dimmer,
             ) {
                 rows.push(r);
@@ -5088,6 +5138,30 @@ impl Game {
                             format!("{} {}", if self.s.autokeep == n { "■" } else { "□" }, n),
                             if self.s.autokeep == n { C::Green } else { C::Dim },
                             Action::SetAutokeep(n),
+                        )
+                    })
+                    .collect(),
+                act: None,
+                indent: 0,
+            });
+            /* les shinies ne partent jamais tant que ce réglage vaut « tout
+               garder ». au-delà, on solde les plus bas rangs d'une espèce dont
+               on a déjà de quoi faire. */
+            rows.push(Row {
+                segs: vec![(
+                    match self.s.keepshiny {
+                        0 => "shinies ⋆ : aucun ne se vend, jamais".to_string(),
+                        n => format!("shinies ⋆ : on garde les {} plus beaux par espèce, le reste se vend", n),
+                    },
+                    if self.s.keepshiny == 0 { C::Shiny } else { C::Text },
+                )],
+                btns: [0u32, 3, 5, 10, 20]
+                    .iter()
+                    .map(|&n| {
+                        (
+                            format!("{} {}", if self.s.keepshiny == n { "■" } else { "□" }, if n == 0 { "tout garder".to_string() } else { n.to_string() }),
+                            if self.s.keepshiny == n { C::Green } else { C::Dim },
+                            Action::SetKeepshiny(n),
                         )
                     })
                     .collect(),
@@ -7879,5 +7953,40 @@ mod tests {
         g.s.lignees[a] = 6;
         g.s.lignees[b] = 2;
         assert!((g.pen_rankup_espece(a, Some(b)) - (g.pen_rankup() + 0.04)).abs() < 1e-9);
+    }
+
+    /* les shinies ne partent jamais tout seuls, sauf réglage explicite — et
+       alors ce sont les plus bas rangs, jamais les plus beaux. */
+    #[test]
+    fn les_shinies_ne_se_vendent_que_sur_demande() {
+        let mut g = jeu_neuf();
+        let ci = 0;
+        for r in 0..4 {
+            g.s.inv2[ci].sm[r] = 3;
+            g.s.inv2[ci].sf[r] = 3;
+        }
+        assert_eq!(g.s.keepshiny, 0, "par défaut, aucun shiny ne se vend");
+        let (q, v) = g.sell_surplus_shiny(ci);
+        assert_eq!((q, v), (0, 0.0), "réglage à zéro : rien ne part");
+        assert_eq!(g.s.inv2[ci].ts(), 24);
+
+        // « vendre tous les doublons » n'y touche pas non plus
+        g.apply(Action::SellDupes);
+        assert_eq!(g.s.inv2[ci].ts(), 24, "les doublons shiny restent tant que rien n'est réglé");
+
+        // avec un réglage, on garde les plus beaux
+        g.s.keepshiny = 5;
+        let (vendus, _) = g.sell_surplus_shiny(ci);
+        assert_eq!(vendus, 19);
+        assert_eq!(g.s.inv2[ci].ts(), 5, "cinq shinies restent");
+        assert_eq!(g.s.inv2[ci].sr(3), 5, "et ce sont les cinq [S]");
+        assert_eq!(g.s.inv2[ci].sr(0), 0, "les [C] sont partis");
+
+        // un seul shiny d'une espèce ne part jamais, quel que soit le réglage
+        let autre = 1;
+        g.s.inv2[autre].sm[0] = 1;
+        g.s.keepshiny = 1;
+        g.apply(Action::SellDupes);
+        assert_eq!(g.s.inv2[autre].ts(), 1, "le dernier shiny d'une espèce reste");
     }
 }
