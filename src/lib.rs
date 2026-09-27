@@ -23,6 +23,7 @@ pub enum GKey {
     Esc,
     PageUp,
     PageDown,
+    Backspace,
     Char(char),
 }
 
@@ -512,8 +513,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.30";
-const NEWS: [(&str, &str, &[&str]); 31] = [
+const VERSION: &str = "1.31";
+const NEWS: [(&str, &str, &[&str]); 32] = [
+    (
+        "1.31",
+        "27 septembre 2026",
+        &[
+            "le conseil de l'enclos ne propose plus deux [S] d'une espèce déjà inscrite en [S] : ils ne donnaient qu'un [S] de plus en consommant deux beaux spécimens. il dit maintenant ce qu'il apporte, « nouveau record au registre » ou « améliore votre stock », et quand plus rien n'est à gagner il le dit aussi au lieu de conseiller n'importe quoi.",
+            "les sélecteurs de l'enclos se filtrent : « / » ouvre une recherche par nom, un bouton fait tourner les biomes. une ou deux lettres cherchent un début de nom, « a » ne ramène donc que les espèces qui commencent par a, et les noms composés comptent par mot. à partir de trois lettres, la recherche va aussi à l'intérieur des mots, accents et majuscules indifférents.",
+        ],
+    ),
     (
         "1.30",
         "26 septembre 2026",
@@ -1079,6 +1088,23 @@ fn clock_hms() -> String {
     format!("{:02}:{:02}:{:02}", d.get_hours(), d.get_minutes(), d.get_seconds())
 }
 
+/* comparaison indulgente : « cristalpin » se trouve en tapant « cristal »,
+   « crist » ou « CRISTAL », accents compris */
+fn sans_accents(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| c.to_lowercase())
+        .map(|c| match c {
+            'à' | 'â' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'î' | 'ï' => 'i',
+            'ô' | 'ö' => 'o',
+            'û' | 'ù' | 'ü' => 'u',
+            'ç' => 'c',
+            c => c,
+        })
+        .collect()
+}
+
 fn splitmix(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9E3779B97F4A7C15);
     x = (x ^ (x >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
@@ -1614,6 +1640,8 @@ enum Action {
     SetBait(usize, usize, Option<usize>),
     SetAutokeep(u32),
     SetKeepshiny(u32),
+    Chercher,
+    FiltreBiome(Option<usize>),
     Remove(usize, usize),
     Sell(usize, bool, SellQty),
     SellDupes,
@@ -1904,6 +1932,11 @@ struct Game {
     pentacle_until: f64,
     /* dernier passage du garnissage automatique du musée */
     museum_auto_at: f64,
+    /* filtres des sélecteurs d'espèces : nom cherché, biome retenu, et si la
+       frappe alimente la recherche plutôt que la navigation */
+    filtre: String,
+    filtre_biome: Option<usize>,
+    saisie: bool,
 }
 
 impl Game {
@@ -1934,6 +1967,9 @@ impl Game {
             pens_seen: vec![],
             pentacle_until: 0.0,
             museum_auto_at: 0.0,
+            filtre: String::new(),
+            filtre_biome: None,
+            saisie: false,
         };
         (game, fresh)
     }
@@ -2864,6 +2900,16 @@ impl Game {
             Action::ToggleAutosell(r) => self.s.autosell[r] = !self.s.autosell[r],
             Action::SetAutokeep(n) => self.s.autokeep = n.clamp(1, 4),
             Action::SetKeepshiny(n) => self.s.keepshiny = n.min(20),
+            Action::Chercher => self.saisie = true,
+            Action::FiltreBiome(b) => {
+                self.filtre_biome = b;
+                /* « effacer » remet tout à plat : le bouton ne porte ce nom que
+                   lorsqu'un filtre est actif */
+                if b.is_none() {
+                    self.filtre.clear();
+                    self.saisie = false;
+                }
+            }
             Action::Migrate => {
                 let g = self.trophy_gain();
                 let cost = self.migration_cost();
@@ -4264,29 +4310,118 @@ impl Game {
         self.s.dex2[hyb].n > 0
     }
 
-    fn interet_couple(&self, ci: usize, rang: usize) -> (bool, usize) {
-        let vise = (rang + 1).min(3); // avec la montée de rang
+    /* ce qu'un couple peut apporter, en trois degrés :
+         2 — le petit peut battre le record du registre
+         1 — il ne battra pas le registre mais peut monter d'un rang, donc
+             améliorer le stock
+         0 — deux [S] ne donnent qu'un [S] : il ne reste que la lignée et la
+             chance de shiny doublée, pour deux beaux spécimens consommés */
+    fn interet_couple(&self, ci: usize, rang: usize) -> (u8, usize) {
         let record = self.s.dex2[ci].best as usize; // 0 = jamais vue, sinon rang+1
-        (record == 0 || vise + 1 > record, rang)
+        let vise = (rang + 1).min(3);
+        if record == 0 || vise + 1 > record {
+            (2, rang)
+        } else if rang < 3 {
+            (1, rang)
+        } else {
+            (0, rang)
+        }
     }
     /* le meilleur couple disponible : d'abord ce qui ferait progresser le
        registre, puis le rang, puis la rareté. */
-    fn meilleur_couple(&self) -> Option<(usize, usize)> {
-        let mut best: Option<(bool, usize, usize, usize, usize)> = None;
+    fn meilleur_couple(&self) -> Option<(usize, usize, u8)> {
+        let mut best: Option<(u8, usize, usize, usize, usize)> = None;
         for ci in 0..CREATURES.len() {
             let iv = &self.s.inv2[ci];
+            /* on descend les rangs : un couple [S] d'une espèce déjà inscrite
+               en [S] ne donnerait qu'un [S] de plus en consommant deux beaux
+               spécimens, donc il ne mérite pas d'être conseillé */
             for r in (0..4).rev() {
                 if iv.m[r] >= 1 && iv.f[r] >= 1 {
-                    let (progres, rang) = self.interet_couple(ci, r);
-                    let cle = (progres, rang, CREATURES[ci].r, usize::MAX - ci, ci);
+                    let (degre, rang) = self.interet_couple(ci, r);
+                    if degre == 0 {
+                        continue;
+                    }
+                    let cle = (degre, rang, CREATURES[ci].r, usize::MAX - ci, ci);
                     if best.map(|b| cle > (b.0, b.1, b.2, b.3, b.4)).unwrap_or(true) {
                         best = Some(cle);
                     }
-                    break; // le plus haut rang de l'espèce suffit
+                    break;
                 }
             }
         }
-        best.map(|b| (b.4, b.1))
+        best.map(|b| (b.4, b.1, b.0))
+    }
+
+    /* une espèce passe le filtre si son nom contient la recherche et si elle
+       appartient au biome retenu */
+    fn passe_filtre(&self, ci: usize) -> bool {
+        if let Some(b) = self.filtre_biome {
+            if CREATURES[ci].b != b {
+                return false;
+            }
+        }
+        if self.filtre.is_empty() {
+            return true;
+        }
+        let q = sans_accents(&self.filtre);
+        let nom = sans_accents(CREATURES[ci].n);
+        /* une ou deux lettres : on ne retient que les noms qui COMMENCENT par
+           là, sinon taper « a » ramènerait la moitié du bestiaire. le nom
+           composé compte par mot, « cornu » trouve « grand cornu ». au-delà de
+           deux lettres, on cherche aussi à l'intérieur des mots. */
+        if nom.split(|c: char| c == ' ' || c == '-' || c == '\'').any(|mot| mot.starts_with(&q)) {
+            return true;
+        }
+        q.chars().count() >= 3 && nom.contains(&q)
+    }
+    /* la ligne de recherche : « / » ouvre la saisie, les flèches ◂ ▸ font
+       tourner le biome. elle sert au sélecteur comme au croisement. */
+    fn rows_filtre(&self) -> Vec<Row> {
+        let biomes: Vec<usize> = biomes_par_prix();
+        let suivant = match self.filtre_biome {
+            None => biomes.first().copied(),
+            Some(b) => {
+                let i = biomes.iter().position(|&x| x == b).unwrap_or(0);
+                biomes.get(i + 1).copied()
+            }
+        };
+        let mut btns = vec![(
+            if self.saisie { "saisie en cours".to_string() } else { "chercher [/]".to_string() },
+            if self.saisie { C::Gold } else { C::Blue },
+            Action::Chercher,
+        )];
+        btns.push((
+            match suivant {
+                Some(b) => format!("biome ▸ {}", BIOMES[b].name),
+                None => "biome ▸ tous".to_string(),
+            },
+            C::Blue,
+            Action::FiltreBiome(suivant),
+        ));
+        if !self.filtre.is_empty() || self.filtre_biome.is_some() {
+            btns.push(("effacer".into(), C::Red, Action::FiltreBiome(None)));
+        }
+        vec![
+            Row {
+                segs: vec![(
+                    format!(
+                        "recherche (une lettre = début du nom) : {}{}   biome : {}",
+                        if self.filtre.is_empty() { "—".to_string() } else { self.filtre.clone() },
+                        if self.saisie { "_" } else { "" },
+                        match self.filtre_biome {
+                            Some(b) => BIOMES[b].name,
+                            None => "tous",
+                        }
+                    ),
+                    if self.saisie { C::Gold } else { C::Dimmer },
+                )],
+                btns,
+                act: None,
+                indent: 0,
+            },
+            Row::text("", C::Dim),
+        ]
     }
 
     fn rows_pen_pick(&self, slot: usize) -> (String, Vec<Row>) {
@@ -4298,39 +4433,59 @@ impl Game {
             Row::text("", C::Dim),
         ];
         let montee_base = (self.pen_rankup() * 100.0).round() as u64;
+        rows.extend(self.rows_filtre());
         /* le conseil : une ligne, un bouton, le meilleur couple du moment */
-        if let Some((ci, rang)) = self.meilleur_couple() {
-            let c = &CREATURES[ci];
-            let vise = (rang + 1).min(3);
-            rows.push(Row {
-                segs: vec![
-                    ("conseil : ".into(), C::Dimmer),
-                    (format!("{} {} ", c.g, c.n), rarity_color(c.r)),
-                    (
-                        format!(
-                            "♂[{}] ♀[{}] → petit [{}]{}",
-                            RANK_NAMES[rang],
-                            RANK_NAMES[rang],
-                            RANK_NAMES[rang],
-                            if rang < 3 {
-                                format!(", [{}] dans {}% des cas", RANK_NAMES[vise], (self.pen_rankup_espece(ci, None) * 100.0).round() as u64)
-                            } else {
-                                String::new()
-                            }
+        match self.meilleur_couple() {
+            Some((ci, rang, degre)) => {
+                let c = &CREATURES[ci];
+                let vise = (rang + 1).min(3);
+                rows.push(Row {
+                    segs: vec![
+                        ("conseil : ".into(), C::Dimmer),
+                        (format!("{} {} ", c.g, c.n), rarity_color(c.r)),
+                        (
+                            format!(
+                                "♂[{}] ♀[{}] → petit [{}], [{}] dans {}% des cas",
+                                RANK_NAMES[rang],
+                                RANK_NAMES[rang],
+                                RANK_NAMES[rang],
+                                RANK_NAMES[vise],
+                                (self.pen_rankup_espece(ci, None) * 100.0).round() as u64
+                            ),
+                            C::Text,
                         ),
-                        C::Text,
-                    ),
-                ],
-                btns: vec![("meilleur couple".into(), C::Gold, Action::PenStart(slot, ci, Some(rang)))],
-                act: None,
-                indent: 0,
-            });
+                        (
+                            if degre == 2 { " — nouveau record au registre".to_string() } else { " — améliore votre stock".to_string() },
+                            if degre == 2 { C::Gold } else { C::Dimmer },
+                        ),
+                    ],
+                    btns: vec![("meilleur couple".into(), C::Gold, Action::PenStart(slot, ci, Some(rang)))],
+                    act: None,
+                    indent: 0,
+                });
+            }
+            None if (0..CREATURES.len())
+                .any(|ci| (0..4).any(|r| self.s.inv2[ci].m[r] >= 1 && self.s.inv2[ci].f[r] >= 1)) =>
+            {
+                /* on a des couples, mais aucun n'apporte plus rien : le dire,
+                   plutôt que de conseiller deux [S] qui ne donneraient qu'un [S] */
+                for r in wrap_rows(
+                    "aucun couple ne peut plus rien améliorer : vos [S] ne donnent que des [S], et le registre les a déjà. une naissance ne rapporte alors que la lignée et une chance de shiny doublée. pour aller plus loin, croisez deux espèces d'un même biome.",
+                    self.panel_w,
+                    C::Dimmer,
+                ) {
+                    rows.push(r);
+                }
+            }
+            None => {} // réserve vide : la liste le dira elle-même
+        }
+        {
             rows.push(Row::text("", C::Dim));
         }
 
         /* le sélecteur trié par intérêt : ce qui fait progresser le registre
            d'abord, puis le rang du couple, puis la rareté */
-        let mut liste: Vec<(bool, usize, usize, usize)> = vec![];
+        let mut liste: Vec<(u8, usize, usize, usize)> = vec![];
         for ci in 0..CREATURES.len() {
             let iv = &self.s.inv2[ci];
             if iv.tn() == 0 {
@@ -4340,17 +4495,20 @@ impl Game {
             if iv.tn() < 2 && !ok {
                 continue;
             }
+            if !self.passe_filtre(ci) {
+                continue;
+            }
             let rang = (0..4).rev().find(|&r| iv.m[r] >= 1 && iv.f[r] >= 1);
-            let (progres, r) = match rang {
+            let (degre, r) = match rang {
                 Some(r) => self.interet_couple(ci, r),
-                None => (false, 0),
+                None => (0, 0),
             };
-            liste.push((progres && ok, r, CREATURES[ci].r, ci));
+            liste.push((if ok { degre } else { 0 }, r, CREATURES[ci].r, ci));
         }
         liste.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(b.2.cmp(&a.2)).then(a.3.cmp(&b.3)));
 
         let any = !liste.is_empty();
-        for (progres, rang_couple, _, ci) in liste {
+        for (degre, rang_couple, _, ci) in liste {
             let iv = &self.s.inv2[ci];
             let ok = iv.tm() >= 1 && iv.tf() >= 1;
             let c = &CREATURES[ci];
@@ -4363,11 +4521,18 @@ impl Game {
             };
             rows.push(Row {
                 segs: vec![
-                    (if progres { "↑ ".to_string() } else { "  ".to_string() }, C::Gold),
+                    (
+                        match degre {
+                            2 => "↑ ".to_string(),  // ferait progresser le registre
+                            1 => "+ ".to_string(),  // améliore le stock, pas le registre
+                            _ => "  ".to_string(),
+                        },
+                        if degre == 2 { C::Gold } else { C::Dim },
+                    ),
                     (pad(&format!("{} {}", c.g, c.n), 24), rarity_color(c.r)),
                     (pad(&format!("♂{} ♀{}", iv.tm(), iv.tf()), 8), if ok { C::Green } else { C::Red }),
                     (pad(&format!("registre [{}]", if record == 0 { "—".to_string() } else { RANK_NAMES[record - 1].to_string() }), 14), C::Dimmer),
-                    (pad(&petit, 14), if progres { C::Gold } else { C::Dimmer }),
+                    (pad(&petit, 14), if degre == 2 { C::Gold } else { C::Dimmer }),
                     (
                         format!(
                             "{} min{}",
@@ -4416,9 +4581,10 @@ impl Game {
         );
         rows.push(Row::text("certains couples, dit-on, donnent tout autre chose.", C::Dimmer));
         rows.push(Row::text("", C::Dim));
+        rows.extend(self.rows_filtre());
         let mut any = false;
         for b in 0..CREATURES.len() {
-            if !Self::croisable(a, b) || self.s.inv2[b].tf() == 0 {
+            if !self.passe_filtre(b) || !Self::croisable(a, b) || self.s.inv2[b].tf() == 0 {
                 continue;
             }
             any = true;
@@ -6437,6 +6603,45 @@ fn panel_scroll(game: &mut Game, lines: i32) -> bool {
 
 fn panel_key(game: &mut Game, code: GKey) {
     let Some(panel) = game.panels.last() else { return };
+    /* les sélecteurs d'espèces se filtrent : « / » ouvre la saisie, et tant
+       qu'elle est ouverte la frappe alimente la recherche au lieu de naviguer */
+    let filtrable = matches!(panel.kind, PanelKind::PenPick(_) | PanelKind::PenCross(_, _));
+    if filtrable {
+        if game.saisie {
+            match code {
+                GKey::Char(c) if !c.is_control() => {
+                    if game.filtre.chars().count() < 20 {
+                        game.filtre.push(c);
+                    }
+                    if let Some(p) = game.panels.last_mut() {
+                        p.sel = 0;
+                        p.scroll = 0;
+                    }
+                    return;
+                }
+                GKey::Backspace => {
+                    game.filtre.pop();
+                    return;
+                }
+                GKey::Enter => {
+                    game.saisie = false;
+                    return;
+                }
+                GKey::Esc => {
+                    game.saisie = false;
+                    game.filtre.clear();
+                    return;
+                }
+                _ => {}
+            }
+        } else if matches!(code, GKey::Char('/')) {
+            game.saisie = true;
+            return;
+        }
+    } else if game.saisie {
+        game.saisie = false;
+    }
+    let Some(panel) = game.panels.last() else { return };
     let (_, rows) = game.build_rows(&panel.kind);
     let sels = selectables(&rows);
     let sel = panel.sel.min(sels.len().saturating_sub(1));
@@ -6630,6 +6835,7 @@ fn map_key(code: crossterm::event::KeyCode) -> Option<GKey> {
         K::Esc => GKey::Esc,
         K::PageUp => GKey::PageUp,
         K::PageDown => GKey::PageDown,
+        K::Backspace => GKey::Backspace,
         K::Char(c) => GKey::Char(c),
         _ => return None,
     })
@@ -6867,6 +7073,7 @@ mod webapp {
                 "Escape" => GKey::Esc,
                 "PageUp" => GKey::PageUp,
                 "PageDown" => GKey::PageDown,
+                "Backspace" => GKey::Backspace,
                 _ => {
                     let mut it = k.chars();
                     match (it.next(), it.next()) {
@@ -7154,6 +7361,9 @@ mod tests {
             pens_seen: vec![],
             pentacle_until: 0.0,
             museum_auto_at: 0.0,
+            filtre: String::new(),
+            filtre_biome: None,
+            saisie: false,
         }
     }
 
@@ -7844,9 +8054,27 @@ mod tests {
         g.s.inv2[2].f[2] = 1;
         g.s.dex2[2].best = 1; // [C] au registre
 
-        let (ci, rang) = g.meilleur_couple().expect("un couple doit être conseillé");
+        let (ci, rang, degre) = g.meilleur_couple().expect("un couple doit être conseillé");
         assert_eq!(ci, 2, "le conseil doit viser ce qui fait progresser le registre");
         assert_eq!(rang, 2);
+        assert_eq!(degre, 2, "et annoncer un nouveau record");
+
+        /* un couple [S] d'une espèce déjà inscrite en [S] n'apporte rien : il
+           ne doit jamais être conseillé */
+        let mut g2 = jeu_neuf();
+        g2.s.inv2[5].m[3] = 2;
+        g2.s.inv2[5].f[3] = 2;
+        g2.s.dex2[5].best = 4;
+        assert!(g2.meilleur_couple().is_none(), "deux [S] ne méritent pas d'être conseillés");
+        let (_, rows2) = g2.build_rows(&PanelKind::PenPick(0));
+        let t2: String = rows2.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(t2.contains("ne peut plus rien améliorer"), "le panneau doit dire pourquoi : {}", t2);
+
+        /* mais un couple [A] de la même espèce, lui, améliore le stock */
+        g2.s.inv2[5].m[2] = 1;
+        g2.s.inv2[5].f[2] = 1;
+        let (_, rang2, degre2) = g2.meilleur_couple().expect("le couple [A] doit être conseillé");
+        assert_eq!((rang2, degre2), (2, 1));
 
         let (_, rows) = g.build_rows(&PanelKind::PenPick(0));
         let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
@@ -7988,5 +8216,59 @@ mod tests {
         g.s.keepshiny = 1;
         g.apply(Action::SellDupes);
         assert_eq!(g.s.inv2[autre].ts(), 1, "le dernier shiny d'une espèce reste");
+    }
+
+    /* le filtre des sélecteurs : une lettre vaut « commence par », trois
+       lettres cherchent aussi à l'intérieur, et le biome restreint la liste. */
+    #[test]
+    fn le_filtre_du_selecteur_cherche_par_debut_de_nom() {
+        let mut g = jeu_neuf();
+        let aiglonet = CREATURES.iter().position(|c| c.n == "aiglonet").unwrap();
+        let mulotin = CREATURES.iter().position(|c| c.n == "mulotin").unwrap();
+        let grand_cornu = CREATURES.iter().position(|c| c.n == "grand cornu").unwrap();
+        let cristalpin = CREATURES.iter().position(|c| c.n == "cristalpin").unwrap();
+
+        // une lettre : seulement les noms qui commencent par là
+        g.filtre = "a".into();
+        assert!(g.passe_filtre(aiglonet));
+        assert!(!g.passe_filtre(mulotin), "« mulotin » contient un a mais ne commence pas par a");
+
+        // les noms composés comptent par mot
+        g.filtre = "cornu".into();
+        assert!(g.passe_filtre(grand_cornu));
+
+        // trois lettres ou plus : on cherche aussi à l'intérieur d'un mot
+        g.filtre = "stal".into();
+        assert!(g.passe_filtre(cristalpin));
+        g.filtre = "st".into();
+        assert!(!g.passe_filtre(cristalpin), "deux lettres ne cherchent qu'au début");
+
+        // accents et casse sont indifférents
+        g.filtre = "ECRE".into();
+        let ecrevisse = CREATURES.iter().position(|c| c.n == "écrevisse d'or").unwrap();
+        assert!(g.passe_filtre(ecrevisse));
+
+        // le biome restreint, et « effacer » remet tout à plat
+        g.filtre.clear();
+        g.filtre_biome = Some(CREATURES[cristalpin].b);
+        assert!(g.passe_filtre(cristalpin));
+        assert!(!g.passe_filtre(mulotin));
+        g.filtre = "x".into();
+        g.saisie = true;
+        g.apply(Action::FiltreBiome(None));
+        assert!(g.filtre.is_empty() && g.filtre_biome.is_none() && !g.saisie);
+
+        // et la frappe alimente la recherche quand la saisie est ouverte
+        g.panels.push(Panel::new(PanelKind::PenPick(0)));
+        panel_key(&mut g, GKey::Char('/'));
+        assert!(g.saisie, "« / » doit ouvrir la saisie");
+        panel_key(&mut g, GKey::Char('a'));
+        panel_key(&mut g, GKey::Char('i'));
+        assert_eq!(g.filtre, "ai");
+        panel_key(&mut g, GKey::Backspace);
+        assert_eq!(g.filtre, "a");
+        panel_key(&mut g, GKey::Esc);
+        assert!(!g.saisie && g.filtre.is_empty(), "Échap efface la recherche");
+        assert_eq!(g.panels.len(), 1, "et ne ferme pas le panneau");
     }
 }
