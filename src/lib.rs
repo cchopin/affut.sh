@@ -513,8 +513,15 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.31";
-const NEWS: [(&str, &str, &[&str]); 32] = [
+const VERSION: &str = "1.32";
+const NEWS: [(&str, &str, &[&str]); 33] = [
+    (
+        "1.32",
+        "30 septembre 2026",
+        &[
+            "les appâts s'achètent aussi par lots de mille. avec huit pièges qui tournent sans arrêt, cent unités partaient en une poignée de minutes.",
+        ],
+    ),
     (
         "1.31",
         "27 septembre 2026",
@@ -5196,11 +5203,18 @@ impl Game {
                     (pad(&format!("{} écus/u", fmt(BAITS[bt].cost)), 14), C::GoldDark),
                     (pad(&format!("×{}", fmt(self.s.baits[bt] as f64)), 8), C::Dim),
                 ],
-                btns: vec![
-                    ("×1".into(), if self.s.ecus >= BAITS[bt].cost { C::Gold } else { C::Dimmer }, Action::BuyBait(bt, 1)),
-                    ("×10".into(), if self.s.ecus >= BAITS[bt].cost * 10.0 { C::Gold } else { C::Dimmer }, Action::BuyBait(bt, 10)),
-                    ("×100".into(), if self.s.ecus >= BAITS[bt].cost * 100.0 { C::Gold } else { C::Dimmer }, Action::BuyBait(bt, 100)),
-                ],
+                /* on en consomme un par tentative et les pièges tournent en
+                   continu : les gros lots évitent de repasser à la boutique */
+                btns: [1u64, 10, 100, 1000]
+                    .iter()
+                    .map(|&q| {
+                        (
+                            format!("×{}", q),
+                            if self.s.ecus >= BAITS[bt].cost * q as f64 { C::Gold } else { C::Dimmer },
+                            Action::BuyBait(bt, q),
+                        )
+                    })
+                    .collect(),
                 act: None,
                 indent: 0,
             });
