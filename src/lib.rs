@@ -513,8 +513,17 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.32";
-const NEWS: [(&str, &str, &[&str]); 33] = [
+const VERSION: &str = "1.33";
+const NEWS: [(&str, &str, &[&str]); 34] = [
+    (
+        "1.33",
+        "5 octobre 2026",
+        &[
+            "un croisement à la bonne recette se signale dès son installation à l'enclos, et la naissance dit « ce couple est le bon, réessayez » quand le tirage a manqué. on attendait des heures sans jamais savoir si l'on s'était trompé d'espèces.",
+            "et ce tirage passe de 35 à 60 sur 100, la couvaison d'un croisement n'étant plus allongée que d'un quart au lieu de moitié : un hybride demandait trente heures en moyenne, il en demande une quinzaine.",
+            "le bestiaire compte enfin ce qui vit hors des biomes, en tête de panneau : curiosités, hybrides, légendes et le puits. ces familles restent hors du pourcentage des espèces sauvages, pour que « bestiaire complet » garde son sens.",
+        ],
+    ),
     (
         "1.32",
         "30 septembre 2026",
@@ -830,6 +839,10 @@ const LAB_APPEL_PM: u64 = 26;
 const HUNT_BUFF_MS: f64 = 3_600_000.0;
 const HUNT_BUFF_PM: u64 = 20;
 const HUNT_BUFF_MAX_PM: u64 = 160;
+/* la part des croisements à la bonne recette qui donnent vraiment l'hybride.
+   avec une couvaison d'épique allongée d'un quart, un hybride demande déjà une
+   quinzaine d'heures en moyenne : plus bas, l'attente décourage. */
+const TAUX_HYBRIDE: f64 = 0.60;
 /* durée de couvaison à l'enclos, par rareté (minutes) */
 const PEN_MIN: [f64; 5] = [30.0, 60.0, 150.0, 420.0, 1080.0];
 
@@ -2584,7 +2597,7 @@ impl Game {
             Some(b2) => self.lignee(a).min(self.lignee(b2)),
             None => self.lignee(a),
         };
-        let croise = if b.is_some() { 1.5 } else { 1.0 };
+        let croise = if b.is_some() { 1.25 } else { 1.0 };
         PEN_MIN[rarete] * 60_000.0 * croise * (1.0 - l as f64 * 0.03)
     }
     fn pen_rankup(&self) -> f64 {
@@ -3234,12 +3247,18 @@ impl Game {
                             None => (pen.r1.max(pen.r2), self.pen_rankup_espece(pen.ci, None)),
                         };
                         let mut hybride = false;
+                        let mut recette_ratee = false;
                         if let Some(h) = croise.and_then(|b| Self::recette(pen.ci, b)) {
-                            if rand::thread_rng().gen::<f64>() < 0.35 {
+                            if rand::thread_rng().gen::<f64>() < TAUX_HYBRIDE {
                                 espece = h;
                                 hybride = true;
                                 rank = (pen.r1.min(pen.r2) + 1).min(3);
                                 shiny_mult = 3.0;
+                            } else {
+                                /* la bonne recette, mais pas cette fois : il faut
+                                   le dire, sinon le joueur ne sait pas s'il s'est
+                                   trompé de couple ou s'il a manqué le tirage */
+                                recette_ratee = true;
                             }
                         }
                         if !hybride && rank < 3 && rand::thread_rng().gen::<f64>() < montee {
@@ -3292,7 +3311,13 @@ impl Game {
                         if hybride {
                             segs.push((" — ce n'est ni l'un ni l'autre.".into(), C::Gold));
                         }
+                        if recette_ratee {
+                            segs.push((" — les deux lignées ont failli se mêler : ce couple est le bon, réessayez.".into(), C::Purple));
+                        }
                         self.log(segs);
+                        if recette_ratee {
+                            self.toast("ce couple est le bon : réessayez");
+                        }
                         if hybride {
                             self.toast(format!("hybride : {} !", CREATURES[espece].n));
                         }
@@ -4284,6 +4309,17 @@ impl Game {
                                     rarity_color(c.r),
                                 ),
                                 (format!(" — naissance dans {} min", left), C::Dim),
+                                /* un couple à la bonne recette se signale tout de
+                                   suite : sans cela, on attend des heures sans
+                                   savoir si l'on s'est trompé d'espèce */
+                                (
+                                    if p.ci2.filter(|&b| b != p.ci).and_then(|b| Self::recette(p.ci, b)).is_some() {
+                                        format!(" · les deux lignées s'accordent ({} sur 100)", (TAUX_HYBRIDE * 100.0) as u64)
+                                    } else {
+                                        String::new()
+                                    },
+                                    C::Purple,
+                                ),
                             ],
                             btns: vec![],
                             act: None,
@@ -5475,6 +5511,30 @@ impl Game {
                 format!("espèces {}/{} {}  shinies {}/{} {}  rang S {}/{}", total, wild_total(), ascii_bar(total as f64 / wild_total() as f64, 10), shiny_total, wild_total(), ascii_bar(shiny_total as f64 / wild_total() as f64, 10), s_total, wild_total()),
                 C::Text,
             ),
+            /* les familles hors biome ne comptent pas dans le pourcentage, pour
+               que « bestiaire complet » garde son sens — mais elles se collectent
+               aussi, et doivent donc se compter quelque part */
+            {
+                let hors = |b: usize| {
+                    (
+                        biome_creatures(b).filter(|&i| self.s.dex2[i].n > 0).count(),
+                        biome_creatures(b).count(),
+                    )
+                };
+                let (c1, c2) = hors(CURIO_B);
+                let (h1, h2) = hors(HYBRIDE_B);
+                let (l1, l2) = hors(LEGEND_B);
+                let (p1, p2) = hors(PUITS_B);
+                Row::text(
+                    format!(
+                        "hors biomes {}/{} : troc {}/{} · hybrides {}/{} · légendes {}/{} · puits {}/{}",
+                        c1 + h1 + l1 + p1,
+                        c2 + h2 + l2 + p2,
+                        c1, c2, h1, h2, l1, l2, p1, p2
+                    ),
+                    C::Dimmer,
+                )
+            },
             Row::text("biome complet : +0,04 chance · biome 100% shiny : +5% vente — pour toujours", C::Dimmer),
             Row::text("colonnes : rareté · ×captures · ⋆shinies · [rang] · sexes vus · réserve", C::Dimmer),
         ];
@@ -5764,7 +5824,7 @@ impl Game {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
         rows.extend(bullet_rows("· ", &format!(
-            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées au labo, +2 par naissance déjà obtenue dans l'espèce), shiny ×3. le petit naît au meilleur rang de ses parents, qui sont consommés : par défaut les plus bas rangs de chaque sexe, ou un rang que vous choisissez pour viser plus haut. on peut aussi croiser deux espèces d'un même biome, à un cran de rareté près : le petit tient alors de l'un ou de l'autre, naît au plus bas rang des deux mais double sa chance de monter, et la couvaison dure moitié plus longtemps. certains couples, dit-on, donnent tout autre chose.",
+            "enclos ╡ e ╞ : un couple ♂+♀ d'une même espèce donne une naissance ({}). {}% de chance de monter d'un rang (25% de base, +4 par niveau de lignées au labo, +2 par naissance déjà obtenue dans l'espèce), shiny ×3. le petit naît au meilleur rang de ses parents, qui sont consommés : par défaut les plus bas rangs de chaque sexe, ou un rang que vous choisissez pour viser plus haut. on peut aussi croiser deux espèces d'un même biome, à un cran de rareté près : le petit tient alors de l'un ou de l'autre, naît au plus bas rang des deux mais double sa chance de monter, et la couvaison dure un quart de plus. un couple à la bonne recette se signale dès l'installation, et donne son hybride six fois sur dix. certains couples, dit-on, donnent tout autre chose.",
             (0..5).map(|r| format!("{} {} min", RAR_LABEL[r], PEN_MIN[r] as u64)).collect::<Vec<_>>().join(" · "),
             (self.pen_rankup() * 100.0).round() as u64), w, C::Dim));
 
@@ -8130,8 +8190,8 @@ mod tests {
         assert_eq!((pen.ci, pen.ci2), (a, Some(b)));
         assert_eq!(g.s.inv2[a].tm(), 0);
         assert_eq!(g.s.inv2[b].tf(), 0);
-        // la couvaison dure moitié plus longtemps que celle de la plus rare
-        let attendu = PEN_MIN[CREATURES[a].r.max(CREATURES[b].r)] * 60_000.0 * 1.5;
+        // la couvaison d'un croisement dure un quart de plus que celle de la plus rare
+        let attendu = PEN_MIN[CREATURES[a].r.max(CREATURES[b].r)] * 60_000.0 * 1.25;
         assert!((pen.ready_at - now_ms() - attendu).abs() < 2000.0);
 
         // le petit sort du croisement : l'une des deux espèces, ou l'hybride
