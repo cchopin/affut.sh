@@ -519,7 +519,7 @@ const NEWS: [(&str, &str, &[&str]); 34] = [
         "1.33",
         "5 octobre 2026",
         &[
-            "un croisement à la bonne recette se signale dès son installation à l'enclos, et la naissance dit « ce couple est le bon, réessayez » quand le tirage a manqué. on attendait des heures sans jamais savoir si l'on s'était trompé d'espèces.",
+            "un croisement à la bonne recette se signale dès son installation à l'enclos, et la naissance dit « ce couple est le bon, réessayez » quand le tirage a manqué. on attendait des heures sans jamais savoir si l'on s'était trompé d'espèces. merci à ookook, qui a cru les hybrides cassés après deux tentatives.",
             "et ce tirage passe de 35 à 60 sur 100, la couvaison d'un croisement n'étant plus allongée que d'un quart au lieu de moitié : un hybride demandait trente heures en moyenne, il en demande une quinzaine.",
             "le bestiaire compte enfin ce qui vit hors des biomes, en tête de panneau : curiosités, hybrides, légendes et le puits. ces familles restent hors du pourcentage des espèces sauvages, pour que « bestiaire complet » garde son sens.",
         ],
