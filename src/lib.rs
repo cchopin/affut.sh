@@ -336,6 +336,51 @@ pub fn biomes_par_prix() -> Vec<usize> {
 pub fn especes_hors_biome() -> usize {
     CREATURES.iter().filter(|c| c.b >= WILDB).count()
 }
+/* niveaux d'une recherche qu'un total de gains permet d'atteindre */
+fn niveaux_finances(lab: usize, ecus: f64) -> u32 {
+    let (mut cumul, mut niveau) = (0.0, 0u32);
+    while niveau < LABS[lab].max {
+        let cout = LABS[lab].base * LABS[lab].mult.powi(niveau as i32);
+        if cumul + cout > ecus {
+            break;
+        }
+        cumul += cout;
+        niveau += 1;
+    }
+    niveau
+}
+
+/* cadence de capture maximale qu'une partie peut atteindre, en prises par
+   seconde, déduite de ce que ses gains lui permettent d'acheter : le meilleur
+   piège, l'affûtage, et surtout le nombre de pièges posables — la licence du
+   labo ET celles du marchand, qui n'ont pas de plafond et que le puits offre
+   parfois. un plafond fixe à 1,5 écartait un joueur honnête dont la ferme
+   tournait à 1,56. marge ×1,5 par-dessus le maximum théorique. */
+pub fn captures_max_par_s(ecus_gagnes: f64) -> f64 {
+    let budget = ecus_gagnes.max(0.0);
+    let vitesse = 1.0 + niveaux_finances(LAB_AFFUTAGE, budget) as f64 * 0.06;
+    let (mut itv, mut succ) = (TRAPS[0].itv, TRAPS[0].succ);
+    for t in TRAPS.iter() {
+        if t.cost <= budget {
+            itv = t.itv;
+            succ = t.succ;
+        }
+    }
+    /* licences du marchand : 400 000 écus, puis le double à chaque fois. on en
+       ajoute trois, que le puits peut rendre sans rien coûter. */
+    let (mut cumul, mut licences) = (0.0, 0u32);
+    while licences < 24 {
+        let cout = 400_000.0 * 2f64.powi(licences as i32);
+        if cumul + cout > budget {
+            break;
+        }
+        cumul += cout;
+        licences += 1;
+    }
+    let poses = 2 + niveaux_finances(LAB_LICENCE, budget) + licences + 3;
+    poses as f64 * succ / (itv / vitesse) * 1.5
+}
+
 pub fn curiosites_max() -> usize {
     CREATURES.iter().filter(|c| c.b == CURIO_B).count()
 }
@@ -451,7 +496,7 @@ const MERCH_ITEMS: usize = 5;
 
 struct AchDef { n: &'static str, d: &'static str, r: f64 }
 const ACH_666: usize = 27;
-const ACHS: [AchDef; 33] = [
+const ACHS: [AchDef; 34] = [
     AchDef { n: "première prise",         d: "capturer une créature",                r: 50.0 },
     AchDef { n: "braconnier du dimanche", d: "capturer 100 créatures",               r: 500.0 },
     AchDef { n: "main verte",             d: "capturer 1 000 créatures",             r: 5000.0 },
@@ -486,9 +531,10 @@ const ACHS: [AchDef; 33] = [
     AchDef { n: "bad is good",             d: "six offrandes au puits",               r: 6666.0 },
     AchDef { n: "it is a good day to die", d: "soixante-six offrandes au puits",      r: 66666.0 },
     AchDef { n: "unleash the beast",       d: "six cent soixante-six offrandes",      r: 666666.0 },
+    AchDef { n: "victime du Créateur",     d: "avoir été écarté du palmarès par erreur", r: 42000.0 },
 ];
 /* les trophées que rien n'annonce : le panneau les tait tant qu'ils dorment */
-const ACH_SCELLES: [usize; 4] = [29, 30, 31, 32];
+const ACH_SCELLES: [usize; 5] = [29, 30, 31, 32, 33];
 const ACH_BETE: usize = 32;
 
 const SHINY_BASE: f64 = 1.0 / 512.0;
@@ -513,8 +559,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.33";
-const NEWS: [(&str, &str, &[&str]); 34] = [
+const VERSION: &str = "1.34";
+const NEWS: [(&str, &str, &[&str]); 35] = [
+    (
+        "1.34",
+        "10 octobre 2026",
+        &[
+            "le classement écartait une partie dont la ferme dépassait une prise et demie par seconde. ce plafond datait d'un temps où huit pièges étaient le maximum : les licences du marchand, qui n'ont pas de limite, en autorisent aujourd'hui le double. la cadence tolérée se déduit désormais des moyens de la partie, meilleur piège, affûtage et licences finançables compris.",
+            "et un trophée de plus, qui ne porte pas de nom tant qu'il dort. ceux que le comptoir a rayés du palmarès par erreur sauront le trouver. réclamé par ookook, rayé deux fois.",
+        ],
+    ),
     (
         "1.33",
         "5 octobre 2026",
@@ -951,6 +1005,10 @@ struct State {
        la lignée, jusqu'à dix */
     #[serde(default)]
     lignees: Vec<u32>,
+    /* le classement a écarté cette partie au moins une fois. le serveur étant
+       faillible, le joueur en garde une trace — et un trophée. */
+    #[serde(default)]
+    ecarte: bool,
     /* le puits : offrandes consenties, et la nuit de la dernière */
     #[serde(default)]
     sacrifices: u32,
@@ -1038,6 +1096,7 @@ impl Default for State {
             trades_made: 0,
             merchant_done: vec![],
             charms: 0,
+            ecarte: false,
             lignees: vec![0; CREATURES.len()],
             sacrifices: 0,
             well_night: -1.0,
@@ -2734,6 +2793,7 @@ impl Game {
             30 => s.sacrifices >= 6,
             31 => s.sacrifices >= 66,
             32 => s.sacrifices >= 666,
+            33 => s.ecarte,
             _ => false,
         }
     }    fn check_achievements(&mut self) {
@@ -7079,6 +7139,20 @@ mod webapp {
             String::new()
         }
 
+        /* le navigateur relit l'entrée du joueur au classement : si le serveur
+           l'a écartée, la partie le retient (et le trophée s'ouvre). */
+        pub fn set_ecarte(&mut self, v: bool) {
+            if v && !self.game.s.ecarte {
+                self.game.s.ecarte = true;
+                self.game.log(vec![(
+                    "le comptoir vous a rayé du palmarès. une erreur de leur part, sans doute.".into(),
+                    C::Red,
+                )]);
+                self.game.check_achievements();
+                self.game.save();
+            }
+        }
+
         pub fn lb_stats(&self) -> String {
             let s = &self.game.s;
             let especes = wild_species().filter(|&i| s.dex2[i].n > 0).count();
@@ -8344,5 +8418,27 @@ mod tests {
         panel_key(&mut g, GKey::Esc);
         assert!(!g.saisie && g.filtre.is_empty(), "Échap efface la recherche");
         assert_eq!(g.panels.len(), 1, "et ne ferme pas le panneau");
+    }
+
+    /* le trophée de consolation : scellé comme les autres, il ne s'ouvre que
+       lorsque le classement a écarté la partie. */
+    #[test]
+    fn le_trophee_de_consolation_reste_scelle() {
+        let mut g = jeu_neuf();
+        let i = ACHS.iter().position(|a| a.n == "victime du Créateur").unwrap();
+        assert!(ACH_SCELLES.contains(&i), "il doit rester muet tant qu'il dort");
+        assert!(!g.ach_done(i));
+
+        let (_, rows) = g.build_rows(&PanelKind::Achs);
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(!texte.contains("victime du"), "le nom ne doit pas fuiter avant d'être gagné");
+
+        g.s.ecarte = true;
+        assert!(g.ach_done(i), "une fois écarté, le trophée s'ouvre");
+        g.check_achievements();
+        assert!(g.s.ach[i]);
+        let (_, rows) = g.build_rows(&PanelKind::Achs);
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(texte.contains("victime du Créateur"), "et s'affiche alors en clair");
     }
 }

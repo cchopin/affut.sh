@@ -106,6 +106,12 @@ export class Web {
         const len0 = WASM_VECTOR_LEN;
         wasm.web_set_board(this.__wbg_ptr, ptr0, len0);
     }
+    /**
+     * @param {boolean} v
+     */
+    set_ecarte(v) {
+        wasm.web_set_ecarte(this.__wbg_ptr, v);
+    }
     tick() {
         wasm.web_tick(this.__wbg_ptr);
     }

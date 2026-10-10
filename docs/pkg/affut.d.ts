@@ -12,6 +12,7 @@ export class Web {
     save(): void;
     scroll(lines: number): boolean;
     set_board(json: string): void;
+    set_ecarte(v: boolean): void;
     tick(): void;
 }
 
@@ -28,6 +29,7 @@ export interface InitOutput {
     readonly web_save: (a: number) => void;
     readonly web_scroll: (a: number, b: number) => number;
     readonly web_set_board: (a: number, b: number, c: number) => void;
+    readonly web_set_ecarte: (a: number, b: number) => void;
     readonly web_tick: (a: number) => void;
     readonly __wbindgen_export: (a: number) => void;
     readonly __wbindgen_export2: (a: number, b: number) => number;

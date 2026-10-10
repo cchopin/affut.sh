@@ -10,6 +10,7 @@ export const web_render: (a: number, b: number, c: number, d: number) => void;
 export const web_save: (a: number) => void;
 export const web_scroll: (a: number, b: number) => number;
 export const web_set_board: (a: number, b: number, c: number) => void;
+export const web_set_ecarte: (a: number, b: number) => void;
 export const web_tick: (a: number) => void;
 export const __wbindgen_export: (a: number) => void;
 export const __wbindgen_export2: (a: number, b: number) => number;

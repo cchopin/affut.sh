@@ -56,7 +56,12 @@ const RANG_MAX: f64 = 4.0;
    naissances comprises, on retient 1,5, plus du double de la marge. cinq était
    huit fois le maximum atteignable : un envoi pouvait gagner 18 000 captures
    à l'heure sans être borné. */
-const CAPTURES_PAR_S: f64 = 1.5;
+/* la cadence maximale n'est plus une constante : elle se déduit de ce que les
+   gains de la partie permettent d'acheter, pièges posables compris. un plafond
+   fixe à 1,5 écartait un joueur dont la ferme tournait honnêtement à 1,56. */
+fn captures_par_s(ecus: f64) -> f64 {
+    affut::captures_max_par_s(ecus)
+}
 /* le plafond de progression hors-ligne : 2 h de base, +2 h par niveau
    d'horlogerie, soit 24 h au maximum. un envoi peut légitimement rapporter
    tout cela d'un coup — le total reste borné par l'âge de la partie. */
@@ -152,10 +157,13 @@ fn borner_stats(
     let (b_capt, b_esp, b_rang, b_shi, b_ecus, b_migr, b_tro, b_curio, b_leg, b_hyb) =
         (brut[0], brut[1], brut[2], brut[3], brut[4], brut[5], brut[6], brut[7], brut[8], brut[9]);
 
-    /* âge de la partie, avance comprise */
+    /* les écus servent à déduire la cadence de capture possible : on les borne
+       d'abord par le temps, sinon en déclarer des milliards achèterait une
+       cadence de rêve avant même que la fraude ne soit repérée */
     let age_s = (((now - premier_at).max(0.0) + AVANCE_MS) / 1000.0).max(1.0);
 
     /* et, si l'on connaît l'envoi précédent, ce qu'il a pu produire depuis */
+    let ecus_plausibles = b_ecus.min((((now - premier_at).max(0.0) + AVANCE_MS) / 1000.0).max(1.0) * ECUS_PAR_S);
     let (capt_max, ecus_max) = match prec {
         Some(p) => {
             let pm = p.as_object();
@@ -167,13 +175,13 @@ fn borner_stats(
                l'intervalle d'un envoi et n'a rien d'une injection. */
             let depuis_s = ((now - lu("at")).max(0.0) / 1000.0).max(1.0);
             (
-                (lu("captures") + (depuis_s + RATTRAPAGE_S) * CAPTURES_PAR_S).min(age_s * CAPTURES_PAR_S),
+                (lu("captures") + (depuis_s + RATTRAPAGE_S) * captures_par_s(ecus_plausibles)).min(age_s * captures_par_s(ecus_plausibles)),
                 /* le rattrapage rapporte aussi des écus (auto-vente), mais au
                    revenu réel du jeu, pas au taux de sécurité */
                 (lu("ecus") + depuis_s * ECUS_PAR_S + RATTRAPAGE_S * REVENU_REEL_PAR_S).min(age_s * ECUS_PAR_S),
             )
         }
-        None => (age_s * CAPTURES_PAR_S, age_s * ECUS_PAR_S),
+        None => (age_s * captures_par_s(ecus_plausibles), age_s * ECUS_PAR_S),
     };
 
     let captures = b_capt.min(capt_max);
@@ -875,5 +883,28 @@ mod tests {
         assert!(borner_stats(&mut trop, now - 20.0 * JOUR, None, now), "au-delà du possible, l'entrée est suspecte");
         assert_eq!(lire_nb(&trop, "curiosites"), affut::curiosites_max() as f64);
         assert_eq!(lire_nb(&trop, "legendes"), affut::legendes_max() as f64);
+    }
+
+    /* la cadence tolérée doit suivre les moyens de la partie : un débutant ne
+       peut pas produire dix prises à la seconde, un joueur qui a financé vingt
+       licences dépasse largement l'ancien plafond fixe de 1,5. */
+    #[test]
+    fn la_cadence_toleree_suit_les_moyens() {
+        let debut = affut::captures_max_par_s(500.0);
+        let riche = affut::captures_max_par_s(985_000_000.0);
+        assert!(debut < 0.6, "un début de partie ne doit pas tolérer {:.2} prises/s", debut);
+        assert!(riche > 2.5, "une ferme complète doit tolérer plus de 2,5 prises/s, pas {:.2}", riche);
+        assert!(riche < 12.0, "mais pas n'importe quoi : {:.2}", riche);
+
+        /* le cas qui a écarté un joueur honnête : 6,7 M de prises en 51,8 jours,
+           soit 1,56 à la seconde, avec 985 M d'écus gagnés */
+        let now = 1_791_647_647_086.0;
+        let premier = 1_787_341_386_840.0;
+        let mut e = entree(serde_json::json!({
+            "captures": 6_718_590.0, "ecus": 985_233_889.0, "especes": 104.0, "rangs": 416.0,
+            "shinies": 27_604.0, "curiosites": 6.0, "legendes": 13.0, "hybrides": 7.0
+        }));
+        assert!(!borner_stats(&mut e, premier, None, now), "cette partie ne doit plus être écartée");
+        assert_eq!(lire_nb(&e, "captures"), 6_718_590.0, "et ses prises ne doivent plus être rognées");
     }
 }
