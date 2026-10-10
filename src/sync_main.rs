@@ -522,6 +522,11 @@ fn main() {
                sauvegarde trafiquée sort du classement au lieu de le dominer */
             let suspect = borner_stats(&mut entry, premier_at, prev.as_ref(), now);
             entry.insert("suspect".into(), serde_json::json!(suspect));
+            /* « suspect » ne dure que jusqu'au prochain envoi : on garde à part
+               la trace d'un écartement passé, qui elle ne s'efface pas. c'est
+               ce que le jeu lit pour savoir qu'il a été rayé un jour. */
+            let deja = g("ecarte_un_jour").and_then(|v| v.as_bool()).unwrap_or(false);
+            entry.insert("ecarte_un_jour".into(), serde_json::json!(deja || suspect));
             let out = serde_json::to_string(&serde_json::Value::Object(entry)).unwrap_or_default();
             let tmp = format!("{}.tmp", path);
             if std::fs::write(&tmp, &out).is_ok() && std::fs::rename(&tmp, &path).is_ok() {
