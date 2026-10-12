@@ -559,8 +559,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.34";
-const NEWS: [(&str, &str, &[&str]); 35] = [
+const VERSION: &str = "1.35";
+const NEWS: [(&str, &str, &[&str]); 36] = [
+    (
+        "1.35",
+        "12 octobre 2026",
+        &[
+            "le filtre de biome de l'enclos portait sur son bouton le nom du biome SUIVANT, alors que la liste montrait le biome courant : on lisait un nom et on voyait les espèces d'un autre. le bouton affiche désormais le biome actif, la flèche ▸ indiquant qu'il fait tourner.",
+            "et quand un filtre ne laisse rien passer, le panneau le dit, au lieu d'annoncer que votre réserve est vide.",
+        ],
+    ),
     (
         "1.34",
         "10 octobre 2026",
@@ -4494,12 +4502,14 @@ impl Game {
             if self.saisie { C::Gold } else { C::Blue },
             Action::Chercher,
         )];
+        /* le bouton porte le biome AFFICHÉ, pas le suivant : sinon on lit un
+           nom sur le bouton et la liste en montre un autre */
         btns.push((
-            match suivant {
-                Some(b) => format!("biome ▸ {}", BIOMES[b].name),
-                None => "biome ▸ tous".to_string(),
+            match self.filtre_biome {
+                Some(b) => format!("{} ▸", BIOMES[b].name),
+                None => "tous les biomes ▸".to_string(),
             },
-            C::Blue,
+            if self.filtre_biome.is_some() { C::Green } else { C::Blue },
             Action::FiltreBiome(suivant),
         ));
         if !self.filtre.is_empty() || self.filtre_biome.is_some() {
@@ -4509,7 +4519,7 @@ impl Game {
             Row {
                 segs: vec![(
                     format!(
-                        "recherche (une lettre = début du nom) : {}{}   biome : {}",
+                        "filtres — nom : {}{}   biome : {}   (le bouton fait tourner les biomes)",
                         if self.filtre.is_empty() { "—".to_string() } else { self.filtre.clone() },
                         if self.saisie { "_" } else { "" },
                         match self.filtre_biome {
@@ -4668,7 +4678,14 @@ impl Game {
             });
         }
         if !any {
-            rows.push(Row::text("aucune espèce avec plusieurs spécimens. les pièges y travaillent.", C::Dim));
+            rows.push(Row::text(
+                if self.filtre.is_empty() && self.filtre_biome.is_none() {
+                    "aucune espèce avec plusieurs spécimens. les pièges y travaillent.".to_string()
+                } else {
+                    "aucune espèce de votre réserve ne correspond au filtre.".to_string()
+                },
+                C::Dim,
+            ));
         }
         (format!("enclos {} · choisir un couple", slot + 1), rows)
     }
@@ -4714,7 +4731,14 @@ impl Game {
             });
         }
         if !any {
-            rows.push(Row::text("aucune femelle compatible en réserve : même biome, rareté voisine.", C::Dim));
+            rows.push(Row::text(
+                if self.filtre.is_empty() && self.filtre_biome.is_none() {
+                    "aucune femelle compatible en réserve : même biome, rareté voisine.".to_string()
+                } else {
+                    "aucune femelle compatible ne correspond au filtre. le croisement exige de toute façon le même biome.".to_string()
+                },
+                C::Dim,
+            ));
         }
         (format!("croiser un ♂ {}", ca.n), rows)
     }
@@ -8405,6 +8429,31 @@ mod tests {
         g.saisie = true;
         g.apply(Action::FiltreBiome(None));
         assert!(g.filtre.is_empty() && g.filtre_biome.is_none() && !g.saisie);
+
+        /* le bouton de biome doit porter le biome AFFICHÉ : on lisait un nom sur
+           le bouton et la liste en montrait un autre */
+        let mut g3 = jeu_neuf();
+        g3.s.inv2[0].m[0] = 1;
+        g3.s.inv2[0].f[0] = 1;
+        let libelle = |g: &Game| -> String {
+            let (_, rows) = g.build_rows(&PanelKind::PenPick(0));
+            rows.iter()
+                .flat_map(|r| r.btns.iter().map(|(t, _, _)| t.clone()))
+                .find(|t| t.ends_with('▸'))
+                .expect("le bouton de biome doit exister")
+        };
+        assert_eq!(libelle(&g3), "tous les biomes ▸");
+        g3.filtre_biome = Some(CREATURES[0].b);
+        assert_eq!(libelle(&g3), format!("{} ▸", BIOMES[CREATURES[0].b].name));
+        // et la liste montre bien les espèces de ce biome
+        let (_, rows) = g3.build_rows(&PanelKind::PenPick(0));
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(texte.contains(CREATURES[0].n), "le biome affiché doit lister ses espèces");
+        // un filtre qui ne laisse rien le dit, au lieu d'accuser la réserve
+        g3.filtre_biome = Some(8);
+        let (_, rows) = g3.build_rows(&PanelKind::PenPick(0));
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(texte.contains("ne correspond au filtre"), "{}", texte);
 
         // et la frappe alimente la recherche quand la saisie est ouverte
         g.panels.push(Panel::new(PanelKind::PenPick(0)));
