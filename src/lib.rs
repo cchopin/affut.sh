@@ -559,8 +559,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.37";
-const NEWS: [(&str, &str, &[&str]); 38] = [
+const VERSION: &str = "1.38";
+const NEWS: [(&str, &str, &[&str]); 39] = [
+    (
+        "1.38",
+        "14 octobre 2026",
+        &[
+            "l'explication de la chance tenait en un pavé de formules que personne ne lisait. elle a sa section dans l'aide, avec un tableau de ce qu'on observe vraiment : une légendaire toutes les 1 672 prises à chance nulle, toutes les 383 à chance 6, et les taux de rang [S] et [A] en face. votre chance du moment y est marquée d'une flèche.",
+            "le résumé de la migration dans l'aide disait « conservés : bestiaire, succès, trophées » en oubliant les breloques, les permis, les lignées et la série, et taisait que le labo entier et les biomes ouverts partent.",
+        ],
+    ),
     (
         "1.37",
         "14 octobre 2026",
@@ -5912,6 +5920,47 @@ impl Game {
             noct_names.join(", ")), w, C::Dim));
 
         rows.push(Row::text("", C::Dim));
+        /* la chance méritait sa section : en un seul paragraphe, personne ne la
+           comprenait. des chiffres observables plutôt que des formules. */
+        rows.push(Row::text("", C::Dim));
+        rows.push(Row::header("la chance, en clair"));
+        for t in [
+            "la chance ne rend pas les pièges plus rapides, ne change pas leur taux de réussite, et ne donne aucun shiny : les shinies dépendent de la chasse nocturne au labo et de la météo.",
+            "elle fait deux choses, et deux seulement : les espèces rares sortent plus souvent (les communes, jamais), et les beaux rangs tombent plus souvent.",
+        ] {
+            rows.extend(bullet_rows("· ", t, w, C::Dim));
+        }
+        rows.push(Row::text("", C::Dim));
+        rows.push(Row::text(
+            format!("{}{}{}{}", pad("chance", 10), pad("1 légendaire sur", 20), pad("rang [S]", 12), "rang [A]"),
+            C::Dimmer,
+        ));
+        for (lk, leg, ps, pa) in [
+            (0.0, 1672, "0,8%", "6%"),
+            (1.0, 920, "0,9%", "7%"),
+            (3.0, 544, "1,2%", "10%"),
+            (6.0, 383, "1,5%", "12%"),
+        ] {
+            let moi = (self.global_luck().min(LUCK_CAP) - lk).abs() < 0.5;
+            rows.push(Row::text(
+                format!(
+                    "{}{}{}{}",
+                    pad(&format!("{}{}", if moi { "▸ " } else { "  " }, fmt2(lk)), 10),
+                    pad(&format!("{} prises", leg), 20),
+                    pad(ps, 12),
+                    pa
+                ),
+                if moi { C::Gold } else { C::Dim },
+            ));
+        }
+        for t in [
+            "les prises par légendaire valent pour un biome d'une espèce par rareté : le vôtre dépendra de sa composition, mais les écarts sont les mêmes.",
+            "au-delà de 6, rien ne change : tout ce qui dépasse est perdu. le rang [A] plafonne même dès 5.",
+            "votre chance se lit au tableau de bord, avec son détail : flair du labo, trophées, biomes complets, breloques, élan de série, jour de foire, météo et saison du biome visé.",
+        ] {
+            rows.extend(bullet_rows("· ", t, w, C::Dim));
+        }
+        rows.push(Row::text("", C::Dim));
         rows.push(Row::header("sur le terrain"));
         for t in [
             "battue : dans un biome, déclenchez vous-même tous vos pièges avec +0,2 chance — ou tentez votre chance à mains nues s'il n'y en a aucun (repos 5 min, réductible au labo). chaque battue remue le terrain : pendant une heure, chaque tirage de légende gagne +2 points (20% de base), et les battues se cumulent jusqu'à +16.",
@@ -5919,7 +5968,6 @@ impl Game {
             "légende errante : une silhouette ✧ paraît parfois sur la carte — un tirage toutes les 10 min, 20 chances sur 100, et elle reste vingt minutes — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
             "des traces fraîches ∵ apparaissent sur la carte : approchez-vous et faites Entrée pour les suivre. tout se joue immédiatement — trois fois sur cinq une prise offerte du biome, une fois sur sept une cache d'appâts, sinon la piste se perd. une trace ne se suit qu'une fois.",
-            "la chance n'est pas une probabilité, c'est un multiplicateur, et elle agit sur deux tirages. sur l'espèce d'abord : le poids de chaque rareté est multiplié par (1 + chance × facteur), facteur nul pour les communs et jusqu'à 1 pour les légendaires — à chance 1 une légendaire paraît deux fois plus souvent qu'à chance 0, à chance 6 près de quatre fois et demie. sur le rang ensuite : la chance d'un [S] vaut 0,8% × (1 + 0,15 × chance) et celle d'un [A] 6% × (1 + 0,2 × chance), ce dernier plafonnant à 12% dès la chance 5. au-delà de 6, plus rien ne change : tout ce qui dépasse est perdu. en revanche la chance ne touche NI les shinies (c'est la chasse nocturne au labo et la météo), NI la vitesse des pièges, NI leur taux de réussite.",
             "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
@@ -5945,7 +5993,7 @@ impl Game {
         rows.push(Row::header("la migration"));
         for t in [
             "au labo, quand une expédition a bien rapporté (et contre des frais de voyage qui doublent à chaque départ) : repartez de zéro avec des trophées permanents (+0,008 chance et +1% vente chacun).",
-            "conservés : bestiaire, succès, trophées. perdus : écus, pièges, appâts, labo, réserve, musée, enclos.",
+            "conservés : bestiaire, succès, trophées, breloques, permis de piégeage, lignées de l'enclos, série. perdus : écus, pièges, appâts, labo entier, biomes ouverts, réserve (shinies compris), musée, enclos.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
