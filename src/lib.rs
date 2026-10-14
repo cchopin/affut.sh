@@ -473,7 +473,7 @@ const LABS: [LabDef; 15] = [
     LabDef { n: "lignées",         max: 5,  base: 8000.0, mult: 2.4, desc: "registres d'élevage : +4% de chance qu'une naissance monte d'un rang (25% de base)." },
     LabDef { n: "traqueur",        max: 5,  base: 4000.0, mult: 2.2, desc: "meilleure endurance : le repos entre deux battues diminue de 30 s par niveau (5 min de base)." },
     LabDef { n: "courtage",        max: 5,  base: 6000.0, mult: 2.3, desc: "carnet d'adresses : les primes de contrats augmentent de 15% par niveau." },
-    LabDef { n: "licence de piégeage", max: 6, base: 3000.0, mult: 2.6, desc: "l'administration est tatillonne : 2 pièges posés autorisés de base, +1 par niveau." },
+    LabDef { n: "licence de piégeage", max: 6, base: 3000.0, mult: 2.6, desc: "l'administration est tatillonne : 2 pièges posés autorisés de base, +1 par niveau. les permis du marchand s'y ajoutent, et survivent à une migration là où ce niveau est perdu." },
     LabDef { n: "appel des légendes", max: 5, base: 25000.0, mult: 2.7, desc: "des appeaux qui portent loin : +2,6 points de chance qu'une légende errante paraisse à chaque tirage (20% de base, et vos battues s'y ajoutent)." },
     LabDef { n: "approche silencieuse", max: 5, base: 35000.0, mult: 2.7, desc: "on apprend à ne plus faire craquer les branches : +5% de réussite face à une légende." },
 ];
@@ -559,8 +559,15 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.36";
-const NEWS: [(&str, &str, &[&str]); 37] = [
+const VERSION: &str = "1.37";
+const NEWS: [(&str, &str, &[&str]); 38] = [
+    (
+        "1.37",
+        "14 octobre 2026",
+        &[
+            "deux choses portaient le nom de « licence de piégeage » : le niveau de labo, perdu à la migration comme tout le laboratoire, et ce qui s'achète au marchand ou remonte du puits, qui survit. la seconde s'appelle désormais un permis de piégeage, et les deux textes disent ce qu'il advient d'eux.",
+        ],
+    ),
     (
         "1.36",
         "14 octobre 2026",
@@ -4223,8 +4230,8 @@ impl Game {
             _ => {
                 if tir < 0.22 {
                     self.s.licences += 1;
-                    self.log(vec![("un parchemin sec remonte, scellé d'un cachet que personne ne reconnaît : une licence de piégeage.".into(), C::Gold)]);
-                    self.toast("licence de piégeage");
+                    self.log(vec![("un parchemin sec remonte, scellé d'un cachet que personne ne reconnaît : un permis de piégeage.".into(), C::Gold)]);
+                    self.toast("permis de piégeage");
                 } else {
                     self.s.charms += 1;
                     self.log(vec![("une breloque remonte, lourde comme une dent. le puits a apprécié.".into(), C::Gold)]);
@@ -5584,7 +5591,7 @@ impl Game {
         let g = self.trophy_gain();
         let mut rows = wrap_rows(
             &format!(
-                "les frais de voyage ({} écus) sont réglés, puis disparaissent : vos écus, vos pièges, vos appâts, TOUT le labo, les biomes ouverts, le musée, les enclos et la réserve entière, shinies compris. survivent : le bestiaire et ses records, les trophées, les succès, vos breloques et licences, les lignées de l'enclos et votre série. vous gagnez {} trophée{} permanents, soit +{} de chance et +{}% au prix de vente.",
+                "les frais de voyage ({} écus) sont réglés, puis disparaissent : vos écus, vos pièges, vos appâts, TOUT le labo, les biomes ouverts, le musée, les enclos et la réserve entière, shinies compris. survivent : le bestiaire et ses records, les trophées, les succès, ce que vous avez acheté au marchand ou remonté du puits (breloques et permis de piégeage), les lignées de l'enclos et votre série. attention, le NIVEAU de licence du labo, lui, repart de zéro comme le reste du laboratoire. vous gagnez {} trophée{} permanents, soit +{} de chance et +{}% au prix de vente.",
                 fmt(self.migration_cost()),
                 g,
                 if g > 1 { "s" } else { "" },
@@ -5828,7 +5835,7 @@ impl Game {
         for t in [
             "comptoir de troc (touche r) : des collectionneurs échangent des curiosités — six espèces qu'aucun piège n'attrape — contre vos doublons. leurs demandes changent chaque jour.",
             "les curiosités ne se revendent pas et ne comptent pas dans le pourcentage du bestiaire : ce sont des pièces de collection.",
-            "marchand ambulant : il s'installe sur la place plusieurs fois par jour et repart vite. sa malle change à chaque passage — breloques de chance, licences de piégeage, lots d'appâts, œufs de curiosité.",
+            "marchand ambulant : il s'installe sur la place plusieurs fois par jour et repart vite. sa malle change à chaque passage — breloques de chance, permis de piégeage, lots d'appâts, œufs de curiosité. ce qu'on lui achète, breloques et permis, survit à une migration.",
             "jour de foire (un jour sur quatre) : le marchand reste toute la journée, le troc double ses demandes, sa malle est à −25 % et la chance monte de 0,15.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
@@ -6014,7 +6021,7 @@ impl Game {
                 format!("son lot du jour, à prix d'ami. {}", BAITS[self.best_bait()].desc),
             ),
             3 => (
-                format!("licence de piégeage (vous en avez {})", self.s.licences),
+                format!("permis de piégeage (vous en avez {})", self.s.licences),
                 if self.s.lab[LAB_LICENCE] < LABS[LAB_LICENCE].max {
                     format!(
                         "un emplacement de piège de plus, partout — 40 % de moins que le prochain palier du labo ({} écus).",
