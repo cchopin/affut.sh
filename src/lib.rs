@@ -559,8 +559,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.35";
-const NEWS: [(&str, &str, &[&str]); 36] = [
+const VERSION: &str = "1.36";
+const NEWS: [(&str, &str, &[&str]); 37] = [
+    (
+        "1.36",
+        "14 octobre 2026",
+        &[
+            "l'aide explique enfin la chance : ce n'est pas une probabilité mais un multiplicateur, elle agit sur le tirage de l'espèce et sur celui du rang, elle ne touche ni les shinies ni la vitesse des pièges, et tout ce qui dépasse 6 est perdu. le tableau de bord et le labo affichent désormais ce plafond.",
+            "le panneau de migration énumère ce qui disparaît et ce qui survit, au lieu de résumer en deux mots. le labo entier et les biomes ouverts partent, les breloques, les licences, les lignées et le bestiaire restent.",
+        ],
+    ),
     (
         "1.35",
         "12 octobre 2026",
@@ -4927,8 +4935,8 @@ impl Game {
             C::Text,
         ));
         rows.push(Row::text(
-            format!("trophées {} · migrations {} · chance +{} · vente ×{} · vitesse ×{}",
-                self.s.trophies, self.s.migrations, fmt2(self.global_luck()), fmt2(self.sell_mult()), fmt2(self.speed_mult())),
+            format!("trophées {} · migrations {} · chance +{} (plafond 6) · vente ×{} · vitesse ×{}",
+                self.s.trophies, self.s.migrations, fmt2(self.global_luck().min(LUCK_CAP)), fmt2(self.sell_mult()), fmt2(self.speed_mult())),
             C::Dim,
         ));
         let mut cpm = 0.0;
@@ -5544,7 +5552,13 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("bonus actifs"));
         rows.push(Row::text(
-            format!("chance globale +{} · vente ×{} · vitesse ×{}", fmt2(self.global_luck()), fmt2(self.sell_mult()), fmt2(self.speed_mult())),
+            format!(
+                "chance globale +{} sur {} utiles · vente ×{} · vitesse ×{}",
+                fmt2(self.global_luck()),
+                LUCK_CAP as u64,
+                fmt2(self.sell_mult()),
+                fmt2(self.speed_mult())
+            ),
             C::Dim,
         ));
         for r in wrap_rows(
@@ -5569,7 +5583,14 @@ impl Game {
     fn rows_migr_confirm(&self) -> (String, Vec<Row>) {
         let g = self.trophy_gain();
         let mut rows = wrap_rows(
-            &format!("les frais de voyage ({} écus) sont réglés, puis vos écus, pièges, appâts, améliorations et créatures en réserve disparaissent. le bestiaire et les succès restent. vous gagnez {} trophée{} permanents.", fmt(self.migration_cost()), g, if g > 1 { "s" } else { "" }),
+            &format!(
+                "les frais de voyage ({} écus) sont réglés, puis disparaissent : vos écus, vos pièges, vos appâts, TOUT le labo, les biomes ouverts, le musée, les enclos et la réserve entière, shinies compris. survivent : le bestiaire et ses records, les trophées, les succès, vos breloques et licences, les lignées de l'enclos et votre série. vous gagnez {} trophée{} permanents, soit +{} de chance et +{}% au prix de vente.",
+                fmt(self.migration_cost()),
+                g,
+                if g > 1 { "s" } else { "" },
+                fmt2(g as f64 * 0.008),
+                g
+            ),
             self.panel_w,
             C::Dim,
         );
@@ -5891,6 +5912,7 @@ impl Game {
             "légende errante : une silhouette ✧ paraît parfois sur la carte — un tirage toutes les 10 min, 20 chances sur 100, et elle reste vingt minutes — y compris sur les terres que vous n'avez pas encore ouvertes. approchez-la et tentez votre chance, une seule fois. la prise est toujours une des 12 légendes errantes, un bestiaire qu'aucun piège n'attrape, rang A minimum. le labo améliore l'appel (leur fréquence) et l'approche (votre réussite).",
             "contrats [c] : trois commandes toutes les 2 h, payées bien au-dessus du marché. la livraison ne prend jamais les shinies ni votre meilleur couple ♂♀.",
             "des traces fraîches ∵ apparaissent sur la carte : approchez-vous et faites Entrée pour les suivre. tout se joue immédiatement — trois fois sur cinq une prise offerte du biome, une fois sur sept une cache d'appâts, sinon la piste se perd. une trace ne se suit qu'une fois.",
+            "la chance n'est pas une probabilité, c'est un multiplicateur, et elle agit sur deux tirages. sur l'espèce d'abord : le poids de chaque rareté est multiplié par (1 + chance × facteur), facteur nul pour les communs et jusqu'à 1 pour les légendaires — à chance 1 une légendaire paraît deux fois plus souvent qu'à chance 0, à chance 6 près de quatre fois et demie. sur le rang ensuite : la chance d'un [S] vaut 0,8% × (1 + 0,15 × chance) et celle d'un [A] 6% × (1 + 0,2 × chance), ce dernier plafonnant à 12% dès la chance 5. au-delà de 6, plus rien ne change : tout ce qui dépasse est perdu. en revanche la chance ne touche NI les shinies (c'est la chasse nocturne au labo et la météo), NI la vitesse des pièges, NI leur taux de réussite.",
             "chaque jour de chasse consécutif augmente votre élan (+0,015 de chance par jour, jusqu'à +0,15) et offre quelques baies. la série retombe si vous sautez un jour.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
