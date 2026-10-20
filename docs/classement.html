@@ -72,7 +72,8 @@
           <th data-k="hybrides">hybrides</th>
           <th data-k="legendes">légendes ✧</th>
           <th data-k="ecus">écus gagnés</th>
-          <th data-k="trophees">trophées</th>
+          <th data-k="trophees">reliques</th>
+          <th data-k="migrations">migrations</th>
           <th data-k="at">vu</th>
         </tr>
       </thead>
@@ -80,9 +81,9 @@
     </table>
   </div>
   <footer>
-    <span class="dim">score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + hybrides×600 + légendes×1000 + trophées×1000 + écus gagnés÷1000.
+    <span class="dim">score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + hybrides×600 + légendes×1000 + reliques×1000 + écus gagnés÷1000.
     les curiosités s'obtiennent au troc, les hybrides en croisant deux lignées d'un même biome à l'enclos, et les légendes ✧ en approchant une silhouette : aucune ne se capture au piège, aucune n'entre dans le compte des espèces.
-    la « cote » additionne le meilleur rang obtenu (C=1 … S=4) sur chaque espèce découverte.</span><br>
+    la « cote » additionne le meilleur rang obtenu (C=1 … S=4) sur chaque espèce découverte. les reliques se gagnent en migrant, et ne se confondent pas avec les succès du jeu.</span><br>
     <span class="dim">pour apparaître ici : ouvrez le jeu, cliquez « ⇄ session partagée » et choisissez un pseudo.
     les scores sont déclarés par le navigateur de chaque joueur — c'est un tableau d'honneur entre amis, pas un juge.</span>
   </footer>
@@ -143,6 +144,7 @@ function render() {
     cell(tr, Math.floor(e.legendes || 0) + '/' + TOTAL_LEGENDES, 'shiny');
     cell(tr, fmt(e.ecus));
     cell(tr, fmt(e.trophees));
+    cell(tr, fmt(e.migrations));
     cell(tr, ago(e.at), 'dim');
     rows.appendChild(tr);
   });

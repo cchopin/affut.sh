@@ -559,8 +559,18 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.38";
-const NEWS: [(&str, &str, &[&str]); 39] = [
+const VERSION: &str = "1.39";
+const NEWS: [(&str, &str, &[&str]); 40] = [
+    (
+        "1.39",
+        "20 octobre 2026",
+        &[
+            "la monnaie de migration s'appelle désormais une relique, et non plus un trophée : on ne la confond plus avec les trophées du bâtiment ╡ t ╞, qui sont les succès. « 43 reliques » dans le bandeau n'a plus rien à voir avec « 31/34 » au tableau des succès.",
+            "le musée dit au journal quand son garnissage automatique prélève une bête en réserve. un spécimen ne disparaît plus sans explication.",
+            "et ce garnissage se coupe à la migration : laissé actif, il vidait la réserve naissante pour remplir des salles vides.",
+            "la migration explique que le silence du journal est normal, et le classement affiche une colonne migrations.",
+        ],
+    ),
     (
         "1.38",
         "14 octobre 2026",
@@ -2645,11 +2655,24 @@ impl Game {
         }
         lots.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         let mut pose = 0;
+        let mut pris: Vec<String> = vec![];
         for &(_, ci, shiny) in lots.iter().take(n) {
             if let Some((rank, sex)) = self.take_best(ci, shiny) {
+                /* ce qui n'était pas déjà exposé sort de la réserve : il faut le
+                   dire, sinon un spécimen disparaît sans explication */
+                if !avant.iter().flatten().any(|&(c, r, s)| c == ci && r == rank && s == shiny) {
+                    pris.push(format!("{}{} [{}]", CREATURES[ci].n, if shiny { " ⋆" } else { "" }, RANK_NAMES[rank]));
+                }
                 self.s.museum[pose] = Some(MusE { ci, rank, shiny, sex });
                 pose += 1;
             }
+        }
+        if !pris.is_empty() {
+            self.log(vec![
+                ("musée : ".into(), C::Blue),
+                (pris.join(", "), C::Text),
+                (format!(" quitte{} la réserve pour une salle.", if pris.len() > 1 { "nt" } else { "" }), C::Dim),
+            ]);
         }
         let apres: Vec<Option<(usize, usize, bool)>> =
             self.s.museum.iter().take(n).map(|o| o.as_ref().map(|m| (m.ci, m.rank, m.shiny))).collect();
@@ -3040,6 +3063,9 @@ impl Game {
                     self.s.contracts = vec![];
                     self.s.lab = vec![0; LABS.len()];
                     self.s.autosell = vec![false; 5];
+                    /* le musée est vide et les salles reviennent à six : laisser
+                       le garnissage actif viderait la réserve naissante */
+                    self.s.museum_auto = false;
                     let mut biomes = vec![None; BIOMES.len()];
                     biomes[0] = Some(BiomeState { slots: 2, pl: vec![None, None], hunt_at: 0.0 });
                     self.s.biomes = biomes;
@@ -3047,8 +3073,15 @@ impl Game {
                     // pour que la migration ne puisse plus jamais laisser un état bancal
                     self.s.normalize();
                     self.panels.clear();
-                    self.log(vec![(format!("migration effectuée : +{} trophées. tout recommence, en mieux.", g), C::Gold)]);
-                    self.toast(format!("migration : +{} trophées", g));
+                    self.log(vec![(
+                        format!("migration effectuée : +{} relique{}. tout recommence, en mieux.", g, if g > 1 { "s" } else { "" }),
+                        C::Gold,
+                    )]);
+                    self.log(vec![(
+                        "le comptoir est vide et vos pièges sont restés là-bas : reposez le piège en bois dans la forêt, le journal se remplira de nouveau.".into(),
+                        C::Dim,
+                    )]);
+                    self.toast(format!("migration : +{} relique{}", g, if g > 1 { "s" } else { "" }));
                     self.check_achievements();
                     self.save();
                 }
@@ -4950,7 +4983,7 @@ impl Game {
             C::Text,
         ));
         rows.push(Row::text(
-            format!("trophées {} · migrations {} · chance +{} (plafond 6) · vente ×{} · vitesse ×{}",
+            format!("reliques {} · migrations {} · chance +{} (plafond 6) · vente ×{} · vitesse ×{}",
                 self.s.trophies, self.s.migrations, fmt2(self.global_luck().min(LUCK_CAP)), fmt2(self.sell_mult()), fmt2(self.speed_mult())),
             C::Dim,
         ));
@@ -5577,7 +5610,7 @@ impl Game {
             C::Dim,
         ));
         for r in wrap_rows(
-            &format!("détail chance : flair +{} · trophées +{} · biomes complets +{} · élan (série j{}) +{}",
+            &format!("détail chance : flair +{} · reliques +{} · biomes complets +{} · élan (série j{}) +{}",
                 fmt2(self.s.lab[LAB_FLAIR] as f64 * 0.08),
                 fmt2(self.s.trophies as f64 * 0.008),
                 fmt2(self.completed_biomes() as f64 * 0.04),
@@ -5599,7 +5632,7 @@ impl Game {
         let g = self.trophy_gain();
         let mut rows = wrap_rows(
             &format!(
-                "les frais de voyage ({} écus) sont réglés, puis disparaissent : vos écus, vos pièges, vos appâts, TOUT le labo, les biomes ouverts, le musée, les enclos et la réserve entière, shinies compris. survivent : le bestiaire et ses records, les trophées, les succès, ce que vous avez acheté au marchand ou remonté du puits (breloques et permis de piégeage), les lignées de l'enclos et votre série. attention, le NIVEAU de licence du labo, lui, repart de zéro comme le reste du laboratoire. vous gagnez {} trophée{} permanents, soit +{} de chance et +{}% au prix de vente.",
+                "les frais de voyage ({} écus) sont réglés, puis disparaissent : vos écus, vos pièges, vos appâts, TOUT le labo, les biomes ouverts, le musée, les enclos et la réserve entière, shinies compris. survivent : le bestiaire et ses records, les trophées, les succès, ce que vous avez acheté au marchand ou remonté du puits (breloques et permis de piégeage), les lignées de l'enclos et votre série. attention, le NIVEAU de licence du labo, lui, repart de zéro comme le reste du laboratoire. vous gagnez {} relique{} permanentes, soit +{} de chance et +{}% au prix de vente. les reliques n'ont rien à voir avec les trophées du bâtiment ╡ t ╞, qui sont les succès.",
                 fmt(self.migration_cost()),
                 g,
                 if g > 1 { "s" } else { "" },
@@ -5800,7 +5833,7 @@ impl Game {
                 indent: 0,
             });
         }
-        ("trophées".into(), rows)
+        ("trophées — les succès".into(), rows)
     }
 
     fn rows_help(&self) -> (String, Vec<Row>) {
@@ -5992,8 +6025,8 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header("la migration"));
         for t in [
-            "au labo, quand une expédition a bien rapporté (et contre des frais de voyage qui doublent à chaque départ) : repartez de zéro avec des trophées permanents (+0,008 chance et +1% vente chacun).",
-            "conservés : bestiaire, succès, trophées, breloques, permis de piégeage, lignées de l'enclos, série. perdus : écus, pièges, appâts, labo entier, biomes ouverts, réserve (shinies compris), musée, enclos.",
+            "au labo, quand une expédition a bien rapporté (et contre des frais de voyage qui doublent à chaque départ) : repartez de zéro avec des reliques permanentes (+0,008 chance et +1% vente chacune). à ne pas confondre avec les trophées du bâtiment ╡ t ╞, qui sont les succès.",
+            "conservés : bestiaire, succès, reliques, breloques, permis de piégeage, lignées de l'enclos, série. perdus : écus, pièges, appâts, labo entier, biomes ouverts, réserve (shinies compris), musée, enclos.",
         ] {
             rows.extend(bullet_rows("· ", t, w, C::Dim));
         }
@@ -6298,7 +6331,7 @@ impl Game {
         }
         rows.extend(bullet_rows(
             "",
-            "score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + hybrides×600 + légendes×1000 + trophées×1000 + écus gagnés÷1000.",
+            "score = espèces×100 + shinies×300 + cote×40 + curiosités×500 + hybrides×600 + légendes×1000 + reliques×1000 + écus gagnés÷1000.",
             self.panel_w,
             C::Dimmer,
         ));
@@ -6691,7 +6724,7 @@ fn render(game: &mut Game, theme: &Theme, buf: &mut Buffer, area: Rect) {
         (format!(" {} écus ", fmt(game.s.ecus)), C::Gold),
         (format!("· {} captures ", fmt(game.s.captures as f64)), C::Dim),
         (format!("· bestiaire {}% ", (dex as f64 / CREATURES.len() as f64 * 100.0).round() as u64), C::Blue),
-        (if game.s.trophies > 0 { format!("· {} trophées ", game.s.trophies) } else { String::new() }, C::GoldDark),
+        (if game.s.trophies > 0 { format!("· {} reliques ", game.s.trophies) } else { String::new() }, C::GoldDark),
     ];
     for (txt, c) in stats {
         draw_str(buf, area, tx, 0, &txt, theme.style(c, false));
@@ -8566,5 +8599,33 @@ mod tests {
         let (_, rows) = g.build_rows(&PanelKind::Achs);
         let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect();
         assert!(texte.contains("victime du Créateur"), "et s'affiche alors en clair");
+    }
+
+    /* le garnissage du musée ne doit pas vider une réserve qui repart de zéro,
+       et ce qu'il prélève doit se lire au journal. */
+    #[test]
+    fn le_musee_automatique_se_tait_apres_une_migration() {
+        let mut g = jeu_neuf();
+        g.s.museum_auto = true;
+        g.s.run_earned = 4_000_000.0; // de quoi payer le voyage et gagner deux reliques
+        g.s.ecus = 200_000.0;
+        g.apply(Action::Migrate);
+        assert!(g.s.migrations >= 1, "la migration doit avoir eu lieu");
+        assert!(!g.s.museum_auto, "le garnissage doit être coupé");
+        assert!(g.s.trophies >= 1, "et rapporter des reliques");
+
+        /* le prélèvement se raconte */
+        let mut g2 = jeu_neuf();
+        g2.s.inv2[0].m[3] = 1;
+        g2.logs.clear();
+        assert!(g2.museum_optimize(), "une salle doit se garnir");
+        let journal: String = g2.logs.iter().flat_map(|l| l.segs.iter().map(|(t, _)| t.clone())).collect();
+        assert!(journal.contains("musée"), "le journal doit signaler le prélèvement : {}", journal);
+        assert!(journal.contains(CREATURES[0].n), "et nommer la bête : {}", journal);
+
+        // un second passage ne change rien, donc ne raconte rien
+        g2.logs.clear();
+        g2.museum_optimize();
+        assert!(g2.logs.is_empty(), "rien à dire si rien ne bouge");
     }
 }
