@@ -1,0 +1,14 @@
+{
+  "title": "affut.sh",
+  "description": "Jeu idle Rust/ratatui, terminal et navigateur. Déploiement web + darkforge.",
+  "status": "wip",
+  "tags": [
+    "rust",
+    "jeu",
+    "wasm"
+  ],
+  "target": "",
+  "url": "https://cchopin.github.io/affut.sh/",
+  "created": 1792518486,
+  "last_opened": 1792520580
+}
