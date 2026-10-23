@@ -559,8 +559,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.39";
-const NEWS: [(&str, &str, &[&str]); 40] = [
+const VERSION: &str = "1.40";
+const NEWS: [(&str, &str, &[&str]); 41] = [
+    (
+        "1.40",
+        "23 octobre 2026",
+        &[
+            "le palmarès du comptoir affiche enfin les reliques et les migrations de chacun : la 1.39 l'annonçait, seule la page web les montrait. remonté par ookook.",
+            "le labo appelait encore « trophées » les reliques promises à la migration, alors que le bandeau les comptait en reliques. remonté par ookook.",
+        ],
+    ),
     (
         "1.39",
         "20 octobre 2026",
@@ -2021,6 +2029,8 @@ struct BoardRow {
     rangs: f64,
     #[serde(default)]
     trophees: f64,
+    #[serde(default)]
+    migrations: f64,
     #[serde(default)]
     curiosites: f64,
     #[serde(default)]
@@ -5572,7 +5582,7 @@ impl Game {
         }
         rows.push(Row::text("", C::Dim));
         rows.push(Row::header(&format!("migration — {} effectuée{}", self.s.migrations, if self.s.migrations > 1 { "s" } else { "" })));
-        for r in wrap_rows("repartir de zéro vers des terres plus giboyeuses, contre des frais de voyage qui doublent à chaque départ. le bestiaire et les succès sont conservés ; écus, pièges, labo et réserve sont perdus. chaque trophée offre définitivement +0,008 de chance et +1% aux prix de vente.", self.panel_w, C::Dim) {
+        for r in wrap_rows("repartir de zéro vers des terres plus giboyeuses, contre des frais de voyage qui doublent à chaque départ. le bestiaire et les succès sont conservés ; écus, pièges, labo et réserve sont perdus. chaque relique offre définitivement +0,008 de chance et +1% aux prix de vente.", self.panel_w, C::Dim) {
             rows.push(r);
         }
         let g = self.trophy_gain();
@@ -5589,9 +5599,9 @@ impl Game {
         });
         rows.push(Row {
             segs: vec![
-                ("trophées à la migration : ".into(), C::Text),
+                ("reliques à la migration : ".into(), C::Text),
                 (format!("+{}", g), if g > 0 { C::Gold } else { C::Dimmer }),
-                (if g < 1 { "  (1 M d'écus gagnés = 1er trophée)".into() } else { String::new() }, C::Dimmer),
+                (if g < 1 { "  (1 M d'écus gagnés = 1re relique)".into() } else { String::new() }, C::Dimmer),
             ],
             btns: vec![("migrer".into(), if can { C::Red } else { C::Dimmer }, if can { Action::Open(PanelKind::MigrConfirm) } else { Action::Nothing })],
             act: None,
@@ -6277,45 +6287,7 @@ impl Game {
                 C::Dimmer,
             ));
         } else {
-            rows.push(Row {
-                segs: vec![(
-                    format!(
-                        "{}{}{}{}{}{}",
-                        pad("#", 3),
-                        pad("piégeur", 17),
-                        format!("{:>7}", "score"),
-                        format!("{:>10}", "espèces"),
-                        format!("{:>9}", "shinies"),
-                        format!("{:>11}", "captures")
-                    ),
-                    C::Dimmer,
-                )],
-                btns: vec![],
-                act: None,
-                indent: 0,
-            });
-            for (i, e) in self.board.iter().enumerate() {
-                let me = !self.board_me.is_empty() && e.pseudo == self.board_me;
-                let pos_c = match i {
-                    0 => C::Gold,
-                    1 => C::Text,
-                    2 => C::GoldDark,
-                    _ => C::Dimmer,
-                };
-                rows.push(Row {
-                    segs: vec![
-                        (pad(&format!("{}", i + 1), 3), pos_c),
-                        (pad(&e.pseudo, 17), if me { C::Gold } else { C::Blue }),
-                        (format!("{:>7}", fmt(e.score)), C::GoldDark),
-                        (format!("{:>7}/{}", fmt(e.especes), wild_total()), C::Text),
-                        (format!("{:>9}", fmt(e.shinies)), if e.shinies > 0.0 { C::Shiny } else { C::Dimmer }),
-                        (format!("{:>11}", fmt(e.captures)), C::Dim),
-                    ],
-                    btns: vec![],
-                    act: None,
-                    indent: 0,
-                });
-            }
+            rows.extend(self.rows_board_table());
         }
         rows.push(Row::text("", C::Dim));
         if self.board_me.is_empty() {
@@ -6353,6 +6325,59 @@ impl Game {
             }
         }
         (title, rows)
+    }
+
+    /* le tableau seul, à part du panneau : le panneau n'existe qu'en
+       navigateur, mais le tableau doit pouvoir se vérifier par cargo test.
+       les reliques et les migrations y figurent parce qu'elles comptent dans
+       le score et qu'un piégeur qui a migré doit pouvoir s'en rendre compte
+       sans ouvrir la page web (ookook). */
+    fn rows_board_table(&self) -> Vec<Row> {
+        let mut rows = Vec::new();
+        rows.push(Row {
+            segs: vec![(
+                format!(
+                    "{}{}{}{}{}{}{}{}",
+                    pad("#", 3),
+                    pad("piégeur", 17),
+                    format!("{:>7}", "score"),
+                    format!("{:>10}", "espèces"),
+                    format!("{:>9}", "shinies"),
+                    format!("{:>9}", "captures"),
+                    format!("{:>9}", "reliques"),
+                    format!("{:>6}", "migr.")
+                ),
+                C::Dimmer,
+            )],
+            btns: vec![],
+            act: None,
+            indent: 0,
+        });
+        for (i, e) in self.board.iter().enumerate() {
+            let me = !self.board_me.is_empty() && e.pseudo == self.board_me;
+            let pos_c = match i {
+                0 => C::Gold,
+                1 => C::Text,
+                2 => C::GoldDark,
+                _ => C::Dimmer,
+            };
+            rows.push(Row {
+                segs: vec![
+                    (pad(&format!("{}", i + 1), 3), pos_c),
+                    (pad(&e.pseudo, 17), if me { C::Gold } else { C::Blue }),
+                    (format!("{:>7}", fmt(e.score)), C::GoldDark),
+                    (format!("{:>7}/{}", fmt(e.especes), wild_total()), C::Text),
+                    (format!("{:>9}", fmt(e.shinies)), if e.shinies > 0.0 { C::Shiny } else { C::Dimmer }),
+                    (format!("{:>9}", fmt(e.captures)), C::Dim),
+                    (format!("{:>9}", fmt(e.trophees)), if e.trophees > 0.0 { C::GoldDark } else { C::Dimmer }),
+                    (format!("{:>6}", fmt(e.migrations)), if e.migrations > 0.0 { C::Text } else { C::Dimmer }),
+                ],
+                btns: vec![],
+                act: None,
+                indent: 0,
+            });
+        }
+        rows
     }
 
     fn rows_offline(&self, sum: &OfflineSummary) -> (String, Vec<Row>) {
@@ -6398,7 +6423,7 @@ impl Game {
     }
 
     fn rows_reset(&self) -> (String, Vec<Row>) {
-        let mut rows = wrap_rows("bestiaire, succès, trophées : tout disparaît. définitivement.", self.panel_w, C::Red);
+        let mut rows = wrap_rows("bestiaire, succès, reliques : tout disparaît. définitivement.", self.panel_w, C::Red);
         rows.push(Row::text("", C::Dim));
         rows.push(Row {
             segs: vec![],
@@ -7677,6 +7702,47 @@ mod tests {
         let (_, rows) = g.rows_dex();
         let (w, l) = largeur_max(&rows);
         assert!(w <= 75, "ligne d'espèce capturée trop large : {} colonnes pour 75 : {:?}", w, l);
+    }
+
+    /* le palmarès en jeu doit montrer tout ce qui pèse dans le score, et
+       tenir en 80 colonnes même pour un piégeur aux chiffres démesurés
+       (ookook : « la colonne migration est absente ») */
+    #[test]
+    fn le_palmares_montre_reliques_et_migrations_en_80_colonnes() {
+        let mut g = jeu_neuf();
+        g.board = vec![BoardRow {
+            pseudo: "aaaaaaaaaaaaaaaa".into(), // 16 caractères, le maximum du formulaire
+            score: 13_600_000.0,
+            especes: 114.0,
+            captures: 9_280_000.0,
+            shinies: 38_700.0,
+            trophees: 43.0,
+            migrations: 7.0,
+            ..Default::default()
+        }];
+        let rows = g.rows_board_table();
+        let entete: String = rows[0].segs.iter().map(|(t, _)| t.as_str()).collect();
+        assert!(entete.contains("reliques"), "{}", entete);
+        assert!(entete.contains("migr"), "{}", entete);
+        let ligne: String = rows[1].segs.iter().map(|(t, _)| t.as_str()).collect();
+        assert!(ligne.contains("43"), "les reliques du piégeur manquent : {}", ligne);
+        assert!(ligne.ends_with("7"), "les migrations du piégeur manquent : {}", ligne);
+        let (w, l) = largeur_max(&rows);
+        assert!(w <= 75, "ligne du palmarès trop large : {} colonnes pour 75 : {:?}", w, l);
+    }
+
+    /* le labo ne parle que de reliques quand il s'agit de la migration : le
+       mot « trophée » est réservé aux succès du bâtiment ╡ t ╞ (ookook) */
+    #[test]
+    fn le_labo_appelle_reliques_les_reliques() {
+        let g = jeu_neuf();
+        let (_, rows) = g.rows_lab();
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect::<Vec<_>>().join(" ");
+        assert!(!texte.contains("troph"), "le labo parle encore de trophées : {}", texte);
+        assert!(texte.contains("reliques à la migration"), "{}", texte);
+        let (_, rows) = g.rows_reset();
+        let texte: String = rows.iter().flat_map(|r| r.segs.iter().map(|(t, _)| t.clone())).collect::<Vec<_>>().join(" ");
+        assert!(!texte.contains("troph"), "la remise à zéro parle encore de trophées : {}", texte);
     }
 
     /* molette : la fenêtre bouge, la sélection ne bouge pas, et on ne sort
