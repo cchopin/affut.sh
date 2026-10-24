@@ -559,8 +559,16 @@ const NOCTURNES: [usize; 20] = [
 ];
 /* journal des versions — la plus récente en tête. VERSION sert de repère
    « déjà lu » : quand elle change, la pastille ● réapparaît dans la barre. */
-const VERSION: &str = "1.40";
-const NEWS: [(&str, &str, &[&str]); 41] = [
+const VERSION: &str = "1.41";
+const NEWS: [(&str, &str, &[&str]); 42] = [
+    (
+        "1.41",
+        "24 octobre 2026",
+        &[
+            "la fenêtre « croiser » montre désormais, en gris, les espèces du biome que la rareté écarte, avec la raison, et rappelle la règle en tête : même biome, un cran de rareté au plus. un légendaire n'a donc qu'un partenaire possible, l'épique du biome, et la fenêtre ne le laissait pas deviner. remonté par gravity, qui a cru ses trois cents anciens des profondeurs stériles.",
+            "la même fenêtre annonçait encore une couvaison « moitié plus longue » : elle dure un quart de plus depuis la 1.33.",
+        ],
+    ),
     (
         "1.40",
         "23 octobre 2026",
@@ -4476,6 +4484,18 @@ impl Game {
             && CREATURES[a].b < WILDB
             && (CREATURES[a].r as i32 - CREATURES[b].r as i32).abs() <= 1
     }
+    /* « commun ou peu commun », pour dire au joueur ce que l'enclos accepte
+       en face d'une rareté donnée */
+    fn raretes_voisines(r: usize) -> String {
+        let v: Vec<&str> = (0..RAR_LABEL.len())
+            .filter(|&x| (x as i32 - r as i32).abs() <= 1)
+            .map(|x| RAR_LABEL[x])
+            .collect();
+        match v.len() {
+            2 => format!("{} ou {}", v[0], v[1]),
+            _ => format!("{}, {} ou {}", v[0], v[1], v[2]),
+        }
+    }
     fn recette(a: usize, b: usize) -> Option<usize> {
         RECETTES
             .iter()
@@ -4761,7 +4781,12 @@ impl Game {
     fn rows_pen_cross(&self, slot: usize, a: usize) -> (String, Vec<Row>) {
         let ca = &CREATURES[a];
         let mut rows = wrap_rows(
-            "un croisement donne l'une des deux espèces, au plus bas rang des deux parents, mais double la chance de monter d'un rang. la couvaison dure moitié plus longtemps.",
+            &format!(
+                "un croisement donne l'une des deux espèces, au plus bas rang des deux parents, mais double la chance de monter d'un rang. la couvaison dure un quart de plus. l'enclos n'accepte qu'une femelle du même biome et d'une rareté voisine : {} est {}, donc {}.",
+                ca.n,
+                RAR_LABEL[ca.r],
+                Self::raretes_voisines(ca.r)
+            ),
             self.panel_w,
             C::Dimmer,
         );
@@ -4769,8 +4794,19 @@ impl Game {
         rows.push(Row::text("", C::Dim));
         rows.extend(self.rows_filtre());
         let mut any = false;
+        /* les espèces du biome qu'on possède mais que la rareté écarte : on
+           les montre quand même, en gris, sinon le joueur croit que l'enclos
+           ignore sa réserve. gravity avait trois cents anciens des
+           profondeurs et un seul partenaire proposé. */
+        let mut ecartees: Vec<usize> = Vec::new();
         for b in 0..CREATURES.len() {
-            if !self.passe_filtre(b) || !Self::croisable(a, b) || self.s.inv2[b].tf() == 0 {
+            if !self.passe_filtre(b) || self.s.inv2[b].tf() == 0 {
+                continue;
+            }
+            if !Self::croisable(a, b) {
+                if b != a && CREATURES[b].b == ca.b {
+                    ecartees.push(b);
+                }
                 continue;
             }
             any = true;
@@ -4792,6 +4828,18 @@ impl Game {
                     ),
                 ],
                 btns: vec![("croiser".into(), C::Blue, Action::PenCross(slot, a, b))],
+                act: None,
+                indent: 0,
+            });
+        }
+        for b in ecartees {
+            let cb = &CREATURES[b];
+            rows.push(Row {
+                segs: vec![
+                    (pad(&format!("♀ {} {}", cb.g, cb.n), 26), C::Dim),
+                    (format!("écartée : {} contre {}, trop loin", RAR_LABEL[cb.r], RAR_LABEL[ca.r]), C::Dim),
+                ],
+                btns: vec![],
                 act: None,
                 indent: 0,
             });
@@ -8694,4 +8742,37 @@ mod tests {
         g2.museum_optimize();
         assert!(g2.logs.is_empty(), "rien à dire si rien ne bouge");
     }
+
+    /* gravity avait trois cents anciens des profondeurs et un seul partenaire
+       proposé : la fenêtre « croiser » doit montrer les espèces écartées par
+       la rareté, dire pourquoi, et annoncer la bonne durée de couvaison. */
+    #[test]
+    fn croiser_montre_les_especes_ecartees() {
+        let mut g = jeu_neuf();
+        let ancien = CREATURES.iter().position(|c| c.n == "ancien des profondeurs").unwrap();
+        let abysses = CREATURES[ancien].b;
+        for ci in (0..CREATURES.len()).filter(|&ci| CREATURES[ci].b == abysses) {
+            g.s.inv2[ci].m[3] = 10;
+            g.s.inv2[ci].f[3] = 10;
+        }
+        let (_, rows) = g.rows_pen_cross(0, ancien);
+        let texte = |r: &Row| r.segs.iter().map(|(t, _)| t.as_str()).collect::<String>();
+        let croisables: Vec<String> = rows.iter().filter(|r| !r.btns.is_empty() && texte(r).starts_with("♀")).map(texte).collect();
+        assert_eq!(croisables.len(), 1, "un légendaire n'a qu'un partenaire possible : {croisables:?}");
+        assert!(croisables[0].contains("krakenot"));
+        let ecartees: Vec<String> = rows.iter().filter(|r| texte(r).contains("écartée")).map(texte).collect();
+        assert_eq!(ecartees.len(), 9, "les neuf autres espèces du biome restent visibles : {ecartees:?}");
+        assert!(ecartees.iter().any(|t| t.contains("néantin") && t.contains("rare contre légendaire, trop loin")));
+        let entete: String = rows.iter().take_while(|r| !texte(r).is_empty()).map(texte).collect::<Vec<_>>().join(" ");
+        assert!(entete.contains("épique ou légendaire"), "l'en-tête doit dire quelles raretés sont acceptées : {entete}");
+        // la durée annoncée concorde avec pen_duree
+        assert!(entete.contains("un quart de plus") && !entete.contains("moitié"));
+        // et tout tient en 80 colonnes, même les lignes grises
+        let (w, l) = largeur_max(&rows);
+        assert!(w <= 75, "ligne trop large : {} colonnes pour 75 : {:?}", w, l);
+        let (a, b, _) = RECETTES[0];
+        let attendu = PEN_MIN[CREATURES[a].r.max(CREATURES[b].r)] * 60_000.0 * 1.25;
+        assert!((g.pen_duree(a, Some(b)) - attendu).abs() < 1.0);
+    }
+
 }
