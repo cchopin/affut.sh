@@ -69,8 +69,10 @@ const RATTRAPAGE_S: f64 = 24.0 * 3600.0;
 /* revenu maximal réellement atteignable en jeu, tous pièges et labo au bout */
 const REVENU_REEL_PAR_S: f64 = 180.0;
 /* le revenu maximal du jeu, tous pièges et tout le labo au bout, avoisine
-   180 écus/s. on retient 500, presque trois fois la marge. */
-const ECUS_PAR_S: f64 = 500.0;
+   180 écus/s. le plafond était à 500, mais une partie suivie depuis son premier
+   envoi (ook) a gagné plus de 500 écus/s de moyenne : le relevé à 1 000 laisse
+   une vraie marge à ces parties sans ouvrir la borne à n'importe quel gonflage. */
+const ECUS_PAR_S: f64 = 1000.0;
 /* on ne s'inscrit au classement qu'en choisissant un pseudo, parfois après
    plusieurs jours de jeu : on crédite d'avance deux jours de partie pour ne
    pas borner ce premier envoi. */
@@ -82,6 +84,10 @@ const VOYAGE_BASE: f64 = 100_000.0;
 const VOYAGE_PALIER_MAX: i32 = 12;
 /* le jeu accorde √(gains de la partie / 1 M) trophées par migration */
 const ECUS_PAR_TROPHEE: f64 = 1_000_000.0;
+/* joueurs gardés au classement malgré la marque « suspect », décidé à la main
+   par l'auteur du jeu. la marque reste écrite dans leur fiche ; seul le
+   filtre de /lb les épargne. */
+const EXCEPTIONS_CLASSEMENT: [&str; 2] = ["ook", "Drasaerys"];
 
 /* combien de migrations les gains totaux peuvent avoir payées */
 fn migrations_max(ecus: f64) -> f64 {
@@ -407,7 +413,17 @@ fn main() {
                 .into_iter()
                 .map(|(_, v)| v)
                 .filter(|v| !v.get("hidden").and_then(|h| h.as_bool()).unwrap_or(false))
-                .filter(|v| !v.get("suspect").and_then(|h| h.as_bool()).unwrap_or(false))
+                /* exceptions nommées : leur progression dépasse les bornes
+                   générales sans qu'il y ait triche, on les garde au classement.
+                   le pseudo fait foi, pas le jeton (qui sert à écrire). */
+                .filter(|v| {
+                    let exception = v
+                        .get("pseudo")
+                        .and_then(|p| p.as_str())
+                        .map(|p| EXCEPTIONS_CLASSEMENT.iter().any(|e| e.eq_ignore_ascii_case(p)))
+                        .unwrap_or(false);
+                    exception || !v.get("suspect").and_then(|h| h.as_bool()).unwrap_or(false)
+                })
                 .filter_map(|v| entree_verifiee(&v))
                 .collect();
             let body = serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into());
